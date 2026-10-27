@@ -61,6 +61,7 @@
 #include "../Objects/Base/SimpleObjectTemplate.h"   // getRelativePositionOffset
 #include "../../Physics/PhysicsUtil.h"        // disablePhysics
 #include "../Python/PythonHost.h"             // buildArgs / handleEvent - the two script events
+#include "../../Scene/Object/WorldObjTemplPortal/PortalManager.h"   // updatePortals
 #include "../../Core/Ids.h"                    // CID_SquadManager / IID_ISquadManager
 #include "../../Core/IProfilerClient.h"        // getEnable - startServer's profiler gate; retires
                                                //   the ProfilerSlots raw-slot shim
@@ -2339,16 +2340,6 @@ extern IBase*                  portalManager;          // ds:0x8B1ED80 - ditto
 } // namespace world
 
 namespace {
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] Bot portal updates diagnose and abort at this seam.
-void portalManagerUpdate(IBase* manager, float dt);                             // world::PortalManager::update(float) - vtable +0x40 (0x88CABE0 slot 16)
-
-void portalManagerUpdate(IBase* /*manager*/, float /*dt*/)
-{
-    std::fprintf(stderr, "[FRONTIER] dice::hfe::(anon)::portalManagerUpdate"
-                         " (world::PortalManager::update, vtable +0x40) reached (bots game)\n");
-    std::fflush(stderr);
-    std::abort();
-}
 // Typed bridge from the shared connection interface to packet processing.
 inline bool clientConnectionProcessReceivedPacket(IClientConnection* c, io::BitStream* stream)
 {
@@ -3513,7 +3504,7 @@ void GameServer::simulatePlayersCollisions(float dt)
 void GameServer::updatePortals(float dt)
 {
     if (ai::g_aiInstance && ai::aiInstance()->isBotsGame())
-        portalManagerUpdate(world::portalManager, dt);          // [FRONTIER]
+        static_cast<world::IPortalManager*>(world::portalManager)->update(dt);   // +0x40
 }
 
 // Marks an acknowledged object ghostable for one connection. Missing connection

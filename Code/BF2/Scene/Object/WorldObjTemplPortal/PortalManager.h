@@ -17,8 +17,6 @@ namespace dice {
 namespace hfe {
 namespace world {
 
-// Portal types remain forward-declared until their full interfaces are available.
-// Dependent [CHOSEN] placeholder bodies must not claim completed portal behavior.
 class IObject;
 class PortalEvent;
 
@@ -32,14 +30,15 @@ public:
 class PortalPassing;
 class Sector;
 
-// Partial portal-passing interface exposing sector get/set after IBase.
-// The following coordinate return type and destructor ownership remain unverified; do not add
-// an implementing class until the complete virtual interface is established.
+// The component a portal-passing object carries: the sector object it is in (null outside every
+// sector) and its passing point in object space. The destructor follows the three methods.
 class IPortalPassing : public IBase
 {
 public:
     virtual IObject* getSector() const = 0;                                     // +0x10
     virtual void setSector(IObject* sector) = 0;                                // +0x14 [INFERRED] void
+    virtual const Vec3& getPortalPassingCoordinate() const = 0;                 // +0x18
+    virtual ~IPortalPassing() {}                                                // +0x1C / +0x20
 };
 
 // Portal transition type in world namespace; preserve enum type for MSVC signature linkage.
@@ -52,6 +51,27 @@ enum PortalEventType
 
     NUM_PORTAL_EVENT_TYPES    = 2       // read - the constructor allocates exactly this many
                                         // callback sets. The identifier is [CHOSEN].
+};
+
+// One sector transition, handed to every subscriber. Only the destructor is virtual.
+// Field names are [CHOSEN]; the getters name them.
+class PortalEvent
+{
+public:
+    PortalEvent(PortalEventType type, IObject* passingObject, IObject* portalObject,
+                unsigned int portalId);
+    virtual ~PortalEvent();
+
+    PortalEventType getType() const;
+    IObject*        getPassingObject() const;
+    IObject*        getPortalObject() const;    // the sector object whose portal was crossed
+    unsigned int    getPortalId() const;
+
+private:
+    /* +0x04 */ PortalEventType m_type;
+    /* +0x08 */ IObject*        m_passingObject;
+    /* +0x0C */ IObject*        m_portalObject;
+    /* +0x10 */ unsigned int    m_portalId;
 };
 
 // Portal-manager interface derived from IBase. Keep virtual method order.
@@ -125,7 +145,7 @@ public:
         /* +0x10 */ Vec3     intersectionPosition;  // attested name
         /* +0x1C */ IObject* portalObject;          // [CHOSEN] name; the IObject argument, stored raw
         /* +0x20 */ Sector*  sector;                // [CHOSEN] name; that object's ISector
-                                                    //   implementation, from queryImplementation
+                                                    //   implementation, from queryComponent
         /* +0x24 */ float    distance;              // attested name; PortalCollisionPred sorts on it
     };
 

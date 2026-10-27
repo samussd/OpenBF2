@@ -11,6 +11,9 @@
 
 namespace dice {
 namespace hfe {
+
+struct Mat4;                             // geom::IPortalCollider::intersect
+
 namespace world {
 
 class IObjectTemplate;
@@ -70,6 +73,17 @@ public:
                            std::vector<Math::Vec3>& out) const = 0;         // +0x18
     virtual const Math::Vec3& getPortalVertex(unsigned int portal,
                                               unsigned int vertex) const = 0;  // +0x1C
+};
+
+// The segment test a portal mesh answers under IID_IPortalCollider. The method name is [CHOSEN];
+// the output names come from the portal manager's statics. One-sided tests ignore back faces.
+class IPortalCollider : public IBase
+{
+public:
+    virtual bool intersect(int& portalId, Math::Vec3& intersectionNormal,
+                           Math::Vec3& intersectionPosition, float& distance,
+                           const Mat4& transformation, const Math::Vec3& from,
+                           const Math::Vec3& to, bool twoSided) = 0;               // +0x10
 };
 
 } // namespace geom

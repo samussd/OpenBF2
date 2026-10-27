@@ -1818,6 +1818,8 @@ if(BUILD_TESTING AND MSVC)
         "${BF2_ROOT}/Game/Objects/Visual/LightSource.cpp"
         "${BF2_ROOT}/Game/Objects/Visual/LightSourceTemplate.cpp"
         "${BF2_ROOT}/Scene/Object/WorldObjTemplPortal/PortalManager.cpp"
+        "${BF2_ROOT}/Scene/Object/WorldObjTemplPortal/PortalPassing.cpp"
+        "${BF2_ROOT}/Scene/Object/WorldObjTemplPortal/Sector.cpp"
         "${BF2_ROOT}/Scene/Object/Object.cpp"
         "${BF2_ROOT}/Scene/Object/ObjectPredicator.cpp"
         "${BF2_ROOT}/Scene/Object/ObjectUtil.cpp"

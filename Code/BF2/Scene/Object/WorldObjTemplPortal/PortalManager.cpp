@@ -1,5 +1,4 @@
 // Portal registration and sector transitions. Directory is attested; filename [INFERRED].
-// Sector transitions remain unimplemented and require the original 0.01 re-test offset.
 
 #include "PortalManager.h"
 
@@ -7,12 +6,113 @@
                                      // queryInterface compares against, both loaded from globals in
                                      // the ELF (0x8328616 / 0x8328625), not from immediates.
 #include "../../../Game/Objects/IObject.h"
+#include "../../../Math/Mat4.h"
+#include "../ObjectManager.h"                // getObjectsFromGrid, the update's sector sweep
+#include "../ObjectPredicator.h"
+#include "../ObjectUtil.h"                   // getPortalMesh, geom::IPortalCollider
+#include "PortalPassing.h"
+#include "Sector.h"
 
+#include <cmath>
 #include <new>
 
 namespace dice {
 namespace hfe {
 namespace world {
+
+PortalEvent::PortalEvent(PortalEventType type, IObject* passingObject, IObject* portalObject,
+                         unsigned int portalId)
+    : m_type(type)
+    , m_passingObject(passingObject)
+    , m_portalObject(portalObject)
+    , m_portalId(portalId)
+{
+}
+
+PortalEvent::~PortalEvent()
+{
+}
+
+PortalEventType PortalEvent::getType() const
+{
+    return m_type;
+}
+
+IObject* PortalEvent::getPassingObject() const
+{
+    return m_passingObject;
+}
+
+IObject* PortalEvent::getPortalObject() const
+{
+    return m_portalObject;
+}
+
+unsigned int PortalEvent::getPortalId() const
+{
+    return m_portalId;
+}
+
+namespace {
+
+// The grid sweep's filter: objects carrying a sector component. The type name is attested.
+class PortalObjectsPred : public ObjectPredicator
+{
+public:
+    virtual bool predicate(IObject* object)
+    {
+        return object->queryComponent(IID_ISector, IID_ISector) != 0;
+    }
+    virtual unsigned int getFlags() const { return 0x1000000; }   // [UNRESOLVED] flag name
+    virtual bool performCulling(IObject*) { return true; }
+};
+
+// Orders collisions farthest first, as both ports sort them. The type name is attested.
+struct PortalCollisionPred
+{
+    bool operator()(const PortalManager::PortalCollision* a,
+                    const PortalManager::PortalCollision* b) const
+    {
+        return a->distance > b->distance;
+    }
+};
+
+// The engine's in-place normalise: a unit vector is left alone, a near-zero one becomes zero.
+void normalise(Vec3& v)
+{
+    const float epsilon = 1.19209290e-7f;    // FLT_EPSILON
+    const float lengthSquared = v.x * v.x + v.y * v.y + v.z * v.z;
+    if (std::fabs(lengthSquared - 1.0f) < epsilon)
+        return;
+    if (std::fabs(lengthSquared) < epsilon)
+    {
+        v.x = 0.0f; v.y = 0.0f; v.z = 0.0f;
+        return;
+    }
+    const float inverse = 1.0f / std::sqrt(lengthSquared);
+    v.x *= inverse; v.y *= inverse; v.z *= inverse;
+}
+
+// Row-vector point transform: the translation is the matrix's last row.
+Vec3 transformPoint(const Vec3& p, const Mat4& m)
+{
+    const Vec3 out = { p.x * m.m[0] + p.y * m.m[4] + p.z * m.m[8]  + m.m[12],
+                       p.x * m.m[1] + p.y * m.m[5] + p.z * m.m[9]  + m.m[13],
+                       p.x * m.m[2] + p.y * m.m[6] + p.z * m.m[10] + m.m[14] };
+    return out;
+}
+
+// One centimetre past a portal hit along the direction of travel, so the next test misses it.
+Vec3 stepPast(const Vec3& hit, const Vec3& direction)
+{
+    const float step = 0.01f;
+    const Vec3 out = { direction.x * step + hit.x,
+                       direction.y * step + hit.y,
+                       direction.z * step + hit.z };
+    return out;
+}
+
+} // namespace
 
 // Starts with one reference and an empty callback set for each of the two portal event types.
 PortalManager::PortalManager()
@@ -127,18 +227,20 @@ int PortalManager::getDebugLevel() const
     return m_debugLevel;
 }
 
-// [CHOSEN, not recovered] Portal registration, event, and update operations remain
-// incomplete. Attaching PortalPassing must preserve replacement without deleting the
-// previous registration data.
+// Gives the object a fresh portal-passing component outside every sector and tracks it from its
+// current position. A repeat registration replaces the record without freeing the old one.
 void PortalManager::registerPortalPassingObject(IObject* object, const Vec3& portalPassingCoordinate)
 {
-    (void)object;
-    (void)portalPassingCoordinate;
-    // [CHOSEN, not recovered] - see above. Does nothing; the real one publishes a PortalPassing
-    // component onto the object and records it here.
+    PortalPassing* const passing = new PortalPassing(portalPassingCoordinate, 0);
+    object->setComponent(IID_IPortalPassing, passing);
+    PassingObjectData* const data = new PassingObjectData;
+    data->lastPosition = object->getAbsolutePosition();
+    data->portalPassing = passing;
+    m_passingObjects[object] = data;
 }
 
-// Removes a portal registration by detaching the component before releasing it, then deletes data and erases the entry.
+// Removes a portal registration by detaching the component before releasing it, then deletes data
+// and erases the entry. A null record, left by a failed subscription, is not checked, as shipped.
 void PortalManager::unRegisterPortalPassingObject(IObject* object)
 {
     std::map<IObject*, PassingObjectData*>::iterator it =
@@ -148,18 +250,17 @@ void PortalManager::unRegisterPortalPassingObject(IObject* object)
 
     object->setComponent(IID_IPortalPassing, 0);
     PassingObjectData* data = it->second;
-    reinterpret_cast<IBase*>(data->portalPassing)->release();
+    data->portalPassing->release();
     ::operator delete(data);
     m_passingObjects.erase(it);
 }
 
-// [CHOSEN, not recovered] sector-registration placeholder.
-// Required behavior creates/attaches a Sector and inserts the object; repeated registration overwrites
-// the prior component without releasing it. Sector construction remains to be implemented.
+// Gives the object a fresh sector component and records it.
 void PortalManager::registerSectorObject(IObject* object)
 {
-    (void)object;
-    // [CHOSEN, not recovered] - see above.
+    Sector* const sector = new Sector();
+    object->setComponent(IID_ISector, sector);
+    m_sectorObjects.insert(object);
 }
 
 // Queries the sector with IID_ISector in both arguments, detaches it, releases it and erases membership.
@@ -175,59 +276,61 @@ void PortalManager::unRegisterSectorObject(IObject* object)
     m_sectorObjects.erase(object);
 }
 
-// [CHOSEN, not recovered] subscription placeholders awaiting PortalPassing dispatch.
-// Required behavior inserts a null entry for an unregistered object and returns false;
-// registered objects forward subscribe/unsubscribe and return true.
+// An unregistered object fails, but the lookup leaves a null record for it in the registry.
 bool PortalManager::subscribePortalPassingObjectEvents(PortalEventType type,
                                                        IObject* object,
                                                        IPortalEventCallback* callback)
 {
-    (void)type; (void)object; (void)callback;
-    return false;   // [CHOSEN, not recovered]. The real one returns true when the object has a
-                    // PortalPassing. false is the real function's own "no such object" answer, so
-                    // callers see a defined, in-range result rather than a fabricated success.
+    PassingObjectData* const data = m_passingObjects[object];
+    if (data)
+        data->portalPassing->subscribeEvents(type, callback);
+    return data != 0;
 }
 
 bool PortalManager::unSubscribePortalPassingObjectEvents(PortalEventType type,
                                                          IObject* object,
                                                          IPortalEventCallback* callback)
 {
-    (void)type; (void)object; (void)callback;
-    return false;   // [CHOSEN, not recovered] - as above.
+    PassingObjectData* const data = m_passingObjects[object];
+    if (data)
+        data->portalPassing->unSubscribeEvents(type, callback);
+    return data != 0;
 }
 
-// [CHOSEN, not recovered] sector-subscription placeholders awaiting Sector dispatch.
-// Required behavior queries the sector directly, without requiring manager registration; null fails,
-// otherwise forwards subscribe/unsubscribe and succeeds.
+// Any object with a sector component qualifies; registration with this manager is not required.
 bool PortalManager::subscribeSectorEvents(PortalEventType type,
                                           IObject* object,
                                           IPortalEventCallback* callback)
 {
-    (void)type; (void)object; (void)callback;
-    return false;   // [CHOSEN, not recovered]. false is the real function's "not a sector" answer.
+    Sector* const sector = static_cast<Sector*>(object->queryComponent(IID_ISector, IID_ISector));
+    if (sector)
+        sector->subscribeEvents(type, callback);
+    return sector != 0;
 }
 
 bool PortalManager::unSubscribeSectorEvents(PortalEventType type,
                                             IObject* object,
                                             IPortalEventCallback* callback)
 {
-    (void)type; (void)object; (void)callback;
-    return false;   // [CHOSEN, not recovered] - as above.
+    Sector* const sector = static_cast<Sector*>(object->queryComponent(IID_ISector, IID_ISector));
+    if (sector)
+        sector->unSubscribeEvents(type, callback);
+    return sector != 0;
 }
 
-// [CHOSEN, not recovered] event-broadcast placeholder; currently delivers nothing.
-// Required behavior selects the unchecked event-type callback set and calls notification slot zero.
-// The callback interface has no IBase reference-count quartet.
+// The event type indexes the global callback sets unchecked.
 void PortalManager::broadcastEvent(PortalEvent* event) const
 {
-    (void)event;
-    // [CHOSEN, not recovered] - see above. Delivers nothing.
+    const std::set<IPortalEventCallback*>& callbacks = *m_globalCallbacks[event->getType()];
+    for (std::set<IPortalEventCallback*>::const_iterator it = callbacks.begin();
+         it != callbacks.end(); ++it)
+    {
+        (*it)->handleEvent(event);
+    }
 }
 
-// Unimplemented portal-mesh intersection path, [CHOSEN, not recovered].
-// The required body tests the mesh/collider, returns null for no hit and prepends a hit record.
-// Its intersection outputs must remain function-static, making the operation non-reentrant.
-// Implement the portal mesh, collider and sector dependencies before replacing this placeholder.
+// Tests the segment against the object's portals and appends a hit. The results pass through
+// function statics on both ports, so the test is not reentrant. The collider is not checked.
 PortalManager::PortalCollision* PortalManager::checkAddPortalCollision(
         std::list<PortalCollision*>& collisions,
         IObject* object,
@@ -235,20 +338,133 @@ PortalManager::PortalCollision* PortalManager::checkAddPortalCollision(
         const Vec3& to,
         bool twoSided) const
 {
-    (void)collisions; (void)object; (void)from; (void)to; (void)twoSided;
-    return 0;   // [CHOSEN, not recovered]. 0 is the real function's "no portal crossed" answer, and
-                // it is the value that terminates update()'s inner while-loop - so a caller written
-                // against the real one still behaves sanely against this.
+    static Vec3  intersectionNormal   = { 0.0f, 0.0f, 0.0f };
+    static Vec3  intersectionPosition = { 0.0f, 0.0f, 0.0f };
+    static int   portalId;
+    static float distance;
+
+    IBase* const mesh = getPortalMesh(object, 0);
+    if (!mesh)
+        return 0;
+
+    geom::IPortalCollider* const collider =
+        static_cast<geom::IPortalCollider*>(mesh->queryInterface(geom::IID_IPortalCollider));
+    Sector* const sector = static_cast<Sector*>(object->queryComponent(IID_ISector, IID_ISector));
+    const Mat4& transformation = object->getAbsoluteTransformation();
+    if (!collider->intersect(portalId, intersectionNormal, intersectionPosition, distance,
+                             transformation, from, to, twoSided))
+    {
+        return 0;
+    }
+
+    PortalCollision* const collision = new PortalCollision;
+    collision->portalId = portalId;
+    collision->intersectionNormal = intersectionNormal;
+    collision->intersectionPosition = intersectionPosition;
+    collision->distance = distance;
+    collision->portalObject = object;
+    collision->sector = sector;
+    collisions.push_back(collision);
+    return collision;
 }
 
-// [CHOSEN, not recovered] portal-transition update; currently performs no work.
-// Required behavior uses frame-to-frame position deltas, ignoring deltaTime, with temporary list/vector
-// storage per call. Portal event, passing, sector and collider operations remain to be connected.
+// Moves every passing object's passing point from last frame's position to this frame's, finds the
+// portals it crossed and reports each crossing, farthest first. An object in a sector first tests
+// that sector's portals one-sided; only a crossing there leads on to the sweep for other sectors,
+// which re-tests each two-sided portal just past every hit. deltaTime is unused.
 void PortalManager::update(float deltaTime)
 {
-    (void)deltaTime;    // unused in the real body too - see above
-    // [CHOSEN, not recovered]. Does nothing, so no sector transitions occur and no PortalEvent is
-    // ever broadcast. This is the single largest behavioural gap in the class.
+    (void)deltaTime;
+
+    std::vector<IObject*> sectorObjects;
+    PortalObjectsPred sectorPredicate;
+    std::list<PortalCollision*> collisions;
+
+    for (std::map<IObject*, PassingObjectData*>::iterator it = m_passingObjects.begin();
+         it != m_passingObjects.end(); ++it)
+    {
+        IObject* const object = it->first;
+        PassingObjectData* const data = it->second;
+        if (!data)
+            continue;
+
+        // [PLATFORM] ELF reads the transformation before the coordinate (0x8326B08 / 0x8326B1E);
+        // PE reads the coordinate first (0x6EC69E / 0x6EC6A8).
+#if defined(_MSC_VER)
+        const Vec3& coordinate = data->portalPassing->getPortalPassingCoordinate();
+        const Mat4& transformation = object->getAbsoluteTransformation();
+#else
+        const Mat4& transformation = object->getAbsoluteTransformation();
+        const Vec3& coordinate = data->portalPassing->getPortalPassingCoordinate();
+#endif
+        const Vec3 position = transformPoint(coordinate, transformation);
+
+        Vec3 start = data->lastPosition;
+        Vec3 direction = { position.x - start.x, position.y - start.y, position.z - start.z };
+        normalise(direction);
+
+        bool sweep = true;
+        if (IObject* const sector = data->portalPassing->getSector())
+        {
+            PortalCollision* const exit =
+                checkAddPortalCollision(collisions, sector, start, position, false);
+            if (exit)
+                start = stepPast(exit->intersectionPosition, direction);
+            else
+                sweep = false;
+        }
+
+        if (sweep)
+        {
+            // The sweep starts from the stored position, not from the step past an exit.
+            const Vec3 delta = { position.x - start.x, position.y - start.y, position.z - start.z };
+            sectorObjects.clear();
+            objectManager->getObjectsFromGrid(data->lastPosition, delta, sectorObjects,
+                                              &sectorPredicate, false, 0, false);
+            for (std::vector<IObject*>::iterator candidate = sectorObjects.begin();
+                 candidate != sectorObjects.end(); ++candidate)
+            {
+                PortalCollision* hit =
+                    checkAddPortalCollision(collisions, *candidate, start, position, true);
+                while (hit)
+                {
+                    const Vec3 retry = stepPast(hit->intersectionPosition, direction);
+                    hit = checkAddPortalCollision(collisions, *candidate, retry, position, true);
+                }
+            }
+        }
+
+        // Moving against a portal's normal enters its sector; anything else leaves it. Each event
+        // goes to the global, sector and object subscribers and is never freed, as shipped.
+        collisions.sort(PortalCollisionPred());
+        for (std::list<PortalCollision*>::iterator c = collisions.begin(); c != collisions.end(); ++c)
+        {
+            PortalCollision* const collision = *c;
+            const Vec3& normal = collision->intersectionNormal;
+            PortalEvent* event;
+            if (direction.x * normal.x + direction.y * normal.y + direction.z * normal.z < 0.0f)
+            {
+                event = new PortalEvent(PORTAL_EVENT_ENTER_SECTOR, object, collision->portalObject,
+                                        collision->portalId);
+                collision->sector->addObject(object);
+                data->portalPassing->setSector(collision->portalObject);
+            }
+            else
+            {
+                event = new PortalEvent(PORTAL_EVENT_LEAVE_SECTOR, object, collision->portalObject,
+                                        collision->portalId);
+                collision->sector->removeObject(object);
+                data->portalPassing->setSector(0);
+            }
+            broadcastEvent(event);
+            collision->sector->broadcastEvent(event);
+            data->portalPassing->broadcastEvent(event);
+            delete collision;
+        }
+        collisions.clear();
+
+        data->lastPosition = position;
+    }
 }
 
 } // namespace world
