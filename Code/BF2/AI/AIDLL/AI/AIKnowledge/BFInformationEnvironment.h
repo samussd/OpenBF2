@@ -99,7 +99,7 @@ public:
     virtual void getAllInformation(std::vector<unsigned int>&, int, bool, IAIInformationGridPredicate*,
                                    IAIInformationGridPredicate*);
 
-    // IAIInformationEnvironmentModifiers. All [FRONTIER].
+    // IAIInformationEnvironmentModifiers. Complete.
     virtual void addInfo(int, bool, unsigned int);
     virtual void addAndUpdatePosition(int, bool, unsigned int);
     virtual void updatePosition(int, bool, unsigned int);
