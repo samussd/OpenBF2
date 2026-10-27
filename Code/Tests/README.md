@@ -3,7 +3,8 @@
 Start with the validation commands in the [development guide](../../docs/development.md).
 `syntaxcheck.cmd` checks engine translation units; the CMake `bf2_run_checks` and
 `bf2_editor_run_checks` targets build and run focused suites. Individual `.cmd` files
-build the matching component fixtures. `aidll/` exercises the AI image; `tier2/`
+build the matching component fixtures. `aidll/` exercises the AI image, and `aidll/coop/`
+observes bots during a real coop round on the original or the rebuilt server; `tier2/`
 and `tier3/` cover content loading and vehicle behavior.
 
 Fixtures may supply typed observers or isolated copies of production translation
