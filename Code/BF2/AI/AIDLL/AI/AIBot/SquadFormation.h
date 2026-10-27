@@ -85,6 +85,7 @@ public:
     bool isInFormation(int memberIndex);      // ignores occupied flag
     void leaveFormation(int memberIndex);
     void resetSlot(int slotIndex);            // inlined
+    void reassignSlots();                     // refills the slots after a member leaves
     void updateClosestSlots();
     int getClosestSlotIndex(int slotIndex);    // world-position seam
     void swapSlots(int first, int second);    // three payload fields only

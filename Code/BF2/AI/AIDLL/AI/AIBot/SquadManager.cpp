@@ -4,6 +4,7 @@
 #include "SquadManager.h"
 
 #include "SquadCoordinator.h"                        // the constructor builds two per squad
+#include "SquadMember.h"                             // addSquadMember moves a member between squads
 #include "BotMain.h"
 #include "BotSquad.h"
 #include "../Main/AIDllFrontier.h"
@@ -276,11 +277,29 @@ void SquadManager::addSquadMember(int playerId, int side)
         best = selected->getNumberOfSquadMembers();
         if (best >= splitAt)
         {
-            // The old member is fetched before removal. Its removal/formation reindexing
-            // engine exit/rejoin and subsequent deletion remain unrecovered as a chain.
-            selected->getSquadMember(best - 1);
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadManager::addSquadMember (SquadCoordinator::removeSquadMember)");
+            // The newest member moves to the empty next squad, which then takes the new player.
+            // The engine sees the member leave and join; the old record is rebuilt and deleted.
+            // The bot arm has no null check, as shipped.
+            SquadMember* const moved = selected->getSquadMember(best - 1);
+            selected->removeSquadMember(best - 1);
+            selected->updateSquadLeader();
+            static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+                ->exitSquad(selected->getSquadId() + 1, moved->getPlayer());
+            selected = coordinators[selected->getSquadId() + 1];
+            selected->addSquadMember(moved->getPlayer());
+            if (!moved->isBot())
+            {
+                static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+                    ->joinSquad(selected->getSquadId() + 1, moved->getPlayer());
+            }
+            else
+            {
+                const int squad = selected->getSquadId() + 1;
+                IBotManager::instance->getBotFromPlayerId(moved->getPlayerId())
+                    ->getBotSquad()->joinSquad(squad);
+            }
+            selected->updateSquadLeader();
+            delete moved;
         }
     }
 

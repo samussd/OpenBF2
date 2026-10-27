@@ -739,7 +739,9 @@ void SquadCoordinator::addSquadMember(IAIPlayer* player)
 
 // Stop on the first engine-recognized leader; later members
 // are not visited. No found leader leaves the old index intact. A first leader skips the
-// change arm, but the single-member trailing-position reset still runs.
+// change arm, but the single-member trailing-position reset still runs. A changed leader
+// moves the formation and squad paths to it; a human leader of two or more members loses the
+// squad's area assignment unless a player commands the side.
 void SquadCoordinator::updateSquadLeader()
 {
     const int oldLeader = m_i96;
@@ -762,13 +764,64 @@ void SquadCoordinator::updateSquadLeader()
     if (oldLeader != m_i96 && oldLeader != -1 && !m_squadMembers.empty())
     {
         m_squadMembers[m_i96]->updateMemberPos();
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-        // Next: formation->joinSquadLeader, updateSquadPosition, updateSquadPaths
-        // then the human-leader/commander policy. Those movement bodies remain unrecovered.
-        BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::updateSquadLeader (SquadFormation::joinSquadLeader)");
+        m_formation->joinSquadLeader();
+        updateSquadPosition();
+        updateSquadPaths();
+        if (getSquadLeader() && !getSquadLeader()->isBot() && m_squadMembers.size() > 1
+            && !IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+        {
+            unAssignSquad();
+        }
     }
     if (m_squadMembers.size() == 1)
         m_formation->resetTrailingPositions();
+}
+
+// The member leaves the formation before the vector erase; the leader update and the slot
+// reassignment then see the renumbered roster. The member itself is not deleted.
+void SquadCoordinator::removeSquadMember(int index)
+{
+    SquadMember* const member = m_squadMembers[index];
+    removeSquadMemberFire(member);
+    if (m_formation->isInFormation(member->getMemberIndex()))
+        m_formation->leaveFormation(member->getMemberIndex());
+    m_squadMembers.erase(m_squadMembers.begin() + index);
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+        m_squadMembers[i]->setMemberIndex(static_cast<int>(i));
+    updateSquadLeader();
+    m_formation->reassignSlots();
+}
+
+// Matches by player id, first match only; an unknown member is ignored.
+void SquadCoordinator::removeSquadMember(SquadMember* member)
+{
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+    {
+        if (member->getPlayerId() == m_squadMembers[i]->getPlayerId())
+        {
+            removeSquadMember(static_cast<int>(i));
+            return;
+        }
+    }
+}
+
+// Every record of the member's player id is deleted, not just the first.
+void SquadCoordinator::removeSquadMemberFire(SquadMember* member)
+{
+    const int playerId = member->getPlayer()->getId();
+    std::list<SquadMemberFire*>::iterator it = m_list12.begin();
+    while (it != m_list12.end())
+    {
+        if ((*it)->m_playerId == playerId)
+        {
+            delete *it;
+            it = m_list12.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
 }
 
 // - one indexed load through the vector's data pointer.

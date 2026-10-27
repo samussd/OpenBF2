@@ -165,6 +165,7 @@ Bot* SquadMember::getBot()
 }
 
 int SquadMember::getMemberIndex() { return m_memberIndex; }
+void SquadMember::setMemberIndex(int index) { m_memberIndex = index; }
 void SquadMember::setIsSquadLeader(bool leader) { m_isSquadLeader = leader; }
 bool SquadMember::isSquadLeader() { return m_isSquadLeader; }
 

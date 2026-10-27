@@ -28,6 +28,7 @@ public:
     bool isBot();
     Bot* getBot();                           // borrowed
     int getMemberIndex();
+    void setMemberIndex(int index);          // the squad renumbers members after a removal
     void setIsSquadLeader(bool leader);
     bool isSquadLeader();
     bool isMoving();                         // returns m_moved

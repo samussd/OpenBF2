@@ -1,5 +1,5 @@
 // Coordinates squad membership, leadership and its owned formation.
-// [FRONTIER] Leader-change movement remains incomplete.
+// [FRONTIER] Radio messages, squad maneuvers and the strategic-strength query remain incomplete.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 // [INFERRED] Source placement.
 
@@ -66,7 +66,12 @@ public:
     SquadFormation* getSquadFormation();         // borrowed
     const Vec3& getSquadGotoPos();               // borrowed, return spelling inferred
     void addSquadMember(IAIPlayer* player);
-    void updateSquadLeader();                   // change seam
+    // Removes the member at index (unchecked) or the member with the same player id; the
+    // caller keeps ownership of the removed member. Remaining members are renumbered.
+    void removeSquadMember(int index);
+    void removeSquadMember(SquadMember* member);
+    void removeSquadMemberFire(SquadMember* member);  // deletes the member's shot records
+    void updateSquadLeader();
     void unAssignSquad();                       // PE inlined at
     SquadMember* getSquadMember(int index);
     SquadMember* getSquadMember(int playerId, int& index);
