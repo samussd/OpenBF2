@@ -48,6 +48,9 @@ public:
     // Round restart: every squad loses its area, the queues empty, and both cursors rewind.
     void reset();
     void unAssignSquads(int side);
+    // Frees the side's squads assigned to the area, except those already closing on it; returns
+    // how many were freed.
+    int unAssignSquads(int areaIndex, int side);
 
     // Clears messages and position records by erasing each container node individually.
     void clearCommanderMessages();

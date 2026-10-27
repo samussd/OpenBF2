@@ -912,6 +912,27 @@ void SquadCoordinator::reset()
         m_squadMembers[i]->reset();
 }
 
+bool SquadCoordinator::squadHasMission()
+{
+    return m_i120 == 2;
+}
+
+// The first member close to the goal answers; members after it are not asked.
+bool SquadCoordinator::isSquadCloseToNonOwnedTarget()
+{
+    if (!m_strategicAreaAssignment
+        || static_cast<int>(m_strategicAreaAssignment->getStatus(m_side + 1)) == 0)
+    {
+        return false;
+    }
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+    {
+        if (m_squadMembers[i]->isCloseToNonOwnedTarget())
+            return true;
+    }
+    return false;
+}
+
 void SquadCoordinator::resetNeedOrderMessageTimer(double now)
 {
     m_needOrderMessageTimer = now;

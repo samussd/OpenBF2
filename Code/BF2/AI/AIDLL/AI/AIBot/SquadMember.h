@@ -40,6 +40,9 @@ public:
     bool isAllowedInFormation();             // nonnull vehicle [FRONTIER]
     void updateMemberPos();                  // nonnull vehicle [FRONTIER]
     bool isMobile();                         // owner query [FRONTIER]
+    // On a mission to its assigned area, which the side does not own, and within the formation
+    // distance of the squad's goal. The (float, float) overload is not called by this path.
+    bool isCloseToNonOwnedTarget() const;
     void moveWithFormation();                // world-position [FRONTIER]
     void moveWithoutFormation();             // alive owner query [FRONTIER]
     float getVehicleRadius();                // [FRONTIER]

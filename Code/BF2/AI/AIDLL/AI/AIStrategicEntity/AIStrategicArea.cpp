@@ -202,8 +202,8 @@ void AIStrategicArea::internalConstructorCall(const Vec2& topLeft, const Vec2& c
     const int vehicleGroups = settings->getNumberOfVehicleGroups();
     const int groups = vehicleGroups ? vehicleGroups : 1;
 
-    m_flagsA = checkPointer(new bool[groups]);
-    m_flagsB = checkPointer(new bool[groups]);
+    m_groupsDirty[0] = checkPointer(new bool[groups]);
+    m_groupsDirty[1] = checkPointer(new bool[groups]);
 
     m_listsA = checkPointer(new std::list<std::pair<float, AIStrategicObject*> >[groups]);
     m_listsB = checkPointer(new std::list<std::pair<float, AIStrategicObject*> >[groups]);
@@ -218,8 +218,8 @@ void AIStrategicArea::internalConstructorCall(const Vec2& topLeft, const Vec2& c
 
     for (int i = 0; i < groups; ++i)
     {
-        m_flagsA[i] = true;
-        m_flagsB[i] = true;
+        m_groupsDirty[0][i] = true;
+        m_groupsDirty[1][i] = true;
     }
 
     // Stores equal center-to-corner distances for the initial positions.
@@ -681,9 +681,22 @@ bool AIStrategicArea::retainBot(int, int, ISAI*)
     BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::retainBot");
 }
 
-void AIStrategicArea::setAsDirty(int)
+// Marks the side's distances and every vehicle group stale. Without groups only the one flag
+// the constructor allocated is set. The side is not checked.
+void AIStrategicArea::setAsDirty(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::setAsDirty");
+    m_distancesDirty[side - 1] = true;
+    const int groups = static_cast<const IAISettings*>(CommonSingletonServer::m_iaiSettings)
+        ->getNumberOfVehicleGroups();
+    if (groups == 0)
+    {
+        m_groupsDirty[side - 1][0] = true;
+    }
+    else
+    {
+        for (int i = 0; i < groups; ++i)
+            m_groupsDirty[side - 1][i] = true;
+    }
 }
 
 int AIStrategicArea::orderBot(int, const std::list<AIStrategicObject*>&, int, ISAI*)

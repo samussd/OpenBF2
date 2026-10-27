@@ -8,6 +8,7 @@
 #include "BotMain.h"
 #include "SquadCoordinator.h"
 #include "SquadFormation.h"
+#include "../AIStrategicEntity/AIStrategicArea.h"   // isCloseToNonOwnedTarget: area status
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
@@ -166,6 +167,23 @@ Bot* SquadMember::getBot()
 
 int SquadMember::getMemberIndex() { return m_memberIndex; }
 void SquadMember::setMemberIndex(int index) { m_memberIndex = index; }
+
+// The distance is three-dimensional and compared squared against m_formationDistanceSq.
+bool SquadMember::isCloseToNonOwnedTarget() const
+{
+    if (!m_squad->squadHasMission() || !m_squad->isSquadAssignedToAnyArea())
+        return false;
+    if (static_cast<int>(m_squad->getSquadStrategicAreaAssignment()->getStatus(m_side + 1)) == 0
+        || !m_positionValid)
+    {
+        return false;
+    }
+    const Vec3& goal = m_squad->getSquadGotoPos();
+    const float dx = m_position.x - goal.x;
+    const float dy = m_position.y - goal.y;
+    const float dz = m_position.z - goal.z;
+    return dx * dx + dy * dy + dz * dz < m_formationDistanceSq;
+}
 
 void SquadMember::reset()
 {

@@ -216,7 +216,7 @@ public:
     virtual bool haveAnyOwnedCps(int side);
     virtual bool haveAnyOwnedAndTakeableCps(int side);
     virtual bool ownAllTakeableCps(int side);
-    virtual int releaseSquadsFromObject(int a, int b);                    // frontier
+    virtual int releaseSquadsFromObject(int objectIndex, int side);
     virtual void releaseUnitFromObject(int a, std::map<int, int>::iterator& it, int b);
     virtual void foundDeadBot(int botId);
     virtual bool hasChangedEquipment(int botId);

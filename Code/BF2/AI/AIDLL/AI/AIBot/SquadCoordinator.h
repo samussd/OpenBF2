@@ -78,6 +78,8 @@ public:
     SquadMember* getSquadMember(int playerId, int& index);
     bool hasMemberWithKit(KitType type);
     bool isSquadAssignedToAnyArea();
+    bool squadHasMission();                      // the maneuver state is 2
+    bool isSquadCloseToNonOwnedTarget();         // any member, while the area is not neutral
     AIStrategicArea* getSquadStrategicAreaAssignment(); // borrowed
     void resetNeedOrderMessageTimer(double now);
 

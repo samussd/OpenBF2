@@ -130,8 +130,7 @@ public:
 // [INFERRED] Container element types remain partly uncertain. Side-indexed flags use side - 1.
     /* +344 */ bool m_distancesDirty[2];           // both = true [INFERRED] name
     /* +346 */ char m_pad346[2];
-    /* +348 */ bool* m_flagsA;                     // new bool[groups], all true [UNRESOLVED]
-    /* +352 */ bool* m_flagsB;                     // new bool[groups], all true [UNRESOLVED]
+    /* +348 */ bool* m_groupsDirty[2];             // per side, new bool[groups], all true [INFERRED] name
     /* +356 */ bool m_sideEnabled[2];             // both true; [INFERRED] name, update side gates
     /* +358 */ bool m_b358;                        // false [UNRESOLVED] (the constructor's)
     /* +359 */ char m_pad359[1];

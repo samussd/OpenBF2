@@ -781,11 +781,13 @@ bool SAI::ownAllTakeableCps(int)
     BF2_AI_FRONTIER("dice::hfe::ai::SAI::ownAllTakeableCps");
 }
 
-// preserve unAssignSquads' full integer return.
-// The caller's full-EAX additions establish the count contract; the body remains stopped.
-int SAI::releaseSquadsFromObject(int, int)
+// Returns the squad manager's count of freed squads. The object is looked up by index only to
+// read its index back.
+int SAI::releaseSquadsFromObject(int objectIndex, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::releaseSquadsFromObject");
+    AIStrategicObject* const object =
+        AIStrategicObjectManager::getInstance()->getStrategicObject(objectIndex);
+    return SquadManager::m_instance->unAssignSquads(object->getIndex(), side);
 }
 
 void SAI::releaseUnitFromObject(int, std::map<int, int>::iterator&, int)

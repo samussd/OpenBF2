@@ -396,6 +396,21 @@ void SquadManager::unAssignSquads(int side)
         m_coordinators[side - 1][i]->unAssignSquad();
 }
 
+int SquadManager::unAssignSquads(int areaIndex, int side)
+{
+    int released = 0;
+    for (unsigned int i = 0; i < m_coordinators[side - 1].size(); ++i)
+    {
+        SquadCoordinator* const squad = m_coordinators[side - 1][i];
+        if (!squad->isSquadCloseToNonOwnedTarget() && squad->isSquadAssignedToArea(areaIndex))
+        {
+            squad->unAssignSquad();
+            ++released;
+        }
+    }
+    return released;
+}
+
 // Squad zero is ignored, and so is a player the side does not know. Only the squad the engine
 // names is searched, so a member held by another squad stays. The member record is not deleted,
 // as shipped: a member the AI moved itself was already removed before the engine reported it.
