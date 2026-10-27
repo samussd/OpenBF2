@@ -373,6 +373,22 @@ void SquadManager::playerJoinsSquad(int playerId, int squadId, int side)
     coordinator->updateSquadLeader();
 }
 
+// Squad zero is ignored, and so is a player the side does not know. Only the squad the engine
+// names is searched, so a member held by another squad stays. The member record is not deleted,
+// as shipped: a member the AI moved itself was already removed before the engine reported it.
+void SquadManager::playerRemovedFromSquad(int playerId, int squadId, int side)
+{
+    if (squadId == 0)
+        return;
+    SquadMember* const member = getSquadMember(playerId, side);
+    if (!member)
+        return;
+
+    SquadCoordinator* coordinator = m_coordinators[side - 1][squadId - 1];
+    coordinator->removeSquadMember(member);
+    coordinator->updateSquadLeader();
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

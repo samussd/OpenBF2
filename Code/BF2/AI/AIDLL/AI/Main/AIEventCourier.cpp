@@ -230,9 +230,11 @@ void AIEventCourier::event_joinedSquad(int playerId, int squadId, int side)
         SquadManager::m_instance->playerJoinsSquad(playerId, squadId, side);
 }
 
-void AIEventCourier::event_removedFromSquad(int, int, int)
+// Same order and guard as event_joinedSquad.
+void AIEventCourier::event_removedFromSquad(int playerId, int squadId, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_removedFromSquad");
+    if (SquadManager::m_instance)
+        SquadManager::m_instance->playerRemovedFromSquad(playerId, squadId, side);
 }
 
 void AIEventCourier::event_recievedAttackSquadOrder(int)

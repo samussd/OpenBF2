@@ -64,9 +64,12 @@ bool BFSquad::joinSquad(int squad, IAIPlayer* player)
     return static_cast<ISquadManager*>(squadManager)->addToSquad(side, squad, playerId);
 }
 
-int BFSquad::exitSquad(int squad, IAIPlayer* player)
+// Preserve id-before-side virtual calls. Never a kick.
+void BFSquad::exitSquad(int squad, IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::exitSquad");
+    const int playerId = player->getId();
+    const int side = player->getSide();
+    static_cast<ISquadManager*>(squadManager)->removeFromSquad(side, squad, playerId, false);
 }
 
 bool BFSquad::isSquadLeader(int squad, IAIPlayer* player)

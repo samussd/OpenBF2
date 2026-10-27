@@ -15,7 +15,6 @@
 #include "../../../AI/AIInterface/AIInstance.h"
 #include "../../../AI/AIInterface/IAIEventCourier.h"
 #include "../../../AI/AIInterface/SingletonServer.h"
-#include "../../../AI/AIInterface/BFKnowledge/AIFrontier.h"
 #include "../../../Core/EventManager.h"              // eventManager->postEvent - removeFromSquad
 #include "../../Common/GameEvent.h"                  // PostRemoteEvent - the ECHud 20/21 sends
 #include "../../IGameLogic.h"                        // gameLogic->isServer
@@ -378,7 +377,7 @@ bool Squad::addToSquad(int playerId)
 // Moves a departing player to the unassigned squad, notifies remaining members and reelects a leader.
 // Captures the squad ID before a possible empty-squad reset. Leader reelection requires a live player.
 // [INFERRED] skipScriptEvent suppresses Python notification; kicked chooses the HUD message.
-// The AI courier notification remains a named stop before the empty-squad reset.
+// The AI hears of the removal before the empty-squad reset.
 bool Squad::removeFromSquad(int playerId, bool skipScriptEvent, bool kicked)
 {
     const int squadId = m_squadId;                                              // captured first
@@ -435,12 +434,16 @@ bool Squad::removeFromSquad(int playerId, bool skipScriptEvent, bool kicked)
 
     if (ai::g_aiInstance && ai::aiInstance()->isInitialized())
     {
+        // [PLATFORM] PE caches the courier before getTeam (0x45F835 / 0x45F844);
+        // ELF loads it after getTeam (0x8119ED8 / 0x8119EDE).
+#if defined(_MSC_VER)
+        ai::IAIEventCourier* const courier = ai::BFSingletonServer::m_iaiEventCourier;
+#endif
         const int teamId = player->getTeam();                                  // player unchecked
-        (void)teamId;
-        //  / PE 0x45F844 reads the team before the courier call with
-        // (playerId, current m_squadId, teamId), ELF +0x90 / PE +0x8C.
-        // [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-        BF2_AI_FRONTIER("dice::hfe::Squad::removeFromSquad (AIEventCourier::event_removedFromSquad)");
+#if !defined(_MSC_VER)
+        ai::IAIEventCourier* const courier = ai::BFSingletonServer::m_iaiEventCourier;
+#endif
+        courier->event_removedFromSquad(playerId, m_squadId, teamId);          // ELF +0x90 / PE +0x8C
     }
 
     if (m_members.empty())                                                      // +0x144

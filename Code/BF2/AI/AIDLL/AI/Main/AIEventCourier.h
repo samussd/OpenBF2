@@ -123,7 +123,7 @@ public:
     virtual void event_resignAsCommander(int, int);
     virtual void eventNewSquadLeader(int, int);     // side then squad id
     virtual void event_joinedSquad(int, int, int);  // player id, squad id, side
-    virtual void event_removedFromSquad(int, int, int);
+    virtual void event_removedFromSquad(int, int, int); // player id, squad id, side
     virtual void event_recievedAttackSquadOrder(int);
     virtual void event_recievedDefendSquadOrder(int);
     virtual void event_recievedMoveSquadOrder(int);
