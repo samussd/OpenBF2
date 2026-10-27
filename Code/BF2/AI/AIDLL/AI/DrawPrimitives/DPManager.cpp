@@ -82,9 +82,47 @@ DPManager::~DPManager()
 {
 }
 
-int DPManager::deleteCircle(DrawPrimitive *&)
+namespace {
+
+// [FRONTIER] The DPStatic classes are unrecovered and their create* bodies still stop, so no map
+// can hold a primitive yet; destroying one stops here.
+template <class Primitive>
+void destroyPrimitive(Primitive* primitive)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::DPManager::deleteCircle");
+    if (primitive)
+        BF2_AI_FRONTIER("dice::hfe::ai::DPManager [DPStatic destructors]");
+}
+
+// A known handle has its primitive destroyed and forgotten, and is cleared; an unknown one is
+// left alone and fails.
+template <class Primitive>
+bool deletePrimitive(std::map<DrawPrimitive*, Primitive*>& primitives, DrawPrimitive*& handle)
+{
+    const typename std::map<DrawPrimitive*, Primitive*>::iterator found = primitives.find(handle);
+    if (found == primitives.end())
+        return false;
+    destroyPrimitive(found->second);
+    primitives.erase(found);
+    handle = 0;
+    return true;
+}
+
+template <class Primitive>
+void deletePrimitives(std::map<DrawPrimitive*, Primitive*>& primitives)
+{
+    for (typename std::map<DrawPrimitive*, Primitive*>::iterator it = primitives.begin();
+         it != primitives.end(); ++it)
+    {
+        destroyPrimitive(it->second);
+    }
+    primitives.clear();
+}
+
+} // namespace
+
+int DPManager::deleteCircle(DrawPrimitive *& primitive)
+{
+    return deletePrimitive(m_circles, primitive);
 }
 
 int DPManager::getCircleAttributes(DrawPrimitive *, float &, unsigned int &, Vec3 &, float &, Vec3 &, bool &, int &)
@@ -97,9 +135,9 @@ int DPManager::setCircleAttributes(DrawPrimitive *, float, unsigned int, const V
     BF2_AI_FRONTIER("dice::hfe::ai::DPManager::setCircleAttributes");
 }
 
-int DPManager::deleteLine(DrawPrimitive *&)
+int DPManager::deleteLine(DrawPrimitive *& primitive)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::DPManager::deleteLine");
+    return deletePrimitive(m_lines, primitive);
 }
 
 int DPManager::getLineAttributes(DrawPrimitive *, float &, unsigned int &, std::vector<Vec3> &, float &)
@@ -112,9 +150,9 @@ int DPManager::setLineAttributes(DrawPrimitive *, float, unsigned int, const std
     BF2_AI_FRONTIER("dice::hfe::ai::DPManager::setLineAttributes");
 }
 
-int DPManager::delete2dText(DrawPrimitive *&)
+int DPManager::delete2dText(DrawPrimitive *& primitive)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::DPManager::delete2dText");
+    return deletePrimitive(m_text2d, primitive);
 }
 
 int DPManager::get2dTextAttributes(DrawPrimitive *, float &, unsigned int &, Vec2 &, std::vector<std::string> &, int &, AITextAlignmentX &, AITextAlignmentY &)
@@ -127,9 +165,9 @@ int DPManager::set2dTextAttributes(DrawPrimitive *, float, unsigned int, const V
     BF2_AI_FRONTIER("dice::hfe::ai::DPManager::set2dTextAttributes");
 }
 
-int DPManager::delete3dText(DrawPrimitive *&)
+int DPManager::delete3dText(DrawPrimitive *& primitive)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::DPManager::delete3dText");
+    return deletePrimitive(m_text3d, primitive);
 }
 
 int DPManager::get3dTextAttributes(DrawPrimitive *, float &, unsigned int &, Vec3 &, std::vector<std::string> &, int &, AITextAlignmentX &, AITextAlignmentY &)
@@ -142,9 +180,9 @@ int DPManager::set3dTextAttributes(DrawPrimitive *, float, unsigned int, const V
     BF2_AI_FRONTIER("dice::hfe::ai::DPManager::set3dTextAttributes");
 }
 
-int DPManager::deleteTriangle(DrawPrimitive *&)
+int DPManager::deleteTriangle(DrawPrimitive *& primitive)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::DPManager::deleteTriangle");
+    return deletePrimitive(m_triangles, primitive);
 }
 
 int DPManager::getTriangleAttributes(DrawPrimitive *, float &, std::vector<Vec3> &, std::vector<unsigned int>&, bool &)
@@ -157,9 +195,9 @@ int DPManager::setTriangleAttributes(DrawPrimitive *, float &, const std::vector
     BF2_AI_FRONTIER("dice::hfe::ai::DPManager::setTriangleAttributes");
 }
 
-int DPManager::deletePolygon(DrawPrimitive *&)
+int DPManager::deletePolygon(DrawPrimitive *& primitive)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::DPManager::deletePolygon");
+    return deletePrimitive(m_polygons, primitive);
 }
 
 int DPManager::getPolygonAttributes(DrawPrimitive *, float &, bool &)
@@ -173,13 +211,9 @@ int DPManager::setPolygonAttributes(DrawPrimitive *, float &, bool &)
 }
 
 // Deletes a known mesh and clears the caller's handle. An unknown handle returns false.
-// [FRONTIER] Known mesh deletion requires DPStaticMesh destruction.
 bool DPManager::deleteMesh(DrawPrimitive *& primitive)
 {
-    const std::map<DrawPrimitive*, DPStaticMesh*>::iterator found = m_meshes.find(primitive);
-    if (found == m_meshes.end())
-        return false;
-    BF2_AI_FRONTIER("dice::hfe::ai::DPManager::deleteMesh [DPStaticMesh's destructor]");
+    return deletePrimitive(m_meshes, primitive);
 }
 
 void DPManager::setTextGamma(float)
@@ -202,9 +236,16 @@ void DPManager::nodrawUpdate()
     BF2_AI_FRONTIER("dice::hfe::ai::DPManager::nodrawUpdate");
 }
 
-int DPManager::deleteAll()
+// Empties every map, lines last, as shipped.
+void DPManager::deleteAll()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::DPManager::deleteAll");
+    deletePrimitives(m_circles);
+    deletePrimitives(m_text2d);
+    deletePrimitives(m_text3d);
+    deletePrimitives(m_triangles);
+    deletePrimitives(m_polygons);
+    deletePrimitives(m_meshes);
+    deletePrimitives(m_lines);
 }
 
 DPStaticCircle * DPManager::createStaticCircle(float, unsigned int, const Vec3&, float, const Vec3&, bool, int)

@@ -340,6 +340,50 @@ SAI::SAI(int side, int, int, Vec2, Vec2)
         m_botInfo[i] = 0;
 }
 
+// Clears the strategies' two leading floats, the strength snapshots, the update cursor and the
+// deny requests, restarts the four review deadlines as the constructor does, and resets every
+// squad, both sides', through the shared squad manager.
+bool SAI::reset()
+{
+    for (std::vector<StrategyContainer>::iterator it = m_strategies.begin();
+         it != m_strategies.end(); ++it)
+    {
+        it->m_float04 = 0.0f;
+        it->m_float00 = 0.0f;
+    }
+    for (int i = 0; i < 6; ++i)
+    {
+        m_enemyStrengths[i] = 0.0f;
+        m_enemyCounts[i] = 0.0f;
+        m_friendlyStrengths[i] = 0.0f;
+        m_friendlyCounts[i] = 0.0f;
+    }
+    m_flag1C0 = false;
+    m_flag1C1 = false;
+    m_flag1CE = true;
+    m_float190 = -1000.0f;
+    m_int18C = 19;
+    m_intD8 = 0;
+    m_intDC = 0;
+    for (std::list<DenyRequest*>::iterator it = m_denyRequests.begin();
+         it != m_denyRequests.end();)
+    {
+        delete *it;
+        it = m_denyRequests.erase(it);
+    }
+
+    const double now =
+        static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_time80 = now + 10.0;
+    m_time68 = now + 60.0;
+    m_time70 = now + 60.0;
+    m_time78 = now + 60.0;
+    m_time88 = 0.0;
+    SquadManager::m_instance->reset();
+    m_flagAC = true;
+    return true;
+}
+
 // [FRONTIER] Strategy and distribution operations remain incomplete.
 // [FRONTIER] Destruction stops until ordered teardown is implemented.
 // [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]

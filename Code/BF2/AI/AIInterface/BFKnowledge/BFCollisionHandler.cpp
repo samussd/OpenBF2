@@ -94,9 +94,14 @@ BFCollisionHandler::~BFCollisionHandler()
 {
 }
 
+// Replaces every bot's record with a fresh one; the tracked rounds are forgotten, not touched.
 void BFCollisionHandler::removeAllProjectiles()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCollisionHandler::removeAllProjectiles");
+    for (int i = 0; i < m_count; ++i)
+    {
+        delete m_projectiles[i];
+        m_projectiles[i] = checkPointer(new BotProjectile());
+    }
 }
 
 void BFCollisionHandler::handleCollision(world::IObject* a, world::IObject* b, const Vec3& at)

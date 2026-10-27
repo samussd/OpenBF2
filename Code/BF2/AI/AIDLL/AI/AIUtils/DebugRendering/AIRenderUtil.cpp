@@ -3,7 +3,9 @@
 
 #include "AIRenderUtil.h"
 
+#include "../../AIBot/BotMain.h"                         // unrenderBot: Bot::getBotId
 #include "../../AIStrategicEntity/AILandingZoneManager.h"
+#include "../../AIStrategicEntity/AIStrategicArea.h"      // unrenderStrategicArea
 #include "../../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../../DrawPrimitives/DPManager.h"
 #include "../../Main/AIConsole.h"
@@ -389,26 +391,31 @@ void AIRenderUtil::unrenderAll()
     AIConsole::m_instance->removeCameraText();
 }
 
-// [FRONTIER] Bot primitive cleanup requires the remaining bot rendering contract.
-// [RETIRE-WHEN: botmain-bases] Complete and validate the corresponding AIRenderUtil operation.
-void AIRenderUtil::unrenderBot(Bot*)
+// The bot's id indexes its primitives, unchecked.
+void AIRenderUtil::unrenderBot(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIRenderUtil::unrenderBot (Bot::getBotId, botmain-bases)");
+    m_botPrimitives[bot->getBotId()].deletePrimitives();
 }
 
-// [FRONTIER] Releases every bot's debug primitives once the required bot interfaces are available.
-// [RETIRE-WHEN: botmain-bases] Remove when the corresponding implementation is complete and validated.
-// [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
+// Walks the ids below the bot count; a free id yields a null bot, which is not checked.
 void AIRenderUtil::unrenderAllBots()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIRenderUtil::unrenderAllBots (IBotManager, botmanager-bases)");
+    IBotManager* const manager = IBotManager::instance;
+    if (!manager)
+        return;
+    const int count = manager->getBotCount();
+    for (int id = 0; id < count; ++id)
+        unrenderBot(manager->getBotFromId(id));
 }
 
-// [FRONTIER] Area primitive cleanup requires its validated primitive index.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding AIRenderUtil operation.
-void AIRenderUtil::unrenderStrategicArea(AIStrategicArea*)
+// The area's index picks its primitives, then each landing zone's id picks the zone's.
+void AIRenderUtil::unrenderStrategicArea(AIStrategicArea* area)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIRenderUtil::unrenderStrategicArea (AIStrategicArea layout)");
+    m_strategicAreaPrimitives[area->getIndex()].deletePrimitives();
+    const std::vector<AILandingZone*>& zones = area->getLandingZones();
+    // [FRONTIER] AILandingZone is unrecovered and nothing adds a zone to an area yet.
+    if (!zones.empty())
+        BF2_AI_FRONTIER("dice::hfe::ai::AIRenderUtil::unrenderStrategicArea (AILandingZone::getId)");
 }
 
 // Copies the strategic-area map before iterating it to remove debug rendering.

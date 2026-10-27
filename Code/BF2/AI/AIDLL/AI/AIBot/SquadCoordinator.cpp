@@ -875,6 +875,43 @@ AIStrategicArea* SquadCoordinator::getSquadStrategicAreaAssignment()
 }
 
 // - one store of a double.
+// Drops the area assignment, maneuver, repair request and shot records, rejoins the formation
+// on the leader, restarts the order-request timer and resets every member.
+void SquadCoordinator::reset()
+{
+    m_strategicAreaAssignment = 0;
+    m_i40 = 4;
+    m_d48 = -20.0;
+    m_i44 = 0;
+    m_i76 = 4;
+    m_i60 = 0;
+    m_i80 = 0;
+    m_i120 = 0;
+    m_formation->joinSquadLeader();
+    for (std::list<SquadMemberFire*>::iterator it = m_list12.begin(); it != m_list12.end();)
+    {
+        delete *it;
+        it = m_list12.erase(it);
+    }
+    m_formation->reassignSlots();
+    const Vec3 zero = { 0.0f, 0.0f, 0.0f };
+    m_v108 = zero;
+    m_i148 = 0;
+    m_i152 = 0;
+    m_d132 = 0.0;
+    m_d140 = 0.0;
+    m_b156 = false;
+    m_b157 = false;
+    m_b172 = false;
+    m_b196 = false;
+    m_v200 = zero;
+    resetNeedOrderMessageTimer(
+        static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime());
+    m_b220 = false;
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+        m_squadMembers[i]->reset();
+}
+
 void SquadCoordinator::resetNeedOrderMessageTimer(double now)
 {
     m_needOrderMessageTimer = now;

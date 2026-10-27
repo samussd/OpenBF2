@@ -103,6 +103,9 @@ public:
     // Additional virtual overload declared after the inherited slots.
     virtual float gravity(float distance, int side);               // slot 33,
 
+    std::vector<AILandingZone*>& getLandingZones();
+    const std::vector<AILandingZone*>& getLandingZones() const;
+
 // [FRONTIER] Additional area operations remain undeclared until their signatures are established.
 
     // layout, ELF offsets, read store by store out of the constructor

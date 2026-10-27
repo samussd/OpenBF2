@@ -373,6 +373,29 @@ void SquadManager::playerJoinsSquad(int playerId, int squadId, int side)
     coordinator->updateSquadLeader();
 }
 
+void SquadManager::reset()
+{
+    unAssignSquads(1);
+    unAssignSquads(2);
+    clearCommanderMessages();
+    clearPlayerValidPositions();
+    m_sideBlock0.m_b0 = false;
+    m_sideBlock1.m_b0 = false;
+    m_squadCursor = 0;
+    m_sideCursor = 1;
+    for (unsigned int i = 0; i < m_coordinators[0].size(); ++i)
+        m_coordinators[0][i]->reset();
+    for (unsigned int i = 0; i < m_coordinators[1].size(); ++i)
+        m_coordinators[1][i]->reset();
+}
+
+// One-based side, unchecked.
+void SquadManager::unAssignSquads(int side)
+{
+    for (unsigned int i = 0; i < m_coordinators[side - 1].size(); ++i)
+        m_coordinators[side - 1][i]->unAssignSquad();
+}
+
 // Squad zero is ignored, and so is a player the side does not know. Only the squad the engine
 // names is searched, so a member held by another squad stays. The member record is not deleted,
 // as shipped: a member the AI moved itself was already removed before the engine reported it.

@@ -166,6 +166,18 @@ Bot* SquadMember::getBot()
 
 int SquadMember::getMemberIndex() { return m_memberIndex; }
 void SquadMember::setMemberIndex(int index) { m_memberIndex = index; }
+
+void SquadMember::reset()
+{
+    m_positionValid = false;
+    m_flag49 = true;
+    m_flag4A = true;
+    m_flag4B = false;
+    m_time24 = 0.0;
+    const Vec3 zero = { 0.0f, 0.0f, 0.0f };
+    m_vector54 = zero;
+    m_vector60 = zero;
+}
 void SquadMember::setIsSquadLeader(bool leader) { m_isSquadLeader = leader; }
 bool SquadMember::isSquadLeader() { return m_isSquadLeader; }
 

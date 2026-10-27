@@ -12,6 +12,9 @@
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"   // postLoadInitAreas
 #include "AIMain.h"                                            // IAIMain::spawnBots
 #include "../AIBot/SquadManager.h"                              // squad notification forwarders
+#include "../AIUtils/DebugRendering/AIRenderUtil.h"             // event_worldReset
+#include "../DrawPrimitives/DPManager.h"
+#include "CommunicationHub.h"
 
 namespace dice {
 namespace hfe {
@@ -105,9 +108,18 @@ void AIEventCourier::event_roundEnd()
     BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_roundEnd");
 }
 
+// Clears the debug drawing and every draw primitive, resets the level, then the radio hub,
+// each only when its singleton exists. The hub is reset twice, once inside resetLevel.
 void AIEventCourier::event_worldReset()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_worldReset");
+    if (AIRenderUtil::m_instance)
+        AIRenderUtil::m_instance->unrenderAll();
+    if (CommonSingletonServer::m_iDPManager)
+        static_cast<IDPManager*>(CommonSingletonServer::m_iDPManager)->deleteAll();
+    if (IAIMain::m_instance)
+        IAIMain::m_instance->resetLevel();
+    if (CommunicationHub::m_instance)
+        CommunicationHub::m_instance->reset();
 }
 
 int AIEventCourier::eventManDown(int, IAIObject *)

@@ -49,7 +49,7 @@ public:
     virtual float getTextGamma() = 0;
     virtual void drawAll() = 0;
     virtual void nodrawUpdate() = 0;
-    virtual int deleteAll() = 0;
+    virtual void deleteAll() = 0;   // [INFERRED] void: the body sets no result, no caller reads one
 };
 
 // IDPStaticCreator - 14 vtable slots.
@@ -137,7 +137,7 @@ public:
     virtual float getTextGamma();
     virtual void drawAll();
     virtual void nodrawUpdate();
-    virtual int deleteAll();
+    virtual void deleteAll();
 
     // IDPStaticCreator
     virtual DPStaticCircle * createStaticCircle(float, unsigned int, const Vec3&, float, const Vec3&, bool, int);
@@ -173,17 +173,15 @@ public:
     virtual int createAIObject3dText(float, unsigned int, const Vec3&, const std::vector<std::string>&, unsigned int, DPDynamicTypes, int, AITextAlignmentX, AITextAlignmentY);
 
 private:
-    // Seven _Rb_trees, one per primitive kind, in the constructor's order. Element types are
-    // [FRONTIER] - the trees are only ever walked by the unwritten bodies. [UNRESOLVED] key type.
-    /* +0x10 */ std::set<DrawPrimitive*> m_circles;
-    /* +0x1C */ std::set<DrawPrimitive*> m_lines;
-    /* +0x28 */ std::set<DrawPrimitive*> m_text2d;
-    /* +0x34 */ std::set<DrawPrimitive*> m_text3d;
-    /* +0x40 */ std::set<DrawPrimitive*> m_triangles;
-    /* +0x4C */ std::set<DrawPrimitive*> m_polygons;
-    // Maps debug-primitive handles to their static meshes. The preceding six containers
-    // still have placeholder element types.
-    /* +0x58 */ std::map<DrawPrimitive*, DPStaticMesh*> m_meshes;
+    // One map per primitive kind, from the handle callers hold to the primitive it owns. The
+    // value types are attested by the _Rb_tree instantiations; each delete* body pins its offset.
+    /* +0x10 */ std::map<DrawPrimitive*, DPStaticLine*>     m_lines;
+    /* +0x1C */ std::map<DrawPrimitive*, DPStaticCircle*>   m_circles;
+    /* +0x28 */ std::map<DrawPrimitive*, DPStatic2dText*>   m_text2d;
+    /* +0x34 */ std::map<DrawPrimitive*, DPStatic3dText*>   m_text3d;
+    /* +0x40 */ std::map<DrawPrimitive*, DPStaticTriangle*> m_triangles;
+    /* +0x4C */ std::map<DrawPrimitive*, DPStaticPolygon*>  m_polygons;
+    /* +0x58 */ std::map<DrawPrimitive*, DPStaticMesh*>     m_meshes;
     /* +0x64 */ float m_textGamma;             // = 1.0f
 };
 

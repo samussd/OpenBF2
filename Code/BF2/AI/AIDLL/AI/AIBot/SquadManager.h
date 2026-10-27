@@ -45,6 +45,10 @@ public:
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
     int getSquadStrengths(int side, int areaIndex, StrategicStrengthType type);
 
+    // Round restart: every squad loses its area, the queues empty, and both cursors rewind.
+    void reset();
+    void unAssignSquads(int side);
+
     // Clears messages and position records by erasing each container node individually.
     void clearCommanderMessages();
     void clearPlayerValidPositions();

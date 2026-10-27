@@ -3,6 +3,7 @@
 #include "CommunicationHub.h"
 
 #include "AIDllFrontier.h"
+#include "../AIStrategicEntity/AIStrategicObjectManager.h"   // reset sizes by the area count
 
 namespace dice {
 namespace hfe {
@@ -30,9 +31,37 @@ CommunicationHub::~CommunicationHub()
 
 // [FRONTIER] Behavior methods stop until their strategic-object dependencies are implemented.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
+// Stamps the three times with -1000 and gives every strategic area a (6, -1000) strength entry
+// on both sides. The first reset appends the entries; later ones overwrite them in place,
+// unchecked, so the area count must not have grown.
 void CommunicationHub::reset()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommunicationHub::reset");
+    const double never = -1000.0;
+    m_time4 = never;
+    m_time12 = never;
+    m_time44 = never;
+
+    const int areas = static_cast<int>(
+        AIStrategicObjectManager::getInstance()->getStrategicAreas().size());
+    const CombatStrengthType unknown = static_cast<CombatStrengthType>(6);
+    if (m_combatStrength[0].empty())
+    {
+        for (int i = 0; i < areas; ++i)
+        {
+            m_combatStrength[0].push_back(std::make_pair(unknown, never));
+            m_combatStrength[1].push_back(std::make_pair(unknown, never));
+        }
+    }
+    else
+    {
+        for (int i = 0; i < areas; ++i)
+        {
+            m_combatStrength[0][i].first = unknown;
+            m_combatStrength[1][i].first = unknown;
+            m_combatStrength[0][i].second = never;
+            m_combatStrength[1][i].second = never;
+        }
+    }
 }
 
 void CommunicationHub::enemySpottedByAI(IAIPlayer*, IAIObject*, int)

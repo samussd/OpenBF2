@@ -53,7 +53,7 @@ public:
     virtual void        draw()                                       = 0;   // +0x40
     virtual void        updateAIObject(IAIObject* o)                 = 0;   // +0x44
     virtual void        reset()                                      = 0;   // +0x48
-    virtual void        resetLevel()                                 = 0;   // +0x4C
+    virtual bool        resetLevel()                                 = 0;   // +0x4C
     virtual void        queueSoundEffect(const Vec3& pos, int a, int b) = 0;// +0x50
     virtual void        spawnBots()                                  = 0;   // +0x54
     virtual void        setAISystemQuotient(const double& q)         = 0;   // +0x58
@@ -101,7 +101,7 @@ public:
     virtual void        draw();                                             // - empty
     virtual void        updateAIObject(IAIObject* o);
     virtual void        reset();
-    virtual void        resetLevel();
+    virtual bool        resetLevel();
     virtual void        queueSoundEffect(const Vec3& pos, int a, int b);    // - empty
     virtual void        spawnBots();
     virtual void        setAISystemQuotient(const double& q);

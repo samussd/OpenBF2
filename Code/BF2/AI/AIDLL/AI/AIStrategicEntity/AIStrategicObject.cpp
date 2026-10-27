@@ -83,6 +83,12 @@ int AIStrategicObject::getNumberOfAssignedUnits(int side) const
     return static_cast<int>(m_set68[side - 1].size());
 }
 
+void AIStrategicObject::resetStatus()
+{
+    m_status[0] = m_status[2];
+    m_status[1] = m_status[3];
+}
+
 // byte at this + 0xEB + side, no bounds guard.
 bool AIStrategicObject::isAttack(int side) const
 {

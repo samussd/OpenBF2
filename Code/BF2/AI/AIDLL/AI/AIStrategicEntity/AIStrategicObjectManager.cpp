@@ -2,8 +2,15 @@
 
 #include "AIStrategicObjectManager.h"
 
+#include <cmath>
+
 #include "AIStrategicArea.h"                          // createFromControlPoint constructs one
 #include "SAWayPoint.h"                               // the destructor and postLoadInitAreas own them
+#include "../AIKnowledge/Information.h"                  // resetBridges' segment positions
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIPhysical.h"                  // resetBridges' segment radius
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"   // getHandle / getTransformation
+#include "../../../../Math/Mat4.h"
 #include "../AIUtils/checkPointer.h"
 #include "../AIUtils/DebugRendering/AIRenderUtil.h"   // addStrategicObject's null-guarded tail
 #include "../Main/AIDllFrontier.h"
@@ -194,10 +201,10 @@ void AIStrategicObjectManager::createBridgeSegment(IAIObject* object)
     BridgeSegment* const segment = new BridgeSegment;   // zeroes the position only - +4 stays unset
     segment->m_object = object;
     segment->m_destroyed = false;
-    // The position is zeroed again, as its own statement: the PE stores it a second time outside
+    // The direction is zeroed again, as its own statement: the PE stores it a second time outside
     // the new-expression's null-checked constructor block, the ELF copies a zeroed 12-byte temporary.
     const Vec3 origin = { 0.0f, 0.0f, 0.0f };
-    segment->m_position = origin;
+    segment->m_direction = origin;
     m_bridgeSegments.push_back(segment);
 }
 
@@ -251,9 +258,81 @@ bool AIStrategicObjectManager::reset()
     BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicObjectManager::reset");
 }
 
+// Every area returns to its starting status for both sides. Always true.
 bool AIStrategicObjectManager::resetAreas()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicObjectManager::resetAreas");
+    m_areasInitialised = false;
+    for (std::map<std::string, AIStrategicArea*>::iterator it = m_strategicAreas.begin();
+         it != m_strategicAreas.end(); ++it)
+    {
+        it->second->resetStatus();
+    }
+    return true;
+}
+
+namespace {
+
+// The side-one record of a segment's object. Neither the handle nor the record is checked.
+Information* segmentInformation(const AIStrategicObjectManager::BridgeSegment* segment)
+{
+    return informationManager->getInformation(segment->m_object->getHandle(1));
+}
+
+} // namespace
+
+// Marks every segment intact and points it at the first segment, in list order, whose centre
+// lies more than 0.1 m and less than twice its radius plus 5 m away; a segment with no such
+// neighbour takes its object's third transformation axis. The direction is normalised unless
+// it is already unit length, and zeroed when it is degenerate.
+void AIStrategicObjectManager::resetBridges()
+{
+    const float epsilon = 1.19209290e-7f;    // FLT_EPSILON
+    for (std::list<BridgeSegment*>::iterator it = m_bridgeSegments.begin();
+         it != m_bridgeSegments.end(); ++it)
+    {
+        BridgeSegment* const segment = *it;
+        segment->m_destroyed = false;
+
+        Information* const information = segmentInformation(segment);
+        const Vec3 centre = information->getPosition();
+        const float reach = information->getPhysical()->getRadius() * 2.0f + 5.0f;
+        const float reachSq = reach * reach;
+
+        bool found = false;
+        for (std::list<BridgeSegment*>::iterator other = m_bridgeSegments.begin();
+             other != m_bridgeSegments.end(); ++other)
+        {
+            const Vec3& position = segmentInformation(*other)->getPosition();
+            Vec3 d = { position.x - centre.x, position.y - centre.y, position.z - centre.z };
+            const float lengthSq = d.x * d.x + d.y * d.y + d.z * d.z;
+            if (lengthSq <= 0.01f || lengthSq >= reachSq)
+                continue;
+
+            if (std::fabs(lengthSq - 1.0f) >= epsilon)
+            {
+                if (std::fabs(lengthSq) < epsilon)
+                {
+                    d.x = 0.0f; d.y = 0.0f; d.z = 0.0f;
+                }
+                else
+                {
+                    const float inverse = 1.0f / std::sqrt(lengthSq);
+                    d.x *= inverse; d.y *= inverse; d.z *= inverse;
+                }
+            }
+            segment->m_direction = d;
+            found = true;
+            break;
+        }
+
+        if (!found)
+        {
+            const Mat4& transformation = segment->m_object->getTransformation();
+            segment->m_direction.x = transformation.m[8];
+            segment->m_direction.y = transformation.m[9];
+            segment->m_direction.z = transformation.m[10];
+        }
+    }
 }
 
 // The accessors that are two or three instructions. Each is transcribed from its own body; none of
@@ -329,11 +408,22 @@ void AIStrategicObjectManager::clearWaypointToDraw()
     m_wayPointsToDrawFirst = -1;
 }
 
-// [FRONTIER] Waypoint drawing cleanup remains unimplemented.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding AIStrategicObjectManager operation.
+// Removes the debug marker of every waypoint, both lists of every area pair.
 void AIStrategicObjectManager::undrawWayPoints() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicObjectManager::undrawWayPoints");
+    for (std::map<std::pair<int, int>, WPContainer>::const_iterator it = m_wayPoints.begin();
+         it != m_wayPoints.end(); ++it)
+    {
+        for (int type = 0; type < 2; ++type)
+        {
+            const std::vector<SAWayPoint*>& wayPoints = it->second.getWayPoints(type);
+            for (std::vector<SAWayPoint*>::const_iterator w = wayPoints.begin();
+                 w != wayPoints.end(); ++w)
+            {
+                (*w)->undraw();
+            }
+        }
+    }
 }
 
 // Returns the category id for an existing name. The caller must ensure that exact

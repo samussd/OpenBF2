@@ -45,6 +45,7 @@ public:
     SquadCoordinator(int side, int squadIndex);
 
     void update(double time);                    // complete order
+    void reset();                                // round restart; members stay
     void updateSquadPosition();                  // complete
     void updateShotsFired();                     // complete
     void updateRepairRequest(double time);       // PE inlined at ; complete

@@ -30,7 +30,8 @@ class Strategy;
 // Its name is [INFERRED]; the other sixteen bytes remain [UNRESOLVED].
 struct StrategyContainer
 {
-    unsigned char m_unresolved00[8];
+    float m_float00;   // [UNRESOLVED] role; SAI::reset zeroes it
+    float m_float04;   // [UNRESOLVED] role; SAI::reset zeroes it
     float m_startTime; // +8, [INFERRED] name
     unsigned char m_unresolved0C[8];
 };
@@ -235,6 +236,7 @@ public:
 
     // non-virtual. The vtable does not carry these.
     void clearStates(float* a, float* b);
+    bool reset();                    // round restart; always true
     // update calls these directly. Strength/state/preparation callers are recovered; later phases retain
     // named stopping bodies. No field or virtual slot is added by these declarations.
     void updateStrengths();

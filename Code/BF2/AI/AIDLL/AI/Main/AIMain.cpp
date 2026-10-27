@@ -31,6 +31,7 @@
 #include "../../../AIInterface/BFKnowledge/BFCollisionHandler.h"  // updateBotProjectiles
 #include "../AIBot/SquadManager.h"                                // update(double)
 #include "AIMineManager.h"                                       // IAIMineManager::update
+#include "CommunicationHub.h"                                    // resetLevel
 
 namespace dice {
 namespace hfe {
@@ -458,9 +459,28 @@ void AIMain::reset()
     BF2_AI_FRONTIER("dice::hfe::ai::AIMain::reset");
 }
 
-void AIMain::resetLevel()
+// Restores the bridges and areas, resets each side's strategy, drops the tracked projectiles,
+// repairs the destroyable map parts, restores the bridges again, then resets the radio hub and
+// the mines. A side's strategy is reset only while every earlier step has succeeded; the
+// result says whether all did. The hub is not checked for null.
+bool AIMain::resetLevel()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::resetLevel");
+    AIStrategicObjectManager::getInstance()->resetBridges();
+    bool succeeded = AIStrategicObjectManager::getInstance()->resetAreas();
+    const IAISettings* const settings =
+        static_cast<const IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    for (int side = 1; side < settings->getNSides() + 1; ++side)
+    {
+        if (m_sai[side])
+            succeeded = succeeded && m_sai[side]->reset();
+    }
+    static_cast<IBFCollisionHandler*>(CommonSingletonServer::m_iBFCollisionHandler)
+        ->removeAllProjectiles();
+    IAIPathfinding::instance->resetDestroyableMapParts();
+    AIStrategicObjectManager::getInstance()->resetBridges();
+    CommunicationHub::m_instance->reset();
+    static_cast<IAIMineManager*>(CommonSingletonServer::m_iAIMineManager)->reset();
+    return succeeded;
 }
 
 void AIMain::setAISystemQuotient(const double& /*q*/)

@@ -169,6 +169,16 @@ void AIStrategicArea::postLoadInit()
     }
 }
 
+std::vector<AILandingZone*>& AIStrategicArea::getLandingZones()
+{
+    return m_landingZones;
+}
+
+const std::vector<AILandingZone*>& AIStrategicArea::getLandingZones() const
+{
+    return m_landingZones;
+}
+
 // Initializes per-vehicle-group area arrays, with at least one element in each allocation.
 // [FRONTIER] The destructor must release these arrays when its implementation is completed.
 void AIStrategicArea::internalConstructorCall(const Vec2& topLeft, const Vec2& centre)

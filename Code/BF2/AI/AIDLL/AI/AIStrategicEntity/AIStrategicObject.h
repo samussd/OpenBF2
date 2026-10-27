@@ -115,6 +115,7 @@ public:
     // [INFERRED] accessor names/forms. SAI::updateStates and the area's neighbour scans inline
     // these loads: status is at +0x70 + 4*side and index at +0xF0 in both shipped x86 ports.
     StatusMap::Status getStatus(int side) const { return m_status[side - 1]; }
+    void resetStatus();      // both sides back to the statuses in m_status[2] and [3]
     int getIndex() const { return m_index; }
 
     // [CHOSEN, not recovered] Public fields allow manager access; the original may have

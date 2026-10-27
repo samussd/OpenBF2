@@ -30,12 +30,16 @@ class Bot;
 
 // draw primitives
 // The seven _Rb_trees inside DPManager hold these. `DrawPrimitive` is the base every `delete*` and
-// `get*Attributes` slot takes; the three named subclasses are the return types of the creators that
-// materialise one, and are the only evidence that the hierarchy has subclasses at all.
+// `get*Attributes` slot takes; the DPStatic* names come from the creators' return types and the
+// maps' instantiations.
 class DrawPrimitive;
+class DPStatic2dText;                 // named only by DPManager's map instantiations
+class DPStatic3dText;
 class DPStaticCircle;
 class DPStaticLine;
 class DPStaticMesh;
+class DPStaticPolygon;
+class DPStaticTriangle;
 
 // `createStaticMesh(float, unsigned int*, Polygon*, Vec3*, unsigned int*, int, bool)` - the one
 // signature in the draw-primitive set that names a geometry type.

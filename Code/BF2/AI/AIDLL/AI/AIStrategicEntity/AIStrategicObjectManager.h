@@ -44,15 +44,15 @@ public:
     public:
         BridgeSegment()
         {
-            m_position.x = 0.0f;
-            m_position.y = 0.0f;
-            m_position.z = 0.0f;
+            m_direction.x = 0.0f;
+            m_direction.y = 0.0f;
+            m_direction.z = 0.0f;
         }
 
         /*  +0 */ bool m_destroyed;       // 0 at creation; `bridgeSegmentDestroyed` sets it to 1
         /*  +4 */ int m_i4;              // [UNRESOLVED] - written only by `bridgeSegmentDestroyed`
         /*  +8 */ IAIObject* m_object;   // the search key for all three of the methods above
-        /* +12 */ Vec3 m_position;       // [INFERRED] - three zeroed floats, never read here
+        /* +12 */ Vec3 m_direction;      // [INFERRED] name - resetBridges points it along the bridge
     };
 
     AIStrategicObjectManager();
