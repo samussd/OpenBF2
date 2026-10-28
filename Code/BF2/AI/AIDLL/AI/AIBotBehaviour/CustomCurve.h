@@ -41,6 +41,34 @@ public:
     static float* curveValues;
 };
 
+// Samples a function on [min, max] every step and reads it back from the table. The ELF
+// places it in AIUtils/CustomCurve.cpp. sizeof == 0x18.
+class CustomCurve
+{
+public:
+    typedef float (*Function)(float);
+
+    CustomCurve(Function function, float min, float max, float step);
+    ~CustomCurve();
+
+    // A soft step rising from about 1 to about 2 around x = 0.5; the fire behaviour samples it.
+    static float modifiedSoftStepFunc(float x);
+
+private:
+    CustomCurve(const CustomCurve&);
+    CustomCurve& operator=(const CustomCurve&);
+
+    // Resamples the table. A step that is not positive is fatal.
+    void init();
+
+    /* +0x00 */ Function m_function;
+    /* +0x04 */ float* m_values;                     // m_count + 1 samples
+    /* +0x08 */ int m_count;
+    /* +0x0C */ float m_min;
+    /* +0x10 */ float m_max;
+    /* +0x14 */ float m_step;
+};
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

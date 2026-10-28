@@ -180,6 +180,56 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotMemory.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotSubObjects.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\UrgencyMerger.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBAvoid.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBBridgeRepair.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBC4.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBChange.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBChangeLandingCraft.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBChangeTeleport.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBDefuseMines.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBFire.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBFire3d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBFireInfantery.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBFireLargeBore.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBFireUnarmed.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBIdle.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBMedicAssist.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBMoveTo.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBMoveToFixed.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBRandom.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBRevive.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBRunOverSoldier.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBTriggerable.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BotBehaviour.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPAvoidCollision.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPAvoidCollision2d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPAvoidCollision3d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPAvoidCollisionInfantery.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPBridgeRepair.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPC4.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPChange.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPChangeLandingCraft.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPChangeTeleport.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPDefuseMines.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPFire.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPFire2d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPFire3d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPFireInfantery.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPGotoWaypoint2d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPGotoWaypoint3d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPGotoWaypointBoat.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPGotoWaypointSoldier.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPHeliFire3d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPIdle.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPIdle2d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPIdle3d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPIdleInfantery.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPMedicAssist.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPPattern.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPRandom.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPRevive.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPRunOverSoldier.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPTriggerable.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\AIConsole.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\UrgeCurve.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\CoverPosition\CPNodeManager.cpp" ^

@@ -265,10 +265,33 @@ void AIConsole::setVehicleDefaultBehaviour(std::string& vehicleName, std::string
         modifier()->setDefaultBehaviour(vehicle, behaviourId);
 }
 
-void AIConsole::setVehicleBehaviour(std::string, std::string, std::string, std::string, int,
-                                    std::string, std::string)
+// Builds the named behaviour for one vehicle and stores it under the behaviour's id. A failed
+// build is dropped silently, its message unread; the behaviour name "NULL" stores no behaviour.
+void AIConsole::setVehicleBehaviour(std::string vehicleName, std::string behaviourName,
+                                    std::string createFunctionName, std::string patternName,
+                                    int mode, std::string urgeCurveName, std::string weightsName)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::setVehicleBehaviour");
+    if (settings()->getMaxNBots() == -1)
+        return;
+    const int vehicle = settings()->getVehicle(vehicleName);
+    if (vehicle == -1)
+        return;
+    std::map<std::string, float*>::iterator weights = m_behaviourModifiers.find(weightsName);
+    if (weights == m_behaviourModifiers.end())
+        return;
+
+    std::string message;
+    BotBehaviour* behaviour = 0;
+    if (behaviourName != "NULL")
+    {
+        behaviour = BotBehaviourManager::m_instance->create(behaviourName, createFunctionName,
+                                                            patternName, mode, urgeCurveName,
+                                                            weights->second, message);
+        if (!behaviour)
+            return;
+    }
+    modifier()->addBehaviour(vehicle, BotBehaviourManager::m_instance->getBehaviourId(behaviourName),
+                             behaviour);
 }
 
 // An unknown name is added to the modifier map with no weights and nothing else happens.

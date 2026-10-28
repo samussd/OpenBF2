@@ -27,7 +27,6 @@ public:
     virtual bool  hasChanged(Bot* bot, float a, float b) = 0;       // +0x1C
     virtual UrgencyGenerator* getChosenGenerator() = 0;             // +0x20
     virtual void  reset(Bot* bot) = 0;                              // +0x24
-    virtual int   getSize() = 0;                                    // +0x28
 };
 
 // UrgencyMerger - (`operator new(0x14)` in BotManager's loop).
@@ -46,7 +45,7 @@ public:
     virtual bool  hasChanged(Bot* bot, float a, float b);
     virtual UrgencyGenerator* getChosenGenerator();
     virtual void  reset(Bot* bot);
-    virtual int   getSize();
+    virtual int   getSize();                                        // +0x28, its own slot
 
 private:
     /*  0 */ // vptr - off_4B6E48

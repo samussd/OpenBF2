@@ -798,6 +798,14 @@ void consoleAiSettingsSetStandardPersonality(std::string weights, int side)
     AIConsole::m_instance->setStandardPersonality(weights, side);
 }
 
+void consoleAiSettingsSetVehicleBehaviour(std::string vehicle, std::string behaviour,
+                                          std::string createFunction, std::string pattern, int mode,
+                                          std::string urgeCurve, std::string weights)
+{
+    AIConsole::m_instance->setVehicleBehaviour(vehicle, behaviour, createFunction, pattern, mode,
+                                               urgeCurve, weights);
+}
+
 void consoleAiSettingsSetVehicleDefaultBehaviour(std::string vehicle, std::string behaviour)
 {
     AIConsole::m_instance->setVehicleDefaultBehaviour(vehicle, behaviour);
@@ -945,12 +953,14 @@ BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(addVehicleToVehicleGroup,
                                    CommonSingletonServer::m_iaiSettingsModifier != 0,
                                    std::string, std::string, kAiSettingsConsoleTag)
 
-// The ELF generated classes 296-318 that AIBehaviours.ai uses, in class order. 298,
-// setVehicleBehaviour, arrives with the behaviour factories.
+// The ELF generated classes 296-318 that AIBehaviours.ai uses, in class order.
 BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(setVehicleMods, consoleAiSettingsSetVehicleMods,
                                    AIConsole::m_instance != 0, std::string, std::string, kAiSettingsConsoleTag)
 BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(setStandardPersonality, consoleAiSettingsSetStandardPersonality,
                                    AIConsole::m_instance != 0, std::string, int, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_7_STATIC_ACTIVE(setVehicleBehaviour, consoleAiSettingsSetVehicleBehaviour,
+                                   AIConsole::m_instance != 0, std::string, std::string, std::string,
+                                   std::string, int, std::string, std::string, kAiSettingsConsoleTag)
 BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(setVehicleDefaultBehaviour,
                                    consoleAiSettingsSetVehicleDefaultBehaviour,
                                    AIConsole::m_instance != 0, std::string, std::string, kAiSettingsConsoleTag)

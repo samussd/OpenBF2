@@ -2,7 +2,9 @@
 
 #include "CustomCurve.h"
 
-#include <cmath>       // isfinite - SCurve's guard only
+#include <cmath>       // isfinite - SCurve's guard only; powf
+
+#include "../../../../Core/Debug.h"   // CustomCurve::init's fatal assert
 
 namespace dice {
 namespace hfe {
@@ -452,6 +454,49 @@ void DecleiningSlopeCurve::init()
 
     curveValues[100] = 1.0f;
 
+}
+
+CustomCurve::CustomCurve(Function function, float min, float max, float step)
+    : m_function(function)
+    , m_values(0)
+    , m_min(min)
+    , m_max(max)
+    , m_step(step)
+{
+    init();
+}
+
+CustomCurve::~CustomCurve()
+{
+    delete[] m_values;
+}
+
+// The x87 code keeps the intermediates wide; doubles stand in for them.
+float CustomCurve::modifiedSoftStepFunc(float x)
+{
+    const float raised = powf((x + x) - 0.95f, 21.0f);
+    return static_cast<float>(static_cast<double>(raised) * 1.012f + 1.0f);
+}
+
+// Every sample is taken, then the two ends are taken again from min and max exactly.
+void CustomCurve::init()
+{
+    if (!(0.0f < m_step))
+    {
+        Debug(DebugTypeError, "AI/AIDLL/AI/AIUtils/CustomCurve.cpp", 0x12a, "") << "assert(0)";
+        return;
+    }
+    delete[] m_values;
+    m_count = static_cast<int>((m_max - m_min) / m_step);
+    m_values = new float[m_count + 1];
+    const double range = static_cast<double>(m_max) - m_min;
+    if (m_count >= 0)
+    {
+        for (int i = 0; i <= m_count; ++i)
+            m_values[i] = m_function(static_cast<float>(i * (range / m_count) + m_min));
+    }
+    m_values[0] = m_function(m_min);
+    m_values[m_count] = m_function(m_max);
 }
 
 } // namespace ai
