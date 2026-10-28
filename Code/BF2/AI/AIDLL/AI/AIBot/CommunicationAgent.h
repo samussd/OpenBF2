@@ -41,9 +41,12 @@ public:
         // the largest value here is what the bot says next.
         bool operator<(const CAPrioMessage& rhs) const { return m_priority < rhs.m_priority; }
 
-        /*  0 */ unsigned char m_opaque0[8];    // [UNRESOLVED]
-        /*  8 */ int m_priority;
-        /* 12 */ unsigned char m_opaque12[16];  // [UNRESOLVED]
+        /*  0 */ AIRadioMessageType m_type;
+        /*  4 */ AIRadioChannelType m_channel;
+        /*  8 */ unsigned int m_priority;
+        /* 12 */ int m_int12;                   // [UNRESOLVED] both known callers pass -1
+        /* 16 */ double m_time;                 // when it may be said: enqueue time + delay
+        /* 24 */ float m_delay;
     };
 
     explicit CommunicationAgent(BotMain* owner);
@@ -51,6 +54,8 @@ public:
 
     void reset();
     void update();                                 // - [FRONTIER]
+    void enqueueRadioMessage(AIRadioMessageType type, AIRadioChannelType channel,
+                             unsigned int priority, float delay, int value);
 
     // attested by a 7-byte body: `return m_receivedMessages.data + type;`
     const std::list<AIRadioMessageInfo>& getReceivedMessages(AIRadioMessageType type) const
@@ -66,7 +71,8 @@ private:
     /*   4 */ CommunicationHub* m_hub;         // = CommunicationHub::m_instance
     // one inbox per message type - eighteen lists, indexed by the enum. See the header block.
     /*   8 */ std::vector<std::list<AIRadioMessageInfo> > m_receivedMessages;
-    /*  20 */ std::map<AIRadioMessageType, double> m_map20;   // a time per type [UNRESOLVED]
+    // The types already queued, with the time each may be said.
+    /*  20 */ std::map<AIRadioMessageType, double> m_queuedTypes;
     // what the bot says next. See the header block.
     /*  32 */ MessageQueue m_queue;            // +32..+47: a 12-byte vector and an empty comparator
     // Eighteen doubles, one per type, zeroed by `reset` and paired with the max-send-period cache

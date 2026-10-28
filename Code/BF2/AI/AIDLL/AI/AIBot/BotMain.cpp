@@ -123,7 +123,7 @@ BotMain::BotMain(IAIPlayer* player,
         m_flag300[k] = false;           // +300..+303
     m_airBorn = false;                  // +312
     for (int k = 0; k < 3; ++k)
-        m_ptr316[k] = 0;                // +316..+324
+        m_spawnCoord[k] = 0.0f;         // +316..+324
     m_deathCallBack = 0;                // +328
     m_spawnCallBack = 0;                // +332
     m_squadMember = 0;
@@ -416,6 +416,13 @@ float* BotMain::getBasicWeights() { return maBasicWeights; }
 float* BotMain::getBasicBehaviourMods() { return m_basicWeights; }
 float* BotMain::getCurrentBehaviourMods() { return m_behaviourUrgencies; }
 void BotMain::setTakingOrders(bool taking) { m_takingOrders = taking; }
+
+void BotMain::setSpawnCoord(const Vec3& coord)
+{
+    m_spawnCoord[0] = coord.x;
+    m_spawnCoord[1] = coord.y;
+    m_spawnCoord[2] = coord.z;
+}
 
 // Decision making and plan execution below remain frontiers; player binding, input preparation
 // and initial order receipt above are recovered without claiming that the bot can execute them.

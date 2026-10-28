@@ -254,13 +254,13 @@ private:
     /* 192 */ void*  m_ptr192;               // = 0
     /* 196 */ void*  m_ptr196;               // = 0
     /* 200 */ void*  m_ptr200;               // = 0
-    // [UNRESOLVED] Map key and value types; the declarations preserve the observed storage width.
-    /* 204 */ std::map<int, void*> m_map204;  // +204 node, +208 count, +212 comparator
+    // Each bot's current vehicle, keyed by the vehicle's object; the value is the bot id.
+    /* 204 */ std::map<IAIObject*, unsigned int> m_botVehicles;
     // [INFERRED] Shared scratch selection, cleared and filled from queues by decision-making
     // and sensing passes before they process the selected bots.
     /* 216 */ std::vector<BotInfo*> m_selectedBots;
     /* 228 */ Bot*   m_lastCreatedBot;       // addUnspawnedBot / getLastCreatedBot (PE +276)
-    /* 232 */ float  m_float232;             // Initially 0.3f. [UNRESOLVED] Purpose is unknown.
+    /* 232 */ float  m_vehicleBailValue;     // = 0.3f; getVehicleBailValue
     /* 236 */ bool   m_flag236;              // = false
     // [INFERRED] Player-id/object pairs populated by the environment for hearing updates.
     /* 240 */ std::vector<std::pair<int, IAIObject*> > m_occupiedObjects;

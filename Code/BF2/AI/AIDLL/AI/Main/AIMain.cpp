@@ -440,7 +440,7 @@ bool AIMain::action()
 
 bool AIMain::getSAIEnable()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::getSAIEnable");
+    return m_saiEnabled;
 }
 
 // an unchecked side-indexed pointer read.

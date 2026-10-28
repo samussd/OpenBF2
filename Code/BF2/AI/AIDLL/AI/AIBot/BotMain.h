@@ -399,8 +399,7 @@ public:
     double getTimeOfLastFire() const;
     void   stepFireInclination();                           // thunk
     void*  getAttackers() const;
-    // +0x298 and returns it), so this pair is the other Vec3 - the one the constructor never
-    // initialises. The old note that one of the two pairs was +576 is settled.
+    // ELF +316: the soldier's position when the bot last came alive.
     const Vec3& getSpawnCoord() const;
     void  setSpawnCoord(const Vec3& v);
     void  setObedience(float f);
@@ -515,7 +514,7 @@ private:
     /* 308 */ unsigned int m_unresolvedCollision;   // = -1
     /* 312 */ bool         m_airBorn;               // = false isAirBorn
     /* 313 */ char         m_pad313[3];
-    /* 316 */ void*        m_ptr316[3];             // +316..+324, all = 0
+    /* 316 */ float        m_spawnCoord[3];         // a Vec3; the constructor zeroes its words
     /* 328 */ IBotDeathCallBack*  m_deathCallBack;  // = 0
     /* 332 */ IBotSpawnCallBack*  m_spawnCallBack;  // = 0
     /* 336 */ char         m_gap336[4];             // [UNRESOLVED]
@@ -569,10 +568,8 @@ private:
     /* 565 */ bool         m_useStaticAttack;       // = false
     /* 566 */ char         m_pad566[2];
     /* 568 */ double       m_timeOfLastFailedSplashDamageAttack;  // = -9999.0
-    // The last field. `Vec3::getZero` is copied in component by component. `getLookDir`
-    // `setLookDir` and `getSpawnCoord` / `setSpawnCoord` have identical shapes
-    // so one of the two pairs is this field and the other is a Vec3 the ctor never initialises.
-    // [UNRESOLVED] which; reading either 56-byte setter settles it in one step.
+    // The last field. `Vec3::getZero` is copied in component by component; updateBotVehicle
+    // zeroes it again. [UNRESOLVED] whether getLookDir / setLookDir use it.
     /* 576 */ float        m_takeOffPosition[3];    // Vec3, = Vec3::getZero
 };
 

@@ -15,6 +15,15 @@
 #include "../AIUtils/DebugRendering/AIRenderUtil.h"             // event_worldReset
 #include "../DrawPrimitives/DPManager.h"
 #include "CommunicationHub.h"
+#include "IBotManager.h"                                       // the bot-state forwarders
+#include "AILODManager.h"                                      // eventPlayerDisconnect
+#include "../AIBot/BotMain.h"                                  // Bot::setIsRepaired
+#include "../AIBot/SquadMember.h"                              // squadMemberKilled
+#include "../AIKnowledge/Information.h"                        // eventManDown
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/BFGame.h"           // eventDrawDebug
 
 namespace dice {
 namespace hfe {
@@ -51,14 +60,22 @@ void AIEventCourier::eventMissileLock(IAIObject *, world::MissileLockMessage *)
     BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventMissileLock");
 }
 
-int AIEventCourier::eventPlayerSpawned(int)
+// Each forwarder below returns whatever its callee left in EAX; the listener ignores it.
+// [CHOSEN, not recovered] They return zero.
+int AIEventCourier::eventPlayerSpawned(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerSpawned");
+    IBotManager::instance->setBotIsAlive(playerId);
+    return 0;
 }
 
-void AIEventCourier::eventPlayerKilled(int, int)
+void AIEventCourier::eventPlayerKilled(int playerId, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerKilled");
+    IBotManager::instance->setBotIsDead(playerId);
+    if (SquadManager::m_instance)
+    {
+        if (SquadMember* const member = SquadManager::m_instance->getSquadMember(playerId, side))
+            member->squadMemberKilled();
+    }
 }
 
 // Notifies the active AI runtime that a player was created, if the runtime exists.
@@ -70,27 +87,39 @@ void AIEventCourier::eventPlayerCreated(bool isAI)
 
 void AIEventCourier::eventChangedKit(KitType)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventChangedKit");
 }
 
-void AIEventCourier::eventPlayerDisconnect(int)
+// A player without a bot is a human; IAIMain decides whether a bot replaces them.
+void AIEventCourier::eventPlayerDisconnect(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerDisconnect");
+    if (AILODManager::m_instance)
+        AILODManager::m_instance->removePlayer(playerId);
+    if (!IAIMain::m_instance)
+        return;
+    if (!IBotManager::instance->getBotFromPlayerId(playerId))
+        IAIMain::m_instance->reactivateBot(playerId);      // IAIMain +0x24
+    else
+        IAIMain::m_instance->deactivateBot(playerId);      // IAIMain +0x1C
 }
 
-int AIEventCourier::eventPlayerEnterVehicle(int, IAIObject *, IAIObject *)
+// The occupant's own object is not forwarded.
+int AIEventCourier::eventPlayerEnterVehicle(int playerId, IAIObject* seat, IAIObject*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerEnterVehicle");
+    IBotManager::instance->setBotChangedVehicle(playerId, seat);
+    return 0;
 }
 
-int AIEventCourier::eventPlayerExitVehicle(IAIObject *, int)
+int AIEventCourier::eventPlayerExitVehicle(IAIObject* vehicle, int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerExitVehicle");
+    IAIMain::m_instance->setPlayerExitedVehicle(vehicle, playerId);
+    return 0;
 }
 
 void AIEventCourier::eventDrawDebug()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventDrawDebug");
+    IAIGame* const game = static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame);
+    if (game && game->isPlaying())
+        IAIMain::m_instance->draw();
 }
 
 // Starts bot spawning when the game-start event arrives.
@@ -105,7 +134,6 @@ int AIEventCourier::eventGameStart()
 
 void AIEventCourier::event_roundEnd()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_roundEnd");
 }
 
 // Clears the debug drawing and every draw primitive, resets the level, then the radio hub,
@@ -122,14 +150,25 @@ void AIEventCourier::event_worldReset()
         CommunicationHub::m_instance->reset();
 }
 
-int AIEventCourier::eventManDown(int, IAIObject *)
+// The opposing side's knowledge of the soldier drops to zero health.
+int AIEventCourier::eventManDown(int playerId, IAIObject* soldier)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventManDown");
+    IBotManager::instance->setBotIsManDown(playerId, soldier);
+    const int side = soldier->getSide();
+    if (side != 0)
+    {
+        Information* const information =
+            informationManager->getInformation(soldier->getInformation(side == 1 ? 2 : 1));
+        if (information)
+            information->getPhysical()->setHealth(0.0f);
+    }
+    return 0;
 }
 
-int AIEventCourier::eventRevived(int, IAIObject *)
+int AIEventCourier::eventRevived(int playerId, IAIObject* soldier)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventRevived");
+    IBotManager::instance->setBotIsRevived(playerId, soldier);
+    return 0;
 }
 
 int AIEventCourier::eventRadioMessage(const AIRadioMessageSettings&, int, int)
@@ -137,9 +176,10 @@ int AIEventCourier::eventRadioMessage(const AIRadioMessageSettings&, int, int)
     BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventRadioMessage");
 }
 
-int AIEventCourier::event_mineRemoved(unsigned int)
+int AIEventCourier::event_mineRemoved(unsigned int mineId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_mineRemoved");
+    IBotManager::instance->removeMineTarget(mineId);
+    return 0;
 }
 
 int AIEventCourier::event_enemySpotted(IAIObject *, unsigned char)
@@ -147,9 +187,11 @@ int AIEventCourier::event_enemySpotted(IAIObject *, unsigned char)
     BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_enemySpotted");
 }
 
-int AIEventCourier::event_isRepaired(int)
+int AIEventCourier::event_isRepaired(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_isRepaired");
+    if (Bot* const bot = IBotManager::instance->getBotFromPlayerId(playerId))
+        static_cast<BotMain*>(bot)->setIsRepaired(true);    // a BotMain slot, +0x1E0
+    return 0;
 }
 
 void AIEventCourier::event_requestNewOrders(int, int)
@@ -206,9 +248,10 @@ void AIEventCourier::event_commanderOrderAccepted(int squadId)
         IAIMain::m_instance->commanderOrderAccepted(squadId);
 }
 
-void AIEventCourier::event_commanderOrderRejected(int)
+void AIEventCourier::event_commanderOrderRejected(int squadId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_commanderOrderRejected");
+    if (IAIMain::m_instance)
+        IAIMain::m_instance->commanderOrderRejected(squadId);
 }
 
 int AIEventCourier::event_appliedForCommander(int)
@@ -271,17 +314,16 @@ void AIEventCourier::event_receivedRepairSquadOrder(int)
 
 void AIEventCourier::event_squadOrderAccepted(int, int)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_squadOrderAccepted");
 }
 
 void AIEventCourier::event_squadOrderRejected(int, int)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_squadOrderRejected");
 }
 
-int AIEventCourier::event_botTeamKilled(int, int)
+int AIEventCourier::event_botTeamKilled(int killerId, int victimId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_botTeamKilled");
+    IBotManager::instance->setBotTeamKilled(killerId, victimId);
+    return 0;
 }
 
 int AIEventCourier::event_freeCameraFire(bool)

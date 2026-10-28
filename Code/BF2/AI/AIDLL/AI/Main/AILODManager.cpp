@@ -97,9 +97,13 @@ void AILODManager::updateBot(Bot*)
     BF2_AI_FRONTIER("dice::hfe::ai::AILODManager::updateBot");
 }
 
-void AILODManager::removePlayer(int)
+// Forgets the player's LOD state; m_i44 is cleared only when it names this player.
+void AILODManager::removePlayer(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AILODManager::removePlayer");
+    if (m_i44 == playerId)
+        m_i44 = -1;
+    m_playerStats.erase(playerId);
+    m_set16.erase(playerId);
 }
 
 } // namespace ai

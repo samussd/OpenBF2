@@ -196,6 +196,15 @@ void SquadMember::reset()
     m_vector54 = zero;
     m_vector60 = zero;
 }
+
+// Frees the member's formation slot.
+void SquadMember::squadMemberKilled()
+{
+    SquadFormation* const formation = m_squad->getSquadFormation();
+    if (formation->isInFormation(m_memberIndex))
+        formation->leaveFormation(m_memberIndex);
+}
+
 void SquadMember::setIsSquadLeader(bool leader) { m_isSquadLeader = leader; }
 bool SquadMember::isSquadLeader() { return m_isSquadLeader; }
 

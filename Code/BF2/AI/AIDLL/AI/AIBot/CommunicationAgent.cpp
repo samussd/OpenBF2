@@ -8,6 +8,7 @@
 #include "../Main/CommonSingletonServer.h"
 #include "../Main/CommunicationHub.h"
 #include "../../../AIInterface/Module/BFConsole.h"   // IBFModuleCourier, AIRadioMessageSettings
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"   // IBFTimer::getGameTime
 
 namespace dice {
 namespace hfe {
@@ -47,6 +48,28 @@ CommunicationAgent::CommunicationAgent(BotMain* owner)
 }
 
 // Resets message state and acquires the shared communication hub.
+// Rate-limited per type: m_lastSentTime holds the earliest time the type may be queued again.
+// A type already waiting in the queue is not queued twice, but its limit still restarts.
+void CommunicationAgent::enqueueRadioMessage(AIRadioMessageType type, AIRadioChannelType channel,
+                                             unsigned int priority, float delay, int value)
+{
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (!(m_lastSentTime[type] <= now))
+        return;
+
+    CAPrioMessage message;
+    message.m_type = type;
+    message.m_channel = channel;
+    message.m_priority = priority;
+    message.m_int12 = value;
+    message.m_time = now + static_cast<double>(delay);
+    message.m_delay = delay;
+    if (m_queuedTypes.insert(std::make_pair(type, message.m_time)).second)
+        m_queue.push(message);
+
+    m_lastSentTime[type] = now + static_cast<double>(m_maxSendPeriod[type]);
+}
+
 void CommunicationAgent::reset()
 {
     // The shared hub, re-read on every reset. See the block above.
@@ -58,7 +81,7 @@ void CommunicationAgent::reset()
     for (unsigned int type = 0; type <= 17; ++type)
         m_receivedMessages[type].clear();
 
-    m_map20.clear();
+    m_queuedTypes.clear();
 
     // No clear on a priority_queue - see the block above.
     while (!m_queue.empty())

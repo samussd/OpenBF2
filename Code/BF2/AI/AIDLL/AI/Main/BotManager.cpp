@@ -27,6 +27,9 @@
 #include "IAIPathfinding.h"                  // actionPathfinding hands the searcher its share
 #include "../../../AIInterface/BFKnowledge/BFObjectEnvironment.h"   // actionHearing's object list
 #include "../AIKnowledge/IPIPhysical.h"
+#include "../AIBot/BotCallBack.h"         // setBotIsDead / setBotIsAlive report
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"   // setBotChangedVehicle
 #include "../../../../IO/Input/PlayerInput.h" // actionExecutePlan presses a climber's inputs
 
 namespace dice {
@@ -600,7 +603,7 @@ BotManager::BotManager()
     , m_ptr200(0)
     // m_selectedBots: the three zero stores at +216..+224 are its default construction.
     , m_lastCreatedBot(0)
-    , m_float232(0.3f)
+    , m_vehicleBailValue(0.3f)
     , m_flag236(false)
     // m_occupiedObjects: the three zero stores at +240..+248 are its default construction.
     , m_navPointCursor(0)
@@ -902,9 +905,13 @@ bool BotManager::reactivateBot(int playerId, int side, const std::string& name)
     return true;
 }
 
-Bot* BotManager::getBot(IAIObject*) const
+Bot* BotManager::getBot(IAIObject* vehicle) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::getBot");
+    const std::map<IAIObject*, unsigned int>::const_iterator it = m_botVehicles.find(vehicle);
+    if (it == m_botVehicles.end())
+        return 0;
+    BotInfo* const info = m_botInfos[it->second];
+    return info ? info->m_bot : 0;
 }
 
 Bot* BotManager::getLastCreatedBot() const
@@ -913,34 +920,130 @@ Bot* BotManager::getLastCreatedBot() const
     return m_lastCreatedBot;
 }
 
-void BotManager::updateBotVehicle(Bot*, IAIObject*)
+// A bot is in one vehicle at a time: its old entry goes before the new one is inserted.
+void BotManager::updateBotVehicle(Bot* bot, IAIObject* vehicle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::updateBotVehicle");
+    const unsigned int botId = bot->getBotId();
+    for (std::map<IAIObject*, unsigned int>::iterator it = m_botVehicles.begin();
+         it != m_botVehicles.end(); ++it)
+    {
+        if (it->second == botId)
+        {
+            m_botVehicles.erase(it);
+            break;
+        }
+    }
+    m_botVehicles.insert(std::make_pair(vehicle, botId));
 }
 
-void BotManager::setBotChangedVehicle(int, IAIObject*)
+// Humans have no bot and are ignored. A bot still respawning is left to setBotIsAlive.
+void BotManager::setBotChangedVehicle(int playerId, IAIObject* vehicle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotChangedVehicle");
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot)
+        return;
+
+    if (vehicle && vehicle->isPhysical())
+        vehicle->getPhysical()->enablePhysics(vehicle->getSide());
+
+    if (bot->isInTransitionPhase() || bot->isDead())
+        return;
+    bot->updateBotVehicle(0);
+    bot->updateBot();
+    bot->invalidatePlan();
+    if (m_aiMain->getSAIEnable())
+    {
+        const int botId = bot->getBotId();
+        m_aiMain->getSAI(bot->getSide())->setBotHasChangedEquipment(botId);
+    }
 }
 
-void BotManager::setBotIsDead(int)
+void BotManager::setBotIsDead(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotIsDead");
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot)
+        return;
+
+    // Retail matches the vehicle entry's bot id against the player id. Preserved.
+    for (std::map<IAIObject*, unsigned int>::iterator it = m_botVehicles.begin();
+         it != m_botVehicles.end(); ++it)
+    {
+        if (static_cast<int>(it->second) == playerId)
+        {
+            m_botVehicles.erase(it);
+            break;
+        }
+    }
+
+    bot->setManDown(false);
+    bot->setIsInTransitionPhase(true);
+    bot->getBotNavigation()->resetAll();
+    static_cast<BotMain*>(bot)->resetAssignedAreas();    // BotMain slots past Bot's +0x1DC
+
+    BotInfo* const info = m_botInfos[bot->getBotId()];
+    IAIMain::m_instance->getSAI(info->m_bot->getSide());    // the result is discarded
+    info->m_word4 = 1;
+    info->m_bot->reset();
+
+    bot->setCurrentEquipment(static_cast<unsigned int>(-1));
+    if (bot->isC4Placed())
+        bot->removeC4();
+    if (IBotDeathCallBack* const callBack = bot->getDeathCallBack())
+        callBack->reportDeath();
 }
 
-void BotManager::setBotIsAlive(int)
+// Only a bot coming out of its transition phase is set up again.
+void BotManager::setBotIsAlive(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotIsAlive");
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot || !bot->isInTransitionPhase())
+        return;
+
+    bot->setIsInTransitionPhase(false);
+    bot->updateBotVehicle(0);
+    bot->updateBot();
+    bot->setLastChangeTime(-1000000.0);
+
+    BotInfo* const info = m_botInfos[bot->getBotId()];
+    info->m_priority = 0;
+    info->m_double24 = 0.0;
+    info->m_word4 = 0;
+    info->m_flag20 = false;
+
+    if (Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment()))
+        static_cast<BotMain*>(bot)->setSpawnCoord(equipment->getPosition());
+    if (IBotSpawnCallBack* const callBack = bot->getSpawnCallBack())
+        callBack->reportSpawn();
 }
 
-void BotManager::setBotIsManDown(int, IAIObject*)
+void BotManager::setBotIsManDown(int playerId, IAIObject*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotIsManDown");
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot)
+        return;
+    bot->setManDown(true);
+    bot->updateBot();
+    bot->updateBotVehicle(0);
+    bot->invalidatePlan();
+    bot->getBotNavigation()->resetAll();
 }
 
-void BotManager::setBotIsRevived(int, IAIObject*)
+void BotManager::setBotIsRevived(int playerId, IAIObject*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotIsRevived");
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot)
+        return;
+    bot->setManDown(false);
+    bot->updateBot();
+    bot->getBotNavigation()->reset();
+    bot->invalidatePlan();
+    bot->getCommunicationAgent()->enqueueRadioMessage(
+        static_cast<AIRadioMessageType>(8), static_cast<AIRadioChannelType>(6), 2, 1.0f, -1);
+    if (m_aiMain->getSAIEnable())
+    {
+        const int botId = bot->getBotId();
+        m_aiMain->getSAI(bot->getSide())->setBotHasChangedEquipment(botId);
+    }
 }
 
 void BotManager::setBotReceivedRadioMessage(const AIRadioMessageSettings&, int, int)
@@ -978,24 +1081,34 @@ void BotManager::setBotRecievedMoveSquadOrder(int)
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedMoveSquadOrder");
 }
 
-void BotManager::setBotTeamKilled(int, int)
+// The killer, when it is a bot, says so on the radio. The victim is not used.
+void BotManager::setBotTeamKilled(int killerId, int)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotTeamKilled");
+    if (Bot* const bot = getBotFromPlayerId(killerId))
+        bot->getCommunicationAgent()->enqueueRadioMessage(
+            static_cast<AIRadioMessageType>(9), static_cast<AIRadioChannelType>(6), 3, 0.0f, -1);
 }
 
-void BotManager::registerDamageOnBot(float, int, int)
+// Indexed by roster position, unchecked. updateDamages applies and clears the sum.
+void BotManager::registerDamageOnBot(float damage, int botIndex, int attackerIndex)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::registerDamageOnBot");
+    m_botInfos[botIndex]->m_damage += damage;
+    m_botInfos[botIndex]->m_attackerIndex = attackerIndex;
 }
 
 float BotManager::getVehicleBailValue()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::getVehicleBailValue");
+    return m_vehicleBailValue;
 }
 
-void BotManager::removeMineTarget(unsigned int)
+void BotManager::removeMineTarget(unsigned int mineId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::removeMineTarget");
+    for (std::vector<BotInfo*>::iterator it = m_botInfos.begin(); it != m_botInfos.end(); ++it)
+    {
+        BotMain* const bot = static_cast<BotMain*>((*it)->m_bot);
+        if (bot->getMineTarget() == mineId)
+            bot->setMineTarget(static_cast<unsigned int>(-1));
+    }
 }
 
 bool BotManager::reset()
