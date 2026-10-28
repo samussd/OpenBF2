@@ -11,11 +11,17 @@
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../../Core/ClassManager.h"
 #include "../SingletonServer.h"   // BFSingletonServer::updateStaticMethods
+#include "../../../Core/EventManager.h"                       // fireArtillery's request event
+#include "../../../Game/GameEvents/ArtilleryEvent.h"
+#include "../../../Game/GameLogic/SquadManager/ISquadManager.h"
+#include "../../../Game/IEventListener.h"                     // ECGameLogic
+#include "../../../Game/Objects/Game/ArtilleryHandler.h"      // the per-team artillery handlers
 
 namespace dice {
 namespace hfe {
 
 extern ClassManager* classManager;
+extern IBase* squadManager;
 
 namespace ai {
 
@@ -83,9 +89,20 @@ void BFCommander::sendDefendMessage(int a, int b)
     BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::sendDefendMessage");
 }
 
-int BFCommander::fireArtillery(int a, int b, Vec2 position)
+// Requests a strike as the team's commander would, through a server-local artillery event; a
+// squad other than -1 also has its order marked accepted.
+void BFCommander::fireArtillery(int team, int squad, Vec2 position)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::fireArtillery");
+    ArtilleryEvent* const event = new ArtilleryEvent();
+    event->m_target = position;
+    event->m_artilleryType = ArtilleryEvent::ArtilleryTypeRequestFire;
+    event->m_team = static_cast<unsigned char>(team);
+    eventManager->postEventNextUpdate(ECGameLogic, 15, event);   // ELF +0x1C / PE +0x18
+    if (squad != -1)
+    {
+        static_cast<ISquadManager*>(squadManager)->setIsAccepted(
+            team, squad, false, static_cast<OrderType>(2), static_cast<SquadOrderType>(0), false);
+    }
 }
 
 int BFCommander::sendUav(int a, int b, Vec2 position)
@@ -108,14 +125,18 @@ int BFCommander::denyArtilleryRequest(int a, int b)
     BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::denyArtilleryRequest");
 }
 
+// Whether the level gave the team any artillery piece, destroyed or not. The team is unchecked.
 bool BFCommander::gameHasArtillery(int team)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::gameHasArtillery");
+    return world::artilleryManager->getHandler(static_cast<unsigned char>(team))
+        ->hasArtilleryPieces();
 }
 
+// Whether any of the team's pieces still stands. The team is unchecked.
 bool BFCommander::anyArtilleryPiecesLeft(int team)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::anyArtilleryPiecesLeft");
+    return world::artilleryManager->getHandler(static_cast<unsigned char>(team))
+        ->haveAnyArtillery();
 }
 
 // dice's capital A. Frozen - it is the mangled name.

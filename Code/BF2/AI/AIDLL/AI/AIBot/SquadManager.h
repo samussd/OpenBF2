@@ -48,6 +48,12 @@ public:
     // Round restart: every squad loses its area, the queues empty, and both cursors rewind.
     void reset();
     void unAssignSquads(int side);
+
+    // Artillery. Sides are one-based and unchecked.
+    float getArtillerySafeDistance();
+    bool friendliesCloseTo(Vec3 position, float distance, int side);
+    bool haveCampingHumans(int side, Vec2& position);
+    void incomingArtillery(Vec3 position, int side);
     // Frees the side's squads assigned to the area, except those already closing on it; returns
     // how many were freed.
     int unAssignSquads(int areaIndex, int side);

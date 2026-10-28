@@ -28,6 +28,9 @@
 #include "../../../AIInterface/BFKnowledge/BFGame.h"       // IAIGame counters
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"     // IAIPlayer::setSpawnGroup
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"      // IBFTimer::getGameTime
+#include "../../../AIInterface/BFKnowledge/BFTerrain.h"    // checkCommanderUseArtillery: impact height
+#include "../AIStrategicEntity/AIStrategicArea.h"         // hostileTakeoveInProgress: the area centre
+#include "../Main/AIRandom.h"
 #include "../../../../Core/Debug.h"                      // update's shipped invalid-state diagnostic
 
 namespace dice {
@@ -751,14 +754,87 @@ void SAI::updateRequestDenyTimers()
     }
 }
 
+// The AI commander fires artillery at most once a minute, checking every ten seconds once the
+// first minute has passed, and only with at least two bots allowed, no human commander and a
+// standing piece. It shells a control point the enemy is taking (nine times in ten, unless
+// friendlies are within the safe distance), otherwise an enemy camping out of position.
 void SAI::checkCommanderUseArtillery()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::checkCommanderUseArtillery");
+    bool tooFewBots = false;
+    const IAISettings* const settings =
+        static_cast<const IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    if (settings)
+        tooFewBots = settings->getMaxNBots() <= 1;
+    if (m_flag1D1 || tooFewBots)
+        return;
+
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    IBFCommander* const commander = static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander);
+    if (!commander->gameHasArtillery(m_side) || !commander->anyArtilleryPiecesLeft(m_side))
+        return;
+    if (now <= m_time68 || now <= m_time88)
+        return;
+    m_time88 = now + 10.0;
+
+    SquadManager* const squads = SquadManager::m_instance;
+    const IAITerrain* const terrain =
+        static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+    AIStrategicObject* object;
+    Vec2 target = { 0.0f, 0.0f };
+    if (hostileTakeoveInProgress(object, target) && AIRandom::m_instance->nextFloat() > 0.1f)
+    {
+        const Vec3 impact = { target.x, terrain->getTerrainAltitude(target.x, target.y), target.y };
+        if (!squads->friendliesCloseTo(impact, squads->getArtillerySafeDistance(), m_side))
+        {
+            m_time68 = now + 60.0;
+            commander->fireArtillery(m_side, -1, target);
+            squads->incomingArtillery(impact, m_side);
+            return;
+        }
+    }
+
+    if (!squads->haveCampingHumans(m_side, target))
+        return;
+    const Vec3 impact = { target.x, terrain->getTerrainAltitude(target.x, target.y), target.y };
+    m_time68 = now + 60.0;
+    commander->fireArtillery(m_side, -1, target);
+    squads->incomingArtillery(impact, m_side);
 }
 
-bool SAI::hostileTakeoveInProgress(AIStrategicObject*&, Vec2&)
+// The first control point whose capture by the enemy is under way and below three quarters; the
+// position is drawn uniformly from the box centred on the point's side position that reaches
+// the area's centre.
+bool SAI::hostileTakeoveInProgress(AIStrategicObject*& object, Vec2& position)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::hostileTakeoveInProgress");
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    AIStrategicObject* candidate = 0;
+    bool found = false;
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin();
+         it != objects.end(); ++it)
+    {
+        candidate = *it;
+        if (!candidate || !candidate->hasObjectTypeFlag(AIStrategicObject::ControlPoint)
+            || !candidate->isEnemyTakingOverBase(m_side))
+        {
+            continue;
+        }
+        if (candidate->getControlPointTakeOverCounter() < 0.75f)
+        {
+            object = candidate;
+            found = true;
+            break;
+        }
+    }
+
+    if (candidate && found)
+    {
+        const Vec2& centre = static_cast<AIStrategicArea*>(candidate)->m_centre;
+        const Vec2& at = candidate->getPosition(m_side);
+        position.x = AIRandom::m_instance->nextFloat() * ((at.x - centre.x) * 2.0f) + centre.x;
+        position.y = AIRandom::m_instance->nextFloat() * ((at.y - centre.y) * 2.0f) + centre.y;
+    }
+    return found;
 }
 
 bool SAI::isPosInsideOwnedControlPoint(AIStrategicObject*&, Vec3, float)

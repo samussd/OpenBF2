@@ -18,6 +18,11 @@
 #include "../../../AIInterface/BFKnowledge/BFSquad.h"
 #include "../../../AIInterface/BFKnowledge/BFCommander.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../AIInterface/BFKnowledge/BFObjectEnvironment.h"  // friendliesCloseTo's player ids
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../Main/AIRandom.h"
 #include "../../../../Core/SettingsRepostitory.h"
 #include "../../../../Core/StringUtil.h"
 
@@ -409,6 +414,101 @@ int SquadManager::unAssignSquads(int areaIndex, int side)
         }
     }
     return released;
+}
+
+float SquadManager::getArtillerySafeDistance()
+{
+    return m_float152;
+}
+
+namespace {
+
+// The record of the vehicle the player is in, as the side sees it; null when there is none.
+Information* vehicleInformation(IAIPlayer* player, int side)
+{
+    IAIObject* const vehicle = player->getCurrentVehicle();
+    if (!vehicle)
+        return 0;
+    return informationManager->getInformation(vehicle->getInformation(side));
+}
+
+} // namespace
+
+// Any player of the side within the distance of the point, in three dimensions. Only records
+// with type flag 0x20, or without flag 0x10, count.
+bool SquadManager::friendliesCloseTo(Vec3 position, float distance, int side)
+{
+    std::vector<int> playerIds;
+    static_cast<IAIObjectEnvironment*>(CommonSingletonServer::m_iaiObjectEnvironment)
+        ->getWorldPlayerIds(playerIds);
+    IAIPlayerFactory* const players =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory);
+    for (std::vector<int>::iterator it = playerIds.begin(); it != playerIds.end(); ++it)
+    {
+        IAIPlayer* const player = players->getPlayerFromId(*it);
+        if (!player || player->getSide() != side)
+            continue;
+        Information* const information = vehicleInformation(player, side);
+        if (!information)
+            continue;
+        const unsigned int flags = information->getObjectTypeFlags();
+        if (!(flags & 0x20) && (flags & 0x10))
+            continue;
+        const Vec3& at = information->getPosition();
+        const float dx = at.x - position.x;
+        const float dy = at.y - position.y;
+        const float dz = at.z - position.z;
+        if (dx * dx + dy * dy + dz * dz < distance * distance)
+            return true;
+    }
+    return false;
+}
+
+// The first enemy of the side, in player-id order, who has held an invalid position for more
+// than a minute; its XZ position is written out. The record is taken as the enemy sees itself.
+bool SquadManager::haveCampingHumans(int side, Vec2& position)
+{
+    const int enemy = side == 1 ? 2 : 1;
+    const double now =
+        static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    IAIPlayerFactory* const players =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory);
+    for (std::map<int, double>::iterator it = m_playerValidPositions.begin();
+         it != m_playerValidPositions.end(); ++it)
+    {
+        IAIPlayer* const player = players->getPlayerFromId(it->first);
+        if (!player || player->getSide() != enemy || !(it->second + 60.0 < now))
+            continue;
+        Information* const information = vehicleInformation(player, player->getSide());
+        if (!information)
+            continue;
+        const Vec3& at = information->getPosition();
+        position.x = at.x;
+        position.y = at.z;
+        return true;
+    }
+    return false;
+}
+
+// Warns the side of a strike at the position: the side's block records when and where, and a
+// delay of half the configured time scaled by one plus a random fraction. Every flee position,
+// on both sides, becomes invalid.
+void SquadManager::incomingArtillery(Vec3 position, int side)
+{
+    SideBlock* const blocks[2] = { &m_sideBlock0, &m_sideBlock1 };
+    const float halfDelay = 0.5f * static_cast<float>(m_double156);
+    SideBlock& block = *blocks[side - 1];
+    block.m_b0 = true;
+    block.m_artilleryStartTime =
+        static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    block.m_artilleryPosition = position;
+    const float fraction = AIRandom::m_instance->nextFloat();
+    block.m_validFlee0 = false;
+    block.m_validFlee1 = false;
+    block.m_artilleryDelay = halfDelay + fraction * halfDelay;
+    SideBlock& other = *blocks[side - 1 == 0 ? 1 : 0];
+    other.m_validFlee0 = false;
+    other.m_validFlee1 = false;
 }
 
 // Squad zero is ignored, and so is a player the side does not know. Only the squad the engine

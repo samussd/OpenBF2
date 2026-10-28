@@ -564,9 +564,10 @@ float AIStrategicArea::getControlPointTakeOverCounter()
     return 1.0f;
 }
 
-bool AIStrategicArea::isEnemyTakingOverBase(int)
+// The flag update raises while the side's owned area is being captured. The side is unchecked.
+bool AIStrategicArea::isEnemyTakingOverBase(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::isEnemyTakingOverBase");
+    return m_enemyTakeover[side - 1];
 }
 
 int AIStrategicArea::calculateDefenseNeed(int)

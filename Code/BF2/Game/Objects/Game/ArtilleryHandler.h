@@ -37,6 +37,8 @@ public:
     void failedFire();
     void doFire();
     bool haveAnyArtillery();
+    // [CHOSEN, not recovered] accessor: BFCommander::gameHasArtillery tests the list inline.
+    bool hasArtilleryPieces() const { return !m_artillery.empty(); }
 
 private:
     void findHelperObjects(ArtilleryObjectStruct& artillery);
