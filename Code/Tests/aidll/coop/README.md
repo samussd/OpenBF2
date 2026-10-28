@@ -40,12 +40,20 @@ run ends. Keep a working copy of the content for these runs, not your playing in
 Bot behavior uses random choices and physics, so compare rounds by their patterns (bots alive,
 distance per minute, captures, kills) over several runs, not by exact values.
 
-## What the original server does without players
+## When the original server spawns its bots
 
 With no human connected, the original server creates the bots, splits them between the teams and
 assigns their squads, but keeps every bot on the spawn screen: in a 180-second default run all 16
-bots were seen, 8 per team, in `MultiPlayerFreeCamera`, and none spawned. Spawning, movement and
-combat need a connected player or a scripted scenario.
+bots were seen, 8 per team, in `MultiPlayerFreeCamera`, and none spawned.
+
+A connected human does not change that by itself. In a 20-minute run with one player joined over
+LAN, the bots stayed unspawned while the player sat on the spawn screen, and all 16 spawned within
+0.1 seconds of the player's first spawn. Spawning, movement and combat therefore need a player who
+has spawned, or a scripted scenario.
+
+To take part, start the run with a long `--seconds`, then join "OpenBF2 AI probe" from the LAN
+list with an offline profile. End a run early by ending the `bf2_w32ded.exe` process, not the
+console: run.py then removes its files and still writes the summary.
 
 The original server's Python has no `os` module, so the probe imports only `host` and `bf2`;
 run.py writes the output path and the sample interval into the installed copy.
