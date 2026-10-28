@@ -12,6 +12,7 @@
 #include "../AIBot/SquadManager.h"
 #include "../AIBotBehaviour/CustomCurve.h"
 #include "../AIStrategic/SAI.h"
+#include "../AIStrategic/Strategy.h"                      // updateTemperature's modifiers
 #include "../AIKnowledge/BFInformationEnvironment.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/Information.h"
@@ -329,9 +330,47 @@ bool AIStrategicArea::hasObjectTypeFlag(StrategicObjectType type) const
 // later dirty/assignment/lifetime behavior remains separately bounded.
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
 
-void AIStrategicArea::updateTemperature(const Strategy*, int)
+// 0x34a0f0 (Ghidra).
+float AIStrategicArea::updateTemperature(const Strategy* strategy, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::updateTemperature");
+    const float* const modifiers = strategy->getStrategicObjectsModifiers(m_status[side - 1]);
+    float& temperature = m_f164[side - 1];
+    float& withoutUnits = m_f164[side + 1];
+
+    for (int type = 0; type < 21; ++type)
+    {
+        if (hasObjectTypeFlag(static_cast<StrategicObjectType>(type)))
+        {
+            temperature = modifiers[type] * temperature;
+            withoutUnits = modifiers[type] * withoutUnits;
+        }
+    }
+
+    StrategicObjectType position;
+    switch (m_status[side - 1])
+    {
+    case StatusMap::Owned:
+        position = hasNeighbourWithStatus(StatusMap::Hostile, side) ? Front : Safe;
+        break;
+    case StatusMap::Hostile:
+        position = Enemy;
+        break;
+    case StatusMap::Neutral:
+        position = NeutralType;
+        break;
+    default:
+        position = static_cast<StrategicObjectType>(0);
+        break;
+    }
+    if (position != 0)
+    {
+        temperature = modifiers[position] * temperature;
+        withoutUnits = modifiers[position] * withoutUnits;
+    }
+
+    temperature = strategy->getSpecificStrategicObjectModifier(m_index) * temperature;
+    withoutUnits = strategy->getSpecificStrategicObjectModifier(m_index) * withoutUnits;
+    return temperature;
 }
 
 // Parameter types

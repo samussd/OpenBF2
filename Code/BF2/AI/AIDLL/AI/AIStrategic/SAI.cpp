@@ -1424,9 +1424,14 @@ void SAI::changeStrategy(std::vector<StrategyContainer>::iterator& it)
     m_activeStrategy->m_startTime = static_cast<float>(now);
 }
 
+// Weights every strategic object's temperature by the active strategy.
 void SAI::modifyStrategicObjectsTemperatures()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::modifyStrategicObjectsTemperatures");
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+        (*it)->updateTemperature(m_activeStrategy->m_strategy, m_side);
 }
 
 void SAI::updateBotPositions()
