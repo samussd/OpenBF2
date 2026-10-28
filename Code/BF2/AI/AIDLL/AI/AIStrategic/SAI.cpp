@@ -1279,11 +1279,33 @@ void SAI::BotInfo::occupy(std::set<int>::iterator& it, AIStrategicObject* from,
     m_occupiedObject = to->getIndex();
 }
 
-// 0x33fdf0 (Ghidra), 318 bytes; reached when a strategy change finds bots still available.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-void SAI::BotInfo::free(AIStrategicObject*, bool, std::set<int>::iterator&, SAI*)
+// 0x33fdf0 (Ghidra). [CHOSEN] The shipped code erases m_setFC at the lookup's result, which is
+// undefined when the bot is missing; erasing by key gives the same result when it is present.
+void SAI::BotInfo::free(AIStrategicObject* object, bool attacker, std::set<int>::iterator& it,
+                        SAI* sai)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::BotInfo::free");
+    const int botId = m_bot->getBotId();
+    if (attacker)
+        object->unregisterAvailableAttacker(it, sai->m_side);
+    else
+        object->unregisterAvailableDefender(it, sai->m_side);
+    sai->m_setFC.erase(botId);
+    sai->m_set44.insert(m_bot->getBotId());
+}
+
+// 0x33fc80 (Ghidra). The same erase choice as above.
+void SAI::BotInfo::free(bool unregister, SAI* sai)
+{
+    const int botId = m_bot->getBotId();
+    AIStrategicObject* const object =
+        AIStrategicObjectManager::getInstance()->getStrategicObject(m_occupiedObject);
+    if (unregister)
+    {
+        if (!object->unregisterAvailableAttacker(botId, sai->m_side))
+            object->unregisterAvailableDefender(botId, sai->m_side);
+        sai->m_setFC.erase(botId);
+    }
+    sai->m_set44.insert(m_bot->getBotId());
 }
 
 // Void is inferred from complete
@@ -1532,9 +1554,111 @@ void SAI::updateBotPositions()
     }
 }
 
+// 0x339e60 (Ghidra). Totals the side's strategic strength: m_intD8 sums the first strength of every
+// available attacker and of every assigned bot at an object it attacks, m_intDC the second of the
+// defenders likewise, and m_intE0 the averaged strength of the bots standing in objects less the
+// averaged strength of those counted. While m_flag1CD or m_flag1CC is set, the available attackers
+// or defenders are freed instead, and m_flag1CE records that one was. Bots whose equipment has no
+// unit information are skipped.
 void SAI::updateDistribution()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::updateDistribution");
+    IBotManager* const bots = IBotManager::instance;
+    const auto unitOf = [&](int botId) -> IPIUnit*
+    {
+        Information* const information =
+            informationManager->getInformation(bots->getBotFromId(botId)->getCurrentEquipment());
+        return information ? information->getUnit() : 0;
+    };
+    const auto averageStrength = [](IPIUnit* unit) -> float
+    {
+        float sum = 0.0f;
+        for (int i = 0; i < unit->getNStrategicStrengths(); ++i)
+            sum += unit->getStrategicStrengths()[i];
+        return sum / static_cast<float>(unit->getNStrategicStrengths());
+    };
+
+    float attack = 0.0f;
+    float defence = 0.0f;
+    m_flag1CE = false;
+    m_intD8 = 0;
+    m_intDC = 0;
+    m_intE0 = 0;
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator object = objects.begin();
+         object != objects.end(); ++object)
+    {
+        std::set<int>& attackers = (*object)->getAvailableAttackers(m_side);
+        if (!m_flag1CD)
+        {
+            for (std::set<int>::iterator it = attackers.begin(); it != attackers.end(); ++it)
+            {
+                IPIUnit* const unit = unitOf(*it);
+                if (unit)
+                {
+                    m_intD8 += static_cast<int>(unit->getStrategicStrengths()[0]);
+                    attack += averageStrength(unit);
+                }
+            }
+        }
+        else
+        {
+            while (!attackers.empty())
+            {
+                m_botInfo[*attackers.begin()]->free(true, this);
+                m_flag1CE = true;
+            }
+        }
+
+        std::set<int>& defenders = (*object)->getAvailableDefenders(m_side);
+        if (!m_flag1CC)
+        {
+            for (std::set<int>::iterator it = defenders.begin(); it != defenders.end(); ++it)
+            {
+                IPIUnit* const unit = unitOf(*it);
+                if (unit)
+                {
+                    m_intDC += static_cast<int>(unit->getStrategicStrengths()[1]);
+                    defence += averageStrength(unit);
+                }
+            }
+        }
+        else
+        {
+            while (!defenders.empty())
+            {
+                m_botInfo[*defenders.begin()]->free(true, this);
+                m_flag1CE = true;
+            }
+        }
+
+        std::set<int>& present = (*object)->getPresentUnits(m_side);
+        for (std::set<int>::iterator it = present.begin(); it != present.end(); ++it)
+        {
+            IPIUnit* const unit = unitOf(*it);
+            if (unit)
+                m_intE0 += static_cast<int>(averageStrength(unit));
+        }
+
+        std::set<int>& assigned = (*object)->getAssignedUnits(m_side);
+        for (std::set<int>::iterator it = assigned.begin(); it != assigned.end(); ++it)
+        {
+            IPIUnit* const unit = unitOf(*it);
+            if (!unit)
+                continue;
+            if ((*object)->isAttack(m_side))
+            {
+                m_intD8 += static_cast<int>(unit->getStrategicStrengths()[0]);
+                attack += averageStrength(unit);
+            }
+            else
+            {
+                m_intDC += static_cast<int>(unit->getStrategicStrengths()[1]);
+                defence += averageStrength(unit);
+            }
+        }
+    }
+    m_intE0 -= static_cast<int>(defence + attack);
 }
 
 void SAI::distributeResources()

@@ -161,9 +161,12 @@ public:
     {
         explicit BotInfo(Bot* bot);
         void remove(SAI* sai); // named removal frontier
-        // Releases the bot from the object's available attackers or defenders and advances it
-        // past the erased entry. Named frontier; the void return is [INFERRED].
+        // Return the bot to the side's free bots. The first form takes it out of the object's
+        // available attackers or defenders and advances the cursor; the second, only when
+        // unregister is set, out of the object it occupies, attackers first. Either way it leaves
+        // the busy set, which must hold it. The void returns are [INFERRED].
         void free(AIStrategicObject* object, bool attacker, std::set<int>::iterator& it, SAI* sai);
+        void free(bool unregister, SAI* sai);
         // Moves the bot from one object's present units to another's, with its place among
         // the available attackers or else defenders, and advances the cursor past it.
         void occupy(std::set<int>::iterator& it, AIStrategicObject* from, AIStrategicObject* to,
@@ -276,7 +279,7 @@ private:
 
     /* +0x02C */ std::vector<int> m_vector2C;        // 4-byte element; type [UNRESOLVED]
     /* +0x038 */ std::vector<int> m_vector38;        // 4-byte element; type [UNRESOLVED]
-    /* +0x044 */ std::set<int>    m_set44;
+    /* +0x044 */ std::set<int>    m_set44;          // free bots; BotInfo::free returns them here
     /* +0x050 */ std::vector<BotInfo*> m_botInfo;    // resized to getMaxNBots by the constructor
     /* +0x05C */ std::map<int, std::pair<int, int> > m_map5C;
 
@@ -302,12 +305,13 @@ private:
     /* +0x0D0 */ int m_behaviourAvoid;               // "Avoid"
     /* +0x0D4 */ int m_behaviourFire;                // "Fire"
 
-    /* +0x0D8 */ int m_intD8;                        // [UNRESOLVED] - the ctor zeroes it
-    /* +0x0DC */ int m_intDC;                        // [UNRESOLVED] - the ctor zeroes it
-    /* +0x0E0 */ int m_intE0;                        // [UNRESOLVED]
+    // Strength totals from updateDistribution; see there.
+    /* +0x0D8 */ int m_intD8;                        // attack
+    /* +0x0DC */ int m_intDC;                        // defence
+    /* +0x0E0 */ int m_intE0;                        // standing, less the committed average
     /* +0x0E4 */ std::map<int, std::map<int, int> > m_mapE4;   // a map of maps - node 32
     /* +0x0F0 */ std::set<int> m_setF0;
-    /* +0x0FC */ std::set<int> m_setFC;
+    /* +0x0FC */ std::set<int> m_setFC;              // busy bots; BotInfo::free removes them here
     /* +0x108 */ std::list<int> m_list108;           // 4-byte element; type [UNRESOLVED]
     /* +0x10C */ std::list<int> m_list10C;           // 4-byte element; type [UNRESOLVED]
     /* +0x110 */ std::list<int> m_list110;           // 4-byte element; type [UNRESOLVED]
@@ -342,9 +346,9 @@ private:
     /* +0x1C0 */ bool m_flag1C0;                     // = false
     /* +0x1C1 */ bool m_flag1C1;                     // = false
     /* +0x1C2 */ unsigned char m_unresolved1C2[10];  // +0x1C2 .. +0x1CB, never written
-    /* +0x1CC */ bool m_flag1CC;                     // = false
-    /* +0x1CD */ bool m_flag1CD;                     // = false
-    /* +0x1CE */ bool m_flag1CE;                     // = true
+    /* +0x1CC */ bool m_flag1CC;                     // = false; updateDistribution frees defenders
+    /* +0x1CD */ bool m_flag1CD;                     // = false; updateDistribution frees attackers
+    /* +0x1CE */ bool m_flag1CE;                     // = true; updateDistribution freed a bot
     /* +0x1CF */ bool m_flag1CF;                     // = false; cumulative strategic-object change
     /* +0x1D0 */ bool m_flag1D0;                     // = true; restart strategic-object traversal
     /* +0x1D1 */ bool m_flag1D1;                     // = false; player is commander
