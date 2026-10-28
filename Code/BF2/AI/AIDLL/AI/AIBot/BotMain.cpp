@@ -17,6 +17,16 @@
 #include "CommunicationAgent.h"
 #include "BotSubObjects.h"
 #include "../AIBotBehaviour/UrgencyMerger.h"
+#include "../AIBotBehaviour/BotBehaviour.h"          // updateBot / addBehaviour
+#include "../AIBotBehaviourPattern/PlanGenerator.h"
+#include "../AIKnowledge/IPIUnit.h"                  // updateBot: the equipment type
+#include "../Main/AISettingsInterfaces.h"
+#include "../Main/CommonSingletonServer.h"
+#include "../Main/IBotManager.h"                     // updateBotVehicle
+#include "WPEmpty.h"
+#include "WPAltitudeMoveTo.h"
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../AIUtils/checkPointer.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/Information.h"      // updatePlayerAction: the equipment's mobile plug-in
@@ -71,7 +81,7 @@ BotMain::BotMain(IAIPlayer* player,
     m_ptr52        = 0;
     m_spawnToStrategicAreaId        = -1;
     m_side        = n;
-    m_ptr72        = 0;
+    m_vehicleMods  = 0;
     m_float48      = 0.01f;
     m_gap88[1]     = 0;                 // +89
     m_memory       = memory;
@@ -79,9 +89,6 @@ BotMain::BotMain(IAIPlayer* player,
     m_inTransitionPhase = false;        // +91
     m_pad92        = 0;                 // +92
     m_deactivated  = false;             // +93
-    m_ptr100 = 0;
-    m_ptr104 = 0;
-    m_ptr108 = 0;
     m_activePlan = 0;
     m_planLock = false;                 // +120
 
@@ -329,7 +336,7 @@ bool BotMain::recieveOrder(BotOrder* order)
     m_currentOrders = order->m_weights;
     m_orderedBehaviour = static_cast<signed char>(order->m_behaviour);
     m_list128.clear();
-    if (m_ptr72)
+    if (m_vehicleMods)
         calculateMods();
     return true;
 }
@@ -388,20 +395,54 @@ void BotMain::setPlayerInput()
 
 // ELF 0x18A2C0 / PE 0x1017EB20. [PLATFORM] Both products use the same factors, but the
 // instructions multiply in different orders. Keep each order instead of reassociating it.
+UrgencyGenerator** BotMain::getBehaviourUrgencyGenerators()
+{
+    return m_urgencyGenerators;
+}
+
+UrgencyGenerator* BotMain::getSelector()
+{
+    return m_urgencyMerger;
+}
+
+PlanInterpreter* BotMain::getPlanInterpreter()
+{
+    return m_planInterpreter;
+}
+
+void BotMain::setPlanInterpreter(PlanInterpreter* interpreter)
+{
+    m_planInterpreter = interpreter;
+}
+
+// Files a behaviour in slot index and, the first time its id is seen, under its mode. A null
+// behaviour only clears the slot.
+void BotMain::addBehaviour(BotBehaviour* behaviour, int index)
+{
+    if (behaviour)
+    {
+        if (m_behaviourIdsByMode.size() <= behaviour->getMode())
+            m_behaviourIdsByMode.resize(behaviour->getMode() + 1);
+        if (!m_behaviours[behaviour->getBehaviourId()])
+            m_behaviourIdsByMode[behaviour->getMode()].push_back(behaviour->getBehaviourId());
+    }
+    m_behaviours[index] = behaviour;
+    m_urgencyGenerators[index] = behaviour;
+}
 void BotMain::calculateMods()
 {
     for (int i = 0; i < mu8NBehaviours; ++i)
     {
 #if defined(_WIN32)
         if (m_takingOrders)
-            m_behaviourUrgencies[i] = m_currentOrders[i] * m_ptr72[i] * maBasicWeights[i] * m_basicWeights[i];
+            m_behaviourUrgencies[i] = m_currentOrders[i] * m_vehicleMods[i] * maBasicWeights[i] * m_basicWeights[i];
         else
-            m_behaviourUrgencies[i] = m_ptr72[i] * maBasicWeights[i] * m_basicWeights[i];
+            m_behaviourUrgencies[i] = m_vehicleMods[i] * maBasicWeights[i] * m_basicWeights[i];
 #else
         if (m_takingOrders)
-            m_behaviourUrgencies[i] = m_currentOrders[i] * m_basicWeights[i] * maBasicWeights[i] * m_ptr72[i];
+            m_behaviourUrgencies[i] = m_currentOrders[i] * m_basicWeights[i] * maBasicWeights[i] * m_vehicleMods[i];
         else
-            m_behaviourUrgencies[i] = maBasicWeights[i] * m_basicWeights[i] * m_ptr72[i];
+            m_behaviourUrgencies[i] = maBasicWeights[i] * m_basicWeights[i] * m_vehicleMods[i];
 #endif
     }
 }
@@ -493,15 +534,111 @@ void BotMain::updatePathfinding(bool& a, bool* b)
 }
 
 // +0x02C
+// Re-reads the vehicle the player is in. A new one becomes the current equipment: the old
+// equipment's strength drops by a quarter, the new one's grows by a third, and the bot's plan,
+// navigation and controls start over. Staying in the same vehicle changes nothing.
+// *out says whether the player is in anything at all.
 void BotMain::updateBotVehicle(bool* out)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updateBotVehicle");
+    IAIObject* const vehicle = m_player->getCurrentVehicle();
+    getPlan();                          // the result is discarded
+    m_gap88[2] = true;                 // [UNRESOLVED] byte 90
+    m_planInvalid = true;
+    m_hasDefaultPlan = false;
+    if (!vehicle)
+    {
+        m_navigation->reset();
+        setCurrentEquipment(static_cast<unsigned int>(-1));
+        if (out)
+            *out = false;
+        return;
+    }
+
+    if (out)
+        *out = true;
+    const unsigned int sameHandle = vehicle->getInformation(m_side);
+    if (sameHandle != static_cast<unsigned int>(-1) && getCurrentEquipment() == sameHandle && !m_manDown)
+        return;
+
+    IBotManager::instance->updateBotVehicle(this, vehicle);
+    m_airBorn = false;
+    Information* const previous = informationManager->getInformation(getCurrentEquipment());
+    m_lastChangeTime = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    const unsigned int handle = vehicle->getInformation(getSide());
+    Information* const current = informationManager->getInformation(handle);
+    if (previous)
+        previous->setStrength(previous->getStrength() * 0.75f);
+    if (!current)
+    {
+        setCurrentEquipment(static_cast<unsigned int>(-1));
+        return;
+    }
+
+    m_sensingAgent->deletePlan();
+    current->setStrength(current->getStrength() * 1.3333334f);
+    setCurrentEquipment(handle);
+    setPlanLock(false);
+    m_navigation->reset();
+    m_takeOffPosition[0] = 0.0f;
+    m_takeOffPosition[1] = 0.0f;
+    m_takeOffPosition[2] = 0.0f;
+    resetAllControls(true, true, true);
 }
 
 // +0x030
+// Sets the bot up for its current equipment: its plan interpreter, the behaviours that apply to
+// the kit, the equipment's modifiers, a fresh memory and an initial route. A bot down on the
+// ground uses the man-down equipment's behaviours. Without a unit nothing changes.
+// [INFERRED] The ELF returns 1 after a full update and 0 without a unit; no caller reads it.
 void BotMain::updateBot()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updateBot");
+    Information* const equipment = informationManager->getInformation(getCurrentEquipment());
+    if (!equipment || !equipment->getUnit())
+        return;
+
+    UrgencyGenerator** const generators = getBehaviourUrgencyGenerators();
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    const int type = m_manDown ? settings->getManDownEquipmentType()
+                               : equipment->getUnit()->getEquipmentType();
+    setPlanInterpreter(settings->getPlanInterpreter(type));
+    const int count = settings->getNumberOfBehaviours();
+    for (int i = 0; i < count; ++i)
+    {
+        BotBehaviour* behaviour = settings->getBehaviour(type, i);
+        if (behaviour)
+        {
+            if (!behaviour->isAplicable(equipment, this))
+                behaviour = 0;
+            if (behaviour)
+                behaviour->reset(this);
+        }
+        addBehaviour(behaviour, i);
+        generators[i] = behaviour;
+        if (behaviour && behaviour->getGenerator())
+            behaviour->getGenerator()->unInit(this);
+    }
+    m_vehicleMods = settings->getVehicleMods(type);
+    calculateMods();
+    getSelector()->updateActiveUrgency(this);
+    getMemory()->reset();
+
+    // An aircraft starts climbing to 100 above where it is; anything else holds its position.
+    if (!(equipment->getObjectTypeFlags() & 0x10))
+    {
+        Information* const current = informationManager->getInformation(m_currentEquipment);
+        setWaypoints(checkPointer(new WPEmpty(current->getPosition())));
+    }
+    else
+    {
+        std::list<Vec3> points;
+        const Vec3& position = equipment->getPosition();
+        Vec3 point;
+        point.x = position.x + 0.0f;
+        point.y = position.y + 100.0f;
+        point.z = position.z + 0.0f;
+        points.push_back(point);
+        setWaypoints(checkPointer(new WPAltitudeMoveTo(1.0f, 1.0f, 25.0f, 1, points)));
+    }
 }
 
 // +0x034
@@ -529,9 +666,11 @@ WaypointList* BotMain::getWaypoints()
 }
 
 // +0x044
+// The bot owns its list; the old one is deleted.
 void BotMain::setWaypoints(WaypointList* w)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setWaypoints");
+    delete m_waypoints;
+    m_waypoints = w;
 }
 
 // +0x04C
@@ -749,10 +888,64 @@ void BotMain::updatePlayerAction(bool stalled)
 // the speed along the facing (clamped by minThrottle) or to zero; the second releases both look
 // axes; the third releases fire, alt-fire, the nine weapon and eight position selects, flares
 // crouch and lie (conditionally), use and reload.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-void BotMain::resetAllControls(bool, bool, bool)
+void BotMain::resetAllControls(bool movement, bool look, bool actions)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::resetAllControls");
+    static const float minThrottle = 0.4f;
+
+    Information* const equipment = informationManager->getInformation(m_currentEquipment);
+    // [UNRESOLVED] object-type flag 0x200000.
+    const bool flag200000 = equipment && (equipment->getObjectTypeFlags() & 0x200000);
+
+    if (movement)
+    {
+        m_playerInput->setInput(io::PISprint, 0.0f);
+        m_playerInput->setInput(io::PIYaw, 0.0f);
+        m_playerInput->setInput(io::PIPitch, 0.0f);
+        m_playerInput->setInput(io::PIRoll, 0.0f);
+        // The equipment is not null-checked here.
+        if (!(equipment->getObjectTypeFlags() & 0x10))
+        {
+            float throttle = 0.0f;
+            IPIMobile* const mobile = equipment->getMobile();
+            if (mobile && !flag200000)
+            {
+                const Vec3 facing = equipment->getFaceing();
+                const Vec3& speed = mobile->getSpeed();
+                const double along = static_cast<double>(speed.x) * facing.x +
+                                     static_cast<double>(speed.y) * facing.y +
+                                     static_cast<double>(speed.z) * facing.z;
+                double brake = along * 0.5f;
+                if (brake < -minThrottle)
+                    brake = -minThrottle;
+                else if (brake > minThrottle)
+                    brake = minThrottle;
+                throttle = static_cast<float>(-brake);
+            }
+            m_playerInput->setInput(io::PIThrottle, throttle);
+        }
+    }
+
+    if (look)
+    {
+        m_playerInput->setInput(io::PIMouseLookX, 0.0f);
+        m_playerInput->setInput(io::PIMouseLookY, 0.0f);
+    }
+
+    if (actions)
+    {
+        m_playerInput->setInput(io::PIFire, 0.0f);
+        m_playerInput->setInput(io::PIAltFire, 0.0f);
+        for (int input = io::PIWeaponSelect1; input <= io::PIPositionSelect8; ++input)
+            m_playerInput->setInput(static_cast<io::PlayerInputMap>(input), 0.0f);
+        m_playerInput->setInput(io::PIFlareFire, 0.0f);
+        if (isDead() || !flag200000)
+        {
+            m_playerInput->setInput(io::PICrouch, 0.0f);
+            m_playerInput->setInput(io::PILie, 0.0f);
+        }
+        m_playerInput->setInput(io::PIUse, 0.0f);
+        m_playerInput->setInput(io::PIReload, 0.0f);
+    }
 }
 
 // deactivated bots are dead without consulting the player.

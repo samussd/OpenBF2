@@ -216,8 +216,8 @@ public:
     virtual void updateSensing(const double& dt);                                                 // +0x020 [FRONTIER]
     virtual void updatePathfinding(bool& a, bool* b);                                             // +0x024 [FRONTIER]
     virtual void reset();                                                                         // +0x028
-    virtual void updateBotVehicle(bool* out);                                                     // +0x02C [FRONTIER]
-    virtual void updateBot();                                                                     // +0x030 [FRONTIER]
+    virtual void updateBotVehicle(bool* out);                                                     // +0x02C
+    virtual void updateBot();                                                                     // +0x030
     virtual BotSquad* getBotSquad() const;                                                        // +0x034
     virtual float getObedience();                                                                 // +0x038
     virtual float* getCurrentOrders();                                                           // +0x03C order weights
@@ -386,6 +386,7 @@ public:
     void  uninitAllBehaviours();
     BotBehaviour* getActiveBehaviour();
     UrgencyGenerator** getBehaviourUrgencyGenerators();
+    UrgencyGenerator* getSelector();                       // the bot's urgency merger
     void  calculateMods();
     float* getBasicBehaviourMods();
     float* getCurrentBehaviourMods();
@@ -412,7 +413,7 @@ public:
     float getHarmlessThrsh();                               // no setter, dice's spelling
     void  setPlayer(IAIPlayer* p);
     void  setPlayerInput();
-    void  resetAllControls(bool a, bool b, bool c);         // [FRONTIER]
+    void  resetAllControls(bool movement, bool look, bool actions);
     void  validateDataStructures();
     // A class static, shared by every bot. See the header - the constructor reads it three times.
     static unsigned char mu8NBehaviours;
@@ -438,7 +439,7 @@ private:
     /*  60 */ int          m_spawnToStrategicAreaId;// = -1 getSpawnToStrategicAreaId
     /*  64 */ char         m_gap64[4];              // +64 byte set to -1 [UNRESOLVED]
     /*  68 */ float*       m_currentOrders;         // borrowed BotOrder weights, not the order object
-    /*  72 */ float*       m_ptr72;                 // = 0; per-behaviour modifiers in calculateMods
+    /*  72 */ float*       m_vehicleMods;           // = 0; the equipment's per-behaviour modifiers
     /*  76 */ BotMemory*   m_memory;                // Borrowed; construction also initializes its first word and +16 double.
     /*  80 */ bool         m_takingOrders;          // isTakingOrders
     /*  81 */ char         m_pad81[3];
@@ -450,9 +451,8 @@ private:
     /*  94 */ char         m_pad94[2];
     // Parallel per-behaviour arrays: scalar urgency values and behaviour pointers.
     /*  96 */ float*       m_behaviourUrgencies;    // new[] sized by mu8NBehaviours - one per behaviour
-    /* 100 */ void*        m_ptr100;                // = 0
-    /* 104 */ void*        m_ptr104;                // = 0
-    /* 108 */ void*        m_ptr108;                // = 0
+    // The ids of the behaviours present, grouped by each behaviour's mode.
+    /* 100 */ std::vector<std::list<unsigned short> > m_behaviourIdsByMode;
     /* 112 */ BotBehaviour** m_behaviours;         // new[] sized by mu8NBehaviours, zero-filled.
     // Owns the active BotScript. reset destroys it virtually and clears the pointer.
     /* 116 */ BotScript*   m_activePlan;            // Initially null; get/setPlan access it.

@@ -44,9 +44,10 @@ float BotBehaviour::getActiveUrgency(Bot* bot)
     return m_activeUrgency[bot->getBotId()];
 }
 
-void BotBehaviour::updateActiveUrgency(Bot* bot)
+float BotBehaviour::updateActiveUrgency(Bot* bot)
 {
     m_activeUrgency[bot->getBotId()] = m_urgency[bot->getBotId()];
+    return m_activeUrgency[bot->getBotId()];
 }
 
 bool BotBehaviour::hasChangedTarget(Bot* bot)

@@ -236,6 +236,8 @@ for /r "%ROOT%" %%F in (*.cpp) do (
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIBot\BotMemory.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIBot\BotSubObjects.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIBotBehaviour\UrgencyMerger.cpp" set "ENGINE_OBJECT=0"
+            if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIBot\WPAltitudeMoveTo.cpp" set "ENGINE_OBJECT=0"
+            if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIBot\WPEmpty.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBAvoid.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBBridgeRepair.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBC4.cpp" set "ENGINE_OBJECT=0"

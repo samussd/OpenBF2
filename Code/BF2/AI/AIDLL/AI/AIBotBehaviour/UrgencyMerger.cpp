@@ -36,49 +36,88 @@ UrgencyMerger::~UrgencyMerger()
 // [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
 // Replace each stop when the corresponding merger behavior is recovered.
 
-float UrgencyMerger::getUrgency(Bot*)
+float UrgencyMerger::getUrgency(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::getUrgency");
+    return m_chosen ? m_chosen->getUrgency(bot) : 0.0f;
 }
 
-float UrgencyMerger::getActiveUrgency(Bot*)
+float UrgencyMerger::getActiveUrgency(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::getActiveUrgency");
+    return m_chosen ? m_chosen->getActiveUrgency(bot) : 0.0f;
 }
 
-void UrgencyMerger::updateActiveUrgency(Bot*)
+// The child with the highest positive urgency is chosen; the first one wins a tie.
+float UrgencyMerger::updateActiveUrgency(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::updateActiveUrgency");
+    float best = 0.0f;
+    m_chosen = 0;
+    for (int i = 0; i < m_count; ++i)
+    {
+        const float urgency = m_generators[i] ? m_generators[i]->updateActiveUrgency(bot) : 0.0f;
+        if (best < urgency)
+        {
+            best = urgency;
+            m_chosen = m_generators[i]->getChosenGenerator();
+        }
+    }
+    return best;
 }
 
-bool UrgencyMerger::hasChangedTarget(Bot*)
+// Every child present must have changed target.
+bool UrgencyMerger::hasChangedTarget(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::hasChangedTarget");
+    bool changed = true;
+    for (int i = 0; changed && i < m_count; ++i)
+    {
+        if (m_generators[i])
+            changed = m_generators[i]->hasChangedTarget(bot);
+    }
+    return changed;
 }
 
-bool UrgencyMerger::quotientChanged(Bot*, float, float)
+// Every child present must report a quotient change.
+bool UrgencyMerger::quotientChanged(Bot* bot, float low, float high)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::quotientChanged");
+    bool changed = true;
+    for (int i = 0; changed && i < m_count; ++i)
+    {
+        if (m_generators[i])
+            changed = m_generators[i]->quotientChanged(bot, low, high);
+    }
+    return changed;
 }
 
-bool UrgencyMerger::hasChanged(Bot*, float, float)
+// Any child that changed its quotient or its target is enough - unlike BotBehaviour::hasChanged,
+// which wants both.
+bool UrgencyMerger::hasChanged(Bot* bot, float low, float high)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::hasChanged");
+    bool changed = false;
+    for (int i = 0; !changed && i < m_count; ++i)
+    {
+        if (m_generators[i])
+            changed = m_generators[i]->quotientChanged(bot, low, high) ||
+                      m_generators[i]->hasChangedTarget(bot);
+    }
+    return changed;
 }
 
 UrgencyGenerator* UrgencyMerger::getChosenGenerator()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::getChosenGenerator");
+    return m_chosen;
 }
 
-void UrgencyMerger::reset(Bot*)
+void UrgencyMerger::reset(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::reset");
+    for (int i = 0; i < m_count; ++i)
+    {
+        if (m_generators[i])
+            m_generators[i]->reset(bot);
+    }
 }
 
 int UrgencyMerger::getSize()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::getSize");
+    return m_count;
 }
 
 } // namespace ai

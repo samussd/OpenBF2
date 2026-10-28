@@ -21,7 +21,8 @@ public:
 
     virtual float getUrgency(Bot* bot) = 0;                         // +0x08
     virtual float getActiveUrgency(Bot* bot) = 0;                   // +0x0C
-    virtual void  updateActiveUrgency(Bot* bot) = 0;                // +0x10
+    // Returns the urgency it made active.
+    virtual float updateActiveUrgency(Bot* bot) = 0;                // +0x10
     virtual bool  hasChangedTarget(Bot* bot) = 0;                   // +0x14
     virtual bool  quotientChanged(Bot* bot, float a, float b) = 0;  // +0x18
     virtual bool  hasChanged(Bot* bot, float a, float b) = 0;       // +0x1C
@@ -39,7 +40,7 @@ public:
 
     virtual float getUrgency(Bot* bot);
     virtual float getActiveUrgency(Bot* bot);
-    virtual void  updateActiveUrgency(Bot* bot);
+    virtual float updateActiveUrgency(Bot* bot);
     virtual bool  hasChangedTarget(Bot* bot);
     virtual bool  quotientChanged(Bot* bot, float a, float b);
     virtual bool  hasChanged(Bot* bot, float a, float b);
@@ -52,7 +53,8 @@ private:
     /*  4 */ int                m_count;         // the generator count; getSize returns it
     /*  8 */ float*             m_weights;       // null from BotManager's pool
     /* 12 */ UrgencyGenerator** m_generators;
-    /* 16 */ void*              m_chosen;        // = 0 [INFERRED] from getChosenGenerator's offset
+    // The generator whose urgency won the last updateActiveUrgency.
+    /* 16 */ UrgencyGenerator*  m_chosen;        // = 0
 };
 
 } // namespace ai

@@ -180,6 +180,8 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotMemory.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotSubObjects.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\UrgencyMerger.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBot\WPAltitudeMoveTo.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBot\WPEmpty.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBAvoid.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBBridgeRepair.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBC4.cpp" ^

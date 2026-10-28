@@ -29,6 +29,8 @@ public:
     /* +0x04 */ bool m_flag04;         // [UNRESOLVED]
     /* +0x05 */ bool m_flag05;         // [UNRESOLVED]; SAI::updateBotPositions requires it set
     /* +0x06 */ bool m_wayPointError;
+    /* +0x08 */ float m_float08;       // [UNRESOLVED] -1 in WPEmpty and WPAltitudeMoveTo
+    /* +0x0C */ int m_int0C;           // [UNRESOLVED] WPEmpty 1, WPAltitudeMoveTo 4
 };
 
 } // namespace ai

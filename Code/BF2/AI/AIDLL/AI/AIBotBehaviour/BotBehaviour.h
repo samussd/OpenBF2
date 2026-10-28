@@ -26,7 +26,7 @@ public:
 
     virtual float getUrgency(Bot* bot);                              // +0x08
     virtual float getActiveUrgency(Bot* bot);                        // +0x0C
-    virtual void  updateActiveUrgency(Bot* bot);                     // +0x10
+    virtual float updateActiveUrgency(Bot* bot);                     // +0x10
     virtual bool  hasChangedTarget(Bot* bot);                        // +0x14
     virtual bool  quotientChanged(Bot* bot, float low, float high);  // +0x18
     virtual bool  hasChanged(Bot* bot, float low, float high);       // +0x1C
@@ -37,6 +37,8 @@ public:
     virtual bool  isAplicable(Information* information, Bot* bot);   // +0x30 (dice's spelling)
 
     PlanGenerator* getGenerator() const { return m_generator; }
+    unsigned char getBehaviourId() const { return m_behaviourId; }
+    unsigned char getMode() const { return m_mode; }
 
 protected:
     // [CHOSEN] helper: every behaviour constructor asks the AI settings for the bot count.

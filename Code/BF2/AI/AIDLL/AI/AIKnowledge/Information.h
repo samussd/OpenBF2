@@ -108,6 +108,7 @@ public:
     IPIUnit* getUnit() const { return m_unit; }
     unsigned int getObjectTypeFlags() const { return m_objectTypeFlags; }
     float getStrength() const { return m_strength; }
+    void setStrength(float strength) { m_strength = strength; }
     bool hasMobile() const { return m_mobile != nullptr; }
     IPIMobile* getMobile() const { return m_mobile; }
     IAIObject* getAIObject() const { return m_object; }
