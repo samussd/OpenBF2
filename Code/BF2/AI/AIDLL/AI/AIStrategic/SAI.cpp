@@ -34,6 +34,9 @@
 #include "../Main/AIRandom.h"
 #include "../Main/StrategyManager.h"                       // chooseStrategy's forced strategy
 #include "Strategy.h"
+#include "../Main/IBotManager.h"                         // updateBotPositions' bot lookup
+#include "../AIBot/WaypointList.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"  // the soldier's information handle
 #include "../../../../Core/Debug.h"                      // update's shipped invalid-state diagnostic
 
 namespace dice {
@@ -242,9 +245,9 @@ SAI::BotInfo::BotInfo(Bot* bot)
     : m_bot(bot)
     , m_int04(-1)
     , m_int08(-1)
-    , m_int0C(-1)
+    , m_occupiedObject(-1)
     , m_float10(0.0f)
-    , m_double14(0.0)
+    , m_lastRetainTime(0.0)
 {
 }
 
@@ -1262,6 +1265,20 @@ void SAI::BotInfo::remove(SAI*)
     BF2_AI_FRONTIER("dice::hfe::ai::SAI::BotInfo::remove");
 }
 
+// 0x33f290 (Ghidra). The shipped body also looks the bot up in m_setFC and drops the result.
+void SAI::BotInfo::occupy(std::set<int>::iterator& it, AIStrategicObject* from,
+                          AIStrategicObject* to, SAI* sai)
+{
+    const int botId = m_bot->getBotId();
+    to->setAsPresentUnit(botId, sai->m_side);
+    if (from->unregisterAvailableAttacker(botId, sai->m_side))
+        to->registerAvailableAttacker(botId, sai->m_side);
+    else if (from->unregisterAvailableDefender(botId, sai->m_side))
+        to->registerAvailableDefender(botId, sai->m_side);
+    from->removeAsPresentUnit(it, sai->m_side);
+    m_occupiedObject = to->getIndex();
+}
+
 // 0x33fdf0 (Ghidra), 318 bytes; reached when a strategy change finds bots still available.
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
 void SAI::BotInfo::free(AIStrategicObject*, bool, std::set<int>::iterator&, SAI*)
@@ -1434,9 +1451,85 @@ void SAI::modifyStrategicObjectsTemperatures()
         (*it)->updateTemperature(m_activeStrategy->m_strategy, m_side);
 }
 
+// 0x33d910 (Ghidra). Only strategic areas take part. A bot standing in an area moves to the
+// neighbouring object that pulls hardest on its position, if that object accepts its vehicle group
+// and equipment. A bot assigned to or available at an area it stands in is retained there once it
+// follows a move-to route with at most one sensed object and has waited 20 seconds on foot or 35
+// otherwise since its last retention.
 void SAI::updateBotPositions()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::updateBotPositions");
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    IBotManager* const bots = IBotManager::instance;
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator object = objects.begin();
+         object != objects.end(); ++object)
+    {
+        if ((*object)->getType() != 0)
+            continue;
+        AIStrategicArea* const area = static_cast<AIStrategicArea*>(*object);
+
+        std::set<int>& present = area->getPresentUnits(m_side);
+        for (std::set<int>::iterator it = present.begin(); it != present.end();)
+        {
+            Bot* const bot = bots->getBotFromId(*it);
+            Information* const information =
+                informationManager->getInformation(bot->getCurrentEquipment());
+            if (!information || !information->getUnit())
+            {
+                ++it;
+                continue;
+            }
+            const int equipmentType = information->getUnit()->getEquipmentType();
+            const int group = settings->getVehicleGroup(equipmentType);
+            AIStrategicObject* best = area;
+            float bestGravity = area->gravity(information->getPosition(), m_side);
+            for (std::vector<AIStrategicObject*>::const_iterator neighbour =
+                     area->m_neighbouringObjects.begin();
+                 neighbour != area->m_neighbouringObjects.end(); ++neighbour)
+            {
+                if ((*neighbour)->isAllowedVehicleGroup(group) &&
+                    !(*neighbour)->isExpelledUnit(equipmentType) && (*neighbour)->getType() == 0 &&
+                    !static_cast<AIStrategicArea*>(*neighbour)->isLandingZoneUser(equipmentType))
+                {
+                    const float gravity = (*neighbour)->gravity(information->getPosition(), m_side);
+                    if (bestGravity < gravity)
+                    {
+                        bestGravity = gravity;
+                        best = *neighbour;
+                    }
+                }
+            }
+            if (best == area)
+                ++it;
+            else
+                m_botInfo[*it]->occupy(it, area, best, this);
+        }
+
+        const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+        // The shipped code repeats this loop for each of the three sets.
+        const auto retainSettled = [&](std::set<int>& units)
+        {
+            for (std::set<int>::iterator it = units.begin(); it != units.end(); ++it)
+            {
+                Bot* const bot = bots->getBotFromId(*it);
+                const float wait = bot->getCurrentEquipment() ==
+                                           bot->getPlayer()->getSoldier()->getInformation(m_side)
+                                       ? 20.0f
+                                       : 35.0f;
+                if (bot->getWaypoints()->m_flag05 && bot->getWaypoints()->getId() == 1 &&
+                    static_cast<double>(wait) < now - m_botInfo[*it]->m_lastRetainTime &&
+                    bot->getSensedObjects().size() < 2 && area->isPresentUnit(*it, m_side))
+                {
+                    area->retainBot(m_side, *it, this);
+                    m_botInfo[*it]->m_lastRetainTime = now;
+                }
+            }
+        };
+        retainSettled(area->getAssignedUnits(m_side));
+        retainSettled(area->getAvailableAttackers(m_side));
+        retainSettled(area->getAvailableDefenders(m_side));
+    }
 }
 
 void SAI::updateDistribution()

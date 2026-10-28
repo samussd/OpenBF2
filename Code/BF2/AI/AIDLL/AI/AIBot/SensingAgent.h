@@ -34,6 +34,8 @@ public:
     void setOverride(bool);
     void deletePlan();                          // - (one arm frontier)
     void clearPlanTargetInformation();
+    // [INFERRED] name; BotMain::getSensedObjects inlines the load.
+    BotSenses* getBotSenses() const { return m_senses; }
     // attested as a nested type by `std::vector<SensingAgent::FocusInformation>`; its members are
     // [UNRESOLVED] - nothing recovered so far constructs one.
     struct FocusInformation;

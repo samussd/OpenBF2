@@ -62,8 +62,8 @@ AIStrategicObject::AIStrategicObject(float radius, float f148)
     m_attack[1] = true;
 
     // `m_index` (+240) is deliberately absent. The constructor does not touch it; see the header.
-    m_i244    = -1;
-    m_i248    = 0;
+    m_allowedVehicleGroups = -1;
+    m_expelledUnits = 0;
     m_category = -1;
 }
 
@@ -125,6 +125,86 @@ std::set<int>& AIStrategicObject::getAvailableAttackers(int side)
 std::set<int>& AIStrategicObject::getAvailableDefenders(int side)
 {
     return m_set44[side - 1];
+}
+
+// 0x351ff0 and 0x352040 (Ghidra).
+bool AIStrategicObject::registerAvailableAttacker(int botId, int side)
+{
+    m_set20[side - 1].insert(botId);
+    return true;
+}
+
+bool AIStrategicObject::registerAvailableDefender(int botId, int side)
+{
+    m_set44[side - 1].insert(botId);
+    return true;
+}
+
+// 0x352600..0x352780 (Ghidra).
+bool AIStrategicObject::unregisterAvailableAttacker(int botId, int side)
+{
+    std::set<int>::iterator it = m_set20[side - 1].find(botId);
+    return unregisterAvailableAttacker(it, side);
+}
+
+bool AIStrategicObject::unregisterAvailableAttacker(std::set<int>::iterator& it, int side)
+{
+    if (it == m_set20[side - 1].end())
+        return false;
+    it = m_set20[side - 1].erase(it);
+    return true;
+}
+
+bool AIStrategicObject::unregisterAvailableDefender(int botId, int side)
+{
+    std::set<int>::iterator it = m_set44[side - 1].find(botId);
+    return unregisterAvailableDefender(it, side);
+}
+
+bool AIStrategicObject::unregisterAvailableDefender(std::set<int>::iterator& it, int side)
+{
+    if (it == m_set44[side - 1].end())
+        return false;
+    it = m_set44[side - 1].erase(it);
+    return true;
+}
+
+// 0x352310 and 0x3523e0 (Ghidra).
+std::set<int>& AIStrategicObject::getAssignedUnits(int side)
+{
+    return m_set68[side - 1];
+}
+
+std::set<int>& AIStrategicObject::getPresentUnits(int side)
+{
+    return m_set92[side - 1];
+}
+
+bool AIStrategicObject::isPresentUnit(int botId, int side) const
+{
+    return m_set92[side - 1].find(botId) != m_set92[side - 1].end();
+}
+
+std::pair<std::set<int>::iterator, bool> AIStrategicObject::setAsPresentUnit(int botId, int side)
+{
+    return m_set92[side - 1].insert(botId);
+}
+
+// 0x352550 (Ghidra).
+void AIStrategicObject::removeAsPresentUnit(std::set<int>::iterator& it, int side)
+{
+    it = m_set92[side - 1].erase(it);
+}
+
+// 0x352e80 and 0x352ef0 (Ghidra).
+bool AIStrategicObject::isAllowedVehicleGroup(int group) const
+{
+    return ((m_allowedVehicleGroups >> group) & 1) != 0;
+}
+
+bool AIStrategicObject::isExpelledUnit(int equipmentType) const
+{
+    return ((m_expelledUnits >> equipmentType) & 1) != 0;
 }
 
 // The ten accessors. Every one of them is between seven and thirty-three bytes in the image.

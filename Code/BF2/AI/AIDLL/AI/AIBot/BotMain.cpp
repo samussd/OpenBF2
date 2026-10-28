@@ -13,6 +13,7 @@
 #include "BotSquad.h"
 #include "../AIPlanInterpreter/BAPContext.h"
 #include "SensingAgent.h"
+#include "BotSenses.h"                   // getSensedObjects
 #include "CommunicationAgent.h"
 #include "BotSubObjects.h"
 #include "../AIBotBehaviour/UrgencyMerger.h"
@@ -628,10 +629,10 @@ void BotMain::insertBehaviourInformation(float f, const Vec3& v, unsigned char c
     BF2_AI_FRONTIER("dice::hfe::ai::BotMain::insertBehaviourInformation");
 }
 
-// +0x090
-const std::vector<IAIObject*>& BotMain::getSensedObjects() const
+// +0x090. The sensing agent's senses' records, keyed by information handle.
+const std::map<unsigned int, SensedObject*>& BotMain::getSensedObjects() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getSensedObjects");
+    return m_sensingAgent->getBotSenses()->getSensedObjects();
 }
 
 // +0x094

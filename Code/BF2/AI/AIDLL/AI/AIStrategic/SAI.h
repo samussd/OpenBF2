@@ -164,13 +164,17 @@ public:
         // Releases the bot from the object's available attackers or defenders and advances it
         // past the erased entry. Named frontier; the void return is [INFERRED].
         void free(AIStrategicObject* object, bool attacker, std::set<int>::iterator& it, SAI* sai);
+        // Moves the bot from one object's present units to another's, with its place among
+        // the available attackers or else defenders, and advances the cursor past it.
+        void occupy(std::set<int>::iterator& it, AIStrategicObject* from, AIStrategicObject* to,
+                    SAI* sai);
 
         /* +0x00 */ Bot*   m_bot;
         /* +0x04 */ int    m_int04;       // = -1
         /* +0x08 */ int    m_int08;       // = -1
-        /* +0x0C */ int    m_int0C;       // = -1
+        /* +0x0C */ int    m_occupiedObject;   // = -1; strategic object index [INFERRED] name
         /* +0x10 */ float  m_float10;     // = 0.0f; update accumulates the frame interval here
-        /* +0x14 */ double m_double14;    // = 0.0
+        /* +0x14 */ double m_lastRetainTime;   // = 0.0; game time [INFERRED] name
     };
 
     // Layout recovered from the inlined request producers and deny-timer sweep. No vptr.

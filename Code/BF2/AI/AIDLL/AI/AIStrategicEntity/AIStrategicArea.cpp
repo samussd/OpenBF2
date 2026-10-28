@@ -39,7 +39,7 @@ AIStrategicArea::AIStrategicArea(const std::string& name, unsigned int controlPo
     , m_objectTypeFlags(0)
     , m_controlPointId(controlPointId)
     , m_landingZones()
-    , m_i340(0)
+    , m_landingZoneUsers(0)
     , m_b358(false)
 {
     // The tail. Everything above this point lands before the three list members are constructed, so
@@ -178,6 +178,12 @@ std::vector<AILandingZone*>& AIStrategicArea::getLandingZones()
 const std::vector<AILandingZone*>& AIStrategicArea::getLandingZones() const
 {
     return m_landingZones;
+}
+
+// 0x34bd30 (Ghidra).
+bool AIStrategicArea::isLandingZoneUser(int equipmentType)
+{
+    return ((m_landingZoneUsers >> equipmentType) & 1) != 0;
 }
 
 // Initializes per-vehicle-group area arrays, with at least one element in each allocation.

@@ -111,9 +111,27 @@ public:
     // Borrowed mutable statistics at m_statistics[side - 1]; reference spelling is [INFERRED].
     EnemyStatistics& getBattleStatistics(int side) const;
     int releaseAssignedResources(int side);
-    // Bot indices free to attack or to defend this object, by side (1 or 2).
+    // Bot ids free to attack or to defend this object, by side (1 or 2). Unchecked side.
     std::set<int>& getAvailableAttackers(int side);
     std::set<int>& getAvailableDefenders(int side);
+    // Each returns true.
+    bool registerAvailableAttacker(int botId, int side);
+    bool registerAvailableDefender(int botId, int side);
+    // False when the bot was not listed. The iterator forms erase it and advance the cursor.
+    bool unregisterAvailableAttacker(int botId, int side);
+    bool unregisterAvailableAttacker(std::set<int>::iterator& it, int side);
+    bool unregisterAvailableDefender(int botId, int side);
+    bool unregisterAvailableDefender(std::set<int>::iterator& it, int side);
+    // Bot ids assigned to this object, and bot ids standing in it, by side.
+    std::set<int>& getAssignedUnits(int side);
+    std::set<int>& getPresentUnits(int side);
+    bool isPresentUnit(int botId, int side) const;
+    std::pair<std::set<int>::iterator, bool> setAsPresentUnit(int botId, int side);
+    // Erases the bot and advances the cursor.
+    void removeAsPresentUnit(std::set<int>::iterator& it, int side);
+    // Bit tests on the vehicle groups allowed here and the equipment types sent away.
+    bool isAllowedVehicleGroup(int group) const;
+    bool isExpelledUnit(int equipmentType) const;
 
     // [INFERRED] accessor names/forms. SAI::updateStates and the area's neighbour scans inline
     // these loads: status is at +0x70 + 4*side and index at +0xF0 in both shipped x86 ports.
@@ -124,12 +142,11 @@ public:
     // [CHOSEN, not recovered] Public fields allow manager access; the original may have
     // used friendship instead. Offsets document ELF layout and do not constrain modern STL sizes.
     /*   +4 */ EnemyStatistics* m_statistics[4];   // new EnemyStatistics(6), (6), (2), (2) in order
-    // Per-side sets. m_set20 and m_set44 hold bot indices into SAI's BotInfo table; the role of
-    // m_set92 is [UNRESOLVED].
+    // Per-side sets of bot ids, which also index SAI's BotInfo table.
     /*  +20 */ std::set<int> m_set20[2]; // getAvailableAttackers
     /*  +44 */ std::set<int> m_set44[2]; // getAvailableDefenders
-    /*  +68 */ std::set<int> m_set68[2]; // assigned units, one-based side accessor
-    /*  +92 */ std::set<int> m_set92[2];
+    /*  +68 */ std::set<int> m_set68[2]; // getAssignedUnits
+    /*  +92 */ std::set<int> m_set92[2]; // getPresentUnits
 
     // All four set to 2. `StatusMap::Status(2)` is `Neutral`, which is the only reason this member
     // carries that name - [INFERRED], on the strength of one coincidence.
@@ -154,8 +171,8 @@ public:
     /* +228 */ int m_assignedSquadStrength[2];
     /* +236 */ bool  m_attack[2];   // both true; isAttack(side) reads [side - 1]
     /* +240 */ int   m_index;       // not initialised here - addStrategicObject assigns it
-    /* +244 */ int   m_i244;        // 1 [UNRESOLVED]
-    /* +248 */ int   m_i248;        // 0 [UNRESOLVED]
+    /* +244 */ int   m_allowedVehicleGroups;   // bit per vehicle group; -1, every group
+    /* +248 */ int   m_expelledUnits;          // bit per equipment type; 0, none
     /* +252 */ int   m_category;    // 1 until createFromControlPoint or create sets it
     /* +256 */ std::set<int> m_set256;
 };

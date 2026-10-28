@@ -7,6 +7,7 @@
 #include "../../../../Math/Vec3.h"
 
 #include <list>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -37,6 +38,7 @@ class IBotDeathCallBack;
 class IBotSpawnCallBack;
 class Information;
 class PlanInterpreter;
+class SensedObject;
 class SensingAgent;
 class SquadMember;
 class UrgencyGenerator;
@@ -85,7 +87,7 @@ public:
     virtual double getFiringTargetTime() const = 0;                                               // +0x084
     virtual SensingAgent* getSensingAgent() = 0;                                                  // +0x088
     virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c) = 0;         // +0x08C [FRONTIER]
-    virtual const std::vector<IAIObject*>& getSensedObjects() const = 0;                          // +0x090 [FRONTIER]
+    virtual const std::map<unsigned int, SensedObject*>& getSensedObjects() const = 0;            // +0x090
     virtual void* getSensedObjectFromHandle(unsigned int handle) const = 0;                       // +0x094 [FRONTIER]
     virtual void setUnresolvedCollisionObject(unsigned int handle) = 0;                           // +0x098
     virtual unsigned int getUnresolvedCollisionHandle() = 0;                                      // +0x09C
@@ -238,7 +240,7 @@ public:
     virtual double getFiringTargetTime() const;                                                   // +0x084
     virtual SensingAgent* getSensingAgent();                                                      // +0x088
     virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c);             // +0x08C [FRONTIER]
-    virtual const std::vector<IAIObject*>& getSensedObjects() const;                              // +0x090 [FRONTIER]
+    virtual const std::map<unsigned int, SensedObject*>& getSensedObjects() const;                // +0x090
     virtual void* getSensedObjectFromHandle(unsigned int handle) const;                           // +0x094 [FRONTIER]
     virtual void setUnresolvedCollisionObject(unsigned int handle);                               // +0x098
     virtual unsigned int getUnresolvedCollisionHandle();                                          // +0x09C
