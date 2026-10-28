@@ -6,11 +6,14 @@
 #include <string>
 
 #include "../../../Core/EventManager.h"
-#include "../../../Core/Debug.h"                     // the line-494 diagnostic below
+#include "../../../Core/Debug.h"                     // the line-166 and line-494 diagnostics below
 #include "../../../Game/Objects/IPlayer.h"          // world::IPlayer::getId / getIsAIPlayer
 #include "../SingletonServer.h"                     // BFSingletonServer::m_iaiEventCourier
 #include "../BFKnowledge/BFGame.h"                  // IAIGame::setIsPrecaching / isPlaying
-#include "../BFKnowledge/AIPlayerFactory.h"         // IAIPlayerFactory
+#include "../BFKnowledge/AIPlayerFactory.h"         // IAIPlayerFactory, isOccupiedObject
+#include "../BFKnowledge/IAIObject.h"               // the vehicle arms' object slots
+#include "../BFKnowledge/IAIObjectPlugIn.h"         // IAIObjectUnit / IAIObjectPhysical
+#include "../../AIDLL/AI/AIKnowledge/BFInformationCourier.h"  // IAIInformationCourier
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../AIDLL/AI/Main/AIEventCourier.h"     // IAIEventCourier - 55 named slots
 #include "../../AIDLL/AI/Main/AISettingsInterfaces.h"  // IAISettings::getDraw
@@ -86,6 +89,53 @@ void unwrittenArm(const char* what, int category, unsigned int id)
                  what, category, id);
     std::fflush(stderr);
     std::abort();
+}
+
+// id 1, as PlayerControlObject::enter and Soldier post it: 20 bytes. A soldier sends itself as
+// the seat and no body.
+struct EnterVehicleNote
+{
+    IAIObject* seat;
+    IAIObject* body;
+    int        team;
+    int        playerId;
+    bool       specialContainer;    // ladder, parachute, zipline or grappling-hook rope
+};
+
+// id 2: the same fields with the two objects swapped. A soldier sends itself as the body.
+struct ExitVehicleNote
+{
+    IAIObject* body;
+    IAIObject* seat;
+    int        team;
+    int        playerId;
+    bool       specialContainer;
+};
+
+// id 0, from ServerGameLogic.
+struct PlayerKilledNote
+{
+    int        team;
+    int        playerId;
+    IAIObject* vehicle;
+};
+
+// ids 6 and 7, from Soldier.
+struct SoldierNote
+{
+    IAIObject* soldier;
+    int        playerId;
+};
+
+// Returns a seat's armament to the seat, on the object and in both sides' information.
+// Retail repeats this tail in ids 0, 2 and 14.
+void returnBorrowedArmament(IAIObject* seat)
+{
+    IAIInformationCourier* const information =
+        static_cast<IAIInformationCourier*>(CommonSingletonServer::m_iaiInformationCourier);
+    seat->resetArmament();
+    information->resetArmament(seat->getHandle(1));
+    information->resetArmament(seat->getHandle(2));
 }
 
 } // anonymous namespace
@@ -263,56 +313,163 @@ void AIEventListener::handleEvent(EventCategory category,
             courier->event_isRepaired(*static_cast<const int*>(userData));
             return;
 
-        // the arms that dereference the payload as a world::IObject
-        // Each of these walks a vehicle or a pathfinding map through `world::IObject` vtable slots
-        // this tree does not name yet (decimal +116, +124, +128, +148, +152, +200, +204, +208, +252
-        // and +296). Naming them is a `world::IObject` slot-map job, not an AI one, and guessing
-        // them would put ten wrong method names in the tree. Each stop below says which arm it is.
         case 0u:
-            unwrittenArm("category 3 id 0 - player killed, plus the vehicle's armament release",
-                         (int)category, id);
+            {
+                const PlayerKilledNote* const note = static_cast<const PlayerKilledNote*>(userData);
+                courier->eventPlayerKilled(note->playerId, note->team);
+
+                // A seat that borrowed its occupant's weapons gets its own back.
+                IAIObject* const vehicle = note->vehicle;
+                if (!vehicle || !vehicle->isUnit())
+                    return;
+                if (!vehicle->getUnit()->mustBorrowArmament(vehicle))
+                    return;
+                returnBorrowedArmament(vehicle);
+            }
             return;
+
         case 1u:
-            unwrittenArm("category 3 id 1 - player entered vehicle (and the 'not prepared for use"
-                         " with AI' Debug at line 166)", (int)category, id);
+            {
+                const EnterVehicleNote* const note = static_cast<const EnterVehicleNote*>(userData);
+                IAIObject* const seat = note->seat;
+                IAIObject* primary;
+                if (!seat)
+                {
+                    if (note->specialContainer)
+                        return;
+                    Debug(DebugTypeError, __FILE__, 166, "")
+                        << "You have tried to enter a vehicle that is not prepared for use with AI."
+                           " Game will crash.";
+                    // Falls through to seat->setSide on the null seat, as the message says.
+                    primary = 0;
+                }
+                else
+                {
+                    primary = seat->getPrimaryObject();
+                }
+
+                IAIObject* const body = note->body;
+                seat->setSide(note->team);
+                if (primary)
+                {
+                    if (IAIObjectPhysical* const physical = primary->getPhysical())
+                        physical->enablePhysics(note->team);
+                }
+
+                // A seat that fights with its occupant's weapons borrows them, on the object and
+                // in both sides' information.
+                if (body && seat->getUnit() && seat->getUnit()->mustBorrowArmament(seat))
+                {
+                    IAIInformationCourier* const information =
+                        static_cast<IAIInformationCourier*>(
+                            CommonSingletonServer::m_iaiInformationCourier);
+                    seat->borrowArmament(body);
+                    information->borrowArmament(body->getHandle(1), seat->getHandle(1));
+                    information->borrowArmament(body->getHandle(2), seat->getHandle(2));
+                }
+
+                if (body)
+                    body->removeFromGrid();
+                courier->eventPlayerEnterVehicle(note->playerId, seat, body);
+            }
             return;
+
         case 2u:
-            unwrittenArm("category 3 id 2 - player exited vehicle", (int)category, id);
+            {
+                const ExitVehicleNote* const note = static_cast<const ExitVehicleNote*>(userData);
+                if (note->specialContainer)
+                    return;
+
+                IAIObject* const seat = note->seat;
+                IAIObject* const body = note->body;
+                if (seat)
+                {
+                    if (seat->getUnit() && seat->getUnit()->mustBorrowArmament(seat))
+                        returnBorrowedArmament(seat);
+
+                    // The seat stays on its side while anyone else is still aboard.
+                    if (!isOccupiedObject(seat, seat))
+                        seat->setSide(0);
+                }
+                if (body)
+                    body->reInsertInGrid();
+            }
             return;
+
         case 3u:
-            unwrittenArm("category 3 id 3 - eventPlayerExitVehicle", (int)category, id);
+            {
+                // ServerGameLogic's two-word exit note: the player id, then the vehicle's object.
+                const int* const p = static_cast<const int*>(userData);
+                courier->eventPlayerExitVehicle(reinterpret_cast<IAIObject*>(p[1]), p[0]);
+            }
             return;
+
         case 5u:
-            unwrittenArm("category 3 id 5 - object slot +76", (int)category, id);
+            static_cast<IAIObject*>(userData)->update();
             return;
+
         case 6u:
-            unwrittenArm("category 3 id 6 - man down", (int)category, id);
+            {
+                const SoldierNote* const note = static_cast<const SoldierNote*>(userData);
+                courier->eventManDown(note->playerId, note->soldier);
+            }
             return;
+
         case 7u:
-            unwrittenArm("category 3 id 7 - revived", (int)category, id);
+            {
+                const SoldierNote* const note = static_cast<const SoldierNote*>(userData);
+                note->soldier->update();
+                courier->eventRevived(note->playerId, note->soldier);
+            }
             return;
+
         case 0xAu:
             unwrittenArm("category 3 id 10 - radio message (needs BFConsole::getAIMessageSettings,"
                          " itself a frontier)", (int)category, id);
             return;
         case 0xEu:
-            unwrittenArm("category 3 id 14 - vehicle armament release", (int)category, id);
+            {
+                IAIObject* const vehicle = static_cast<IAIObject*>(userData);
+                if (!vehicle || !vehicle->getUnit())
+                    return;
+                if (!vehicle->getUnit()->mustBorrowArmament(vehicle))
+                    return;
+                returnBorrowedArmament(vehicle);
+            }
             return;
+
+        // [UNRESOLVED] Retail reads a 0x44-byte payload here; RequestEvent posts a 0x30-byte one.
         case 0xFu:
             unwrittenArm("category 3 id 15 - commander request (artillery/uav/supply/vehicle drop),"
                          " a 68-byte payload struct", (int)category, id);
             return;
+
         case 0x11u:
-            unwrittenArm("category 3 id 17 - bridge destroyed", (int)category, id);
+            {
+                // ArmorGLComp's note: the first damaging player's id, then the bridge's object.
+                if (!static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)->isPlaying())
+                    return;
+                const int* const p = static_cast<const int*>(userData);
+                IAIObject* const bridge = reinterpret_cast<IAIObject*>(p[1]);
+                courier->event_pathfindingMapIdDestroyed(bridge->getPhysical()->getMapPosId(), 0);
+                courier->event_bridgeDestroyed(bridge, p[0]);
+            }
             return;
+
         case 0x12u:
-            unwrittenArm("category 3 id 18 - bridge repaired", (int)category, id);
+            {
+                IAIObject* const bridge = static_cast<IAIObject*>(userData);
+                courier->event_pathfindingMapIdRestored(bridge->getPhysical()->getMapPosId());
+                courier->event_bridgeRepaired(bridge);
+            }
             return;
+
         case 0x13u:
-            unwrittenArm("category 3 id 19 - object slot +204", (int)category, id);
+            static_cast<IAIObject*>(userData)->reInsertInGrid();
             return;
+
         case 0x14u:
-            unwrittenArm("category 3 id 20 - object slot +200", (int)category, id);
+            static_cast<IAIObject*>(userData)->removeFromGrid();
             return;
 
         default:

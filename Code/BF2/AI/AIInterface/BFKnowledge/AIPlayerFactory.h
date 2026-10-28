@@ -64,6 +64,10 @@ private:
     /* +0x04 */ std::vector<IAIPlayer*> m_players;
 };
 
+// True when a seat of object's vehicle other than ignore is occupied: the primary object or
+// one of its secondaries. [INFERRED] Placement: it precedes the factory in the ELF.
+bool isOccupiedObject(IAIObject* object, IAIObject* ignore);
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

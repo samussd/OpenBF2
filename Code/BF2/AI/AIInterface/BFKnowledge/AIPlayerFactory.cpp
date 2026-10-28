@@ -9,6 +9,8 @@
 #include "AIFrontier.h"
 
 #include "AIPlayer.h"                                 // the concrete wrapper this creates
+#include "IAIObject.h"                                // isOccupiedObject
+#include "IAIObjectPlugIn.h"
 #include "../../AIDLL/AI/AIUtils/checkPointer.h"
 #include "../../../Game/GameLogic/Player.h"           // world::IPlayer::getId
 
@@ -22,6 +24,26 @@ namespace hfe {
 extern ClassManager* classManager;
 
 namespace ai {
+
+// The secondaries' unit plug-ins are not null-checked; only the primary's is.
+bool isOccupiedObject(IAIObject* object, IAIObject* ignore)
+{
+    IAIObject* const primary = object->getPrimaryObject();
+    IAIObjectUnit* const unit = primary->getUnit();
+    if (!unit)
+        return false;
+    if (ignore != primary && unit->isOccupied())
+        return true;
+
+    int iterator;
+    for (IAIObject* secondary = primary->getFirstSecondaryObject(iterator); secondary;
+         secondary = primary->getSecondaryObject(iterator))
+    {
+        if (ignore != secondary && secondary->getUnit()->isOccupied())
+            return true;
+    }
+    return false;
+}
 
 // First wins in, exact match out.
 IAIPlayerFactory::IAIPlayerFactory()
