@@ -572,9 +572,23 @@ void AIPathfinding::MapContainer::init()
     }
 }
 
-bool AIPathfinding::MapContainer::isValidPosition(const Vec3&, MaterialManager*, bool) const
+// A position is valid when it lies on a polygon of some island. Unless anyMaterial is set, the
+// polygon's material must also be readable and not 5. [UNRESOLVED] what material 5 marks.
+bool AIPathfinding::MapContainer::isValidPosition(const Vec3& position, MaterialManager* materials,
+                                                  bool anyMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::isValidPosition");
+    unsigned int polygon;
+    const unsigned int island = m_quadTreeManager->findPolygon(
+        position, polygon, materials, m_properties->m_allowedHeightDiff);
+    if (island == 0xFFFFFFFFu || polygon == 0xFFFFFFFFu)
+        return false;
+    if (anyMaterial)
+        return true;
+
+    unsigned char material;
+    if (!getMaterial(island, polygon, material))
+        return false;
+    return material != 5;
 }
 
 bool AIPathfinding::MapContainer::isValidPosition(const Vec3&, MaterialManager*, unsigned int,
@@ -793,9 +807,17 @@ int AIPathfinding::internalLocalSearch(int, int, unsigned int, unsigned int, con
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::internalLocalSearch");
 }
 
-bool AIPathfinding::isValidPosition(int, int, const Vec3&, bool) const
+// A negative map counts as valid. Retail only rejects negative indices; a map past the end
+// is indexed unchecked, and the settings singleton is not guarded.
+bool AIPathfinding::isValidPosition(int map, int vehicleId, const Vec3& position,
+                                    bool anyMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::isValidPosition");
+    if (map < 0)
+        return true;
+
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    MaterialManager* const materials = settings->getVehicleMaterialManager(vehicleId);
+    return m_maps[map]->isValidPosition(position, materials, anyMaterial);
 }
 
 bool AIPathfinding::isValidPosition(int, int, const Vec3&, unsigned int, bool) const

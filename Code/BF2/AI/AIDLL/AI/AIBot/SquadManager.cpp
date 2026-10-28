@@ -25,6 +25,9 @@
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/IPIUnit.h"
+#include "../Main/IAIPathfinding.h"                 // updateHumanPlayers' position check
 #include "../Main/AIRandom.h"
 #include "../../../../Core/SettingsRepostitory.h"
 #include "../../../../Core/StringUtil.h"
@@ -217,8 +220,9 @@ void SquadManager::setPlayerOnValidPosition(IAIPlayer* player, bool valid, doubl
 
 // Copy the borrowed factory
 // vector before callbacks. Preserve the repeated AI-player query even when the first one
-// returned true. A live, non-downed human with a vehicle next needs IAIObject::getInformation
-// (ELF +0xB8 / PE +0xB4); its full interface remains unknown. Stop at that caller boundary.
+// returned true. A live, non-downed human stands on a valid position unless the record of
+// the vehicle they are in (the soldier counts) is mobile and its position fails the
+// pathfinding check for that vehicle's trace map and equipment type.
 void SquadManager::updateHumanPlayers(double time)
 {
     const std::vector<IAIPlayer*> players =
@@ -228,17 +232,34 @@ void SquadManager::updateHumanPlayers(double time)
         IAIPlayer* player = *i;
         if (!player)
             continue;
+        bool valid = true;
         if (!player->getIsAIPlayer() && player->getIsAlive() && !player->isManDown())
         {
-            if (player->getCurrentVehicle())
+            IAIObject* const vehicle = player->getCurrentVehicle();
+            if (vehicle)
             {
-                player->getSide();
-                // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-                BF2_AI_FRONTIER("dice::hfe::ai::SquadManager::updateHumanPlayers (IAIObject::getInformation)");
+                // [PLATFORM] ELF captures the manager before the getSide and getInformation calls.
+                InformationManager* const manager = informationManager;
+                Information* const information =
+                    manager->getInformation(vehicle->getInformation(player->getSide()));
+                if (information)
+                {
+                    const Vec3 position = information->getPosition();
+                    IPIMobile* const mobile = information->getMobile();
+                    if (mobile)
+                    {
+                        // Retail asks the equipment type before the vehicle number.
+                        const int equipmentType = information->getUnit()->getEquipmentType();
+                        const int vehicleNumber = mobile->getVehicleNumber();
+                        if (!IAIPathfinding::instance->isValidPosition(vehicleNumber, equipmentType,
+                                                                       position, false))
+                            valid = false;
+                    }
+                }
             }
         }
         if (!player->getIsAIPlayer())
-            setPlayerOnValidPosition(player, true, time);
+            setPlayerOnValidPosition(player, valid, time);
     }
     for (std::map<int, double>::iterator i = m_playerValidPositions.begin();
          i != m_playerValidPositions.end(); )
