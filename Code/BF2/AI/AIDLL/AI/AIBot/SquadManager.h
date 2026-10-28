@@ -49,6 +49,7 @@ public:
     // area unless a bot leads it. strength receives twice its attack or defence strength.
     SquadCoordinator* getClosestAvailableSquad(AIStrategicArea* area, const Vec3& position,
                                                int side, bool attack, int& strength);
+    float getDistanceToClosestSquad(const Vec3& position, int side);
 
     // Round restart: every squad loses its area, the queues empty, and both cursors rewind.
     void reset();

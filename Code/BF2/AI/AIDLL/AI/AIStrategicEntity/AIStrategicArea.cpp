@@ -630,14 +630,39 @@ float AIStrategicArea::calculateDefenseNeed(int side)
     return base;
 }
 
-int AIStrategicArea::calculateAttackValue(int)
+// 0x348ce0 (Ghidra), from the disassembly; the decompiler loses the x87 result. The area's
+// side-1 position is used whatever the side.
+float AIStrategicArea::calculateAttackValue(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::calculateAttackValue");
+    float value = 0.0f;
+    if (m_status[side - 1] != StatusMap::Owned && hasNeighbourWithStatus(StatusMap::Owned, side))
+    {
+        value = 1.0f + m_needCurveInput[side - 1];
+        value = value * m_f164[side - 1];
+        if (!hasNeighbourWithStatus(StatusMap::Hostile, side))
+            value = (hasNeighbourWithStatus(StatusMap::Neutral, side) ? 1.5f : 1.25f) * value;
+        const IAITerrain* const terrain =
+            static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+        Vec3 position;
+        position.x = m_position[0].x;
+        position.y = terrain->getTerrainAltitude(m_position[0].x, m_position[0].y);
+        position.z = m_position[0].y;
+        const float distance = SquadManager::m_instance->getDistanceToClosestSquad(position, side);
+        if (1.0f < distance && distance < 100000.0f)
+            value = static_cast<float>(1.0 / distance * 100.0 * value);
+        else
+            value = 0.0f;
+    }
+    return value - calculateAttackCost(side);
 }
 
-int AIStrategicArea::calculateAttackCost(int)
+// 0x348e60 (Ghidra).
+float AIStrategicArea::calculateAttackCost(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::calculateAttackCost");
+    const EnemyStatistics* const statistics = m_statistics[side + 1];
+    const float strength = 1 < statistics->m_size ? statistics->m_strength[1] : -1.0f;
+    return static_cast<float>((1.0 + m_friendlyRatio[side - 1]) *
+                              (1.5 - 0.5 * m_needCurveInput[side - 1]) * strength);
 }
 
 bool AIStrategicArea::isNeighbour(AIStrategicObject*) const
@@ -689,9 +714,34 @@ bool AIStrategicArea::isAreaTakeable()
     BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::isAreaTakeable");
 }
 
-int AIStrategicArea::collectSquadResources(int, ISAI*)
+// 0x34a380 (Ghidra).
+bool AIStrategicArea::collectSquadResources(int side, ISAI* sai)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::collectSquadResources");
+    if (m_assignedSquadStrength[side - 1] >= m_resourceNeed[side - 1])
+        return true;
+    Vec3 position;
+    position.x = 0.0f;
+    position.y = 0.0f;
+    position.z = 0.0f;
+    vec2ToVec3XZ(getPosition(side), position);
+    position.y = m_f148;
+    validateDistances(side);
+
+    int strength = 0;
+    while (m_assignedSquadStrength[side - 1] <= m_resourceNeed[side - 1])
+    {
+        SquadCoordinator* const squad = SquadManager::m_instance->getClosestAvailableSquad(
+            this, position, side, m_attack[side - 1], strength);
+        if (!squad)
+            return m_assignedSquadStrength[side - 1] >= m_resourceNeed[side - 1];
+        const StatusMap::Status status = m_status[side - 1];
+        if (status == StatusMap::Owned || (m_enemyTakeover[side - 1] && status == StatusMap::Neutral))
+            sai->getCommanderInterface()->giveDefendOrder(position, squad);
+        else
+            sai->getCommanderInterface()->giveAttackOrder(position, squad);
+        m_assignedSquadStrength[side - 1] += strength;
+    }
+    return true;
 }
 
 // 0x34a530 (Ghidra).

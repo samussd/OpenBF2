@@ -1841,7 +1841,7 @@ void SAI::distributeDefence()
 
 namespace {
 
-// An area and its defence need; sorted by need.
+// An area and its defence need or attack value; sorted by it.
 struct SquareInfo
 {
     int m_index;
@@ -1958,9 +1958,140 @@ void SAI::categoryDistributeDefence(const std::vector<AIStrategicObject*>& objec
     }
 }
 
+// 0x33b9b0 (Ghidra). Category by category when the map has categories.
 void SAI::distributeAttack()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::distributeAttack");
+    if (m_activeStrategy->m_strategy->getNumberOfAttacks() == 0)
+        return;
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    if (manager->getNumberOfCategories() == 0)
+    {
+        categoryDistributeAttack(manager->getStrategicObjects());
+        return;
+    }
+    for (int category = 0; category < manager->getNumberOfCategories(); ++category)
+        categoryDistributeAttack(manager->getStrategicObjectsOfCategory(category));
+}
+
+// 0x33ba50 (Ghidra). Areas worth more than 0.001 are ranked by value; past the strategy's
+// attacks, those below 0.8 of the last value within them, or past twice the attacks, are released
+// with the rest. While the side is withdrawing attackers and nothing was freed, the least valuable
+// is dropped too and the most valuable attacked one is released instead of filling. Otherwise the
+// areas already attacked come first, then the others in value order, while at most the strategy's
+// attacks are chosen before each one, so one more can join. [PLATFORM] Heap ties as in defence.
+void SAI::categoryDistributeAttack(const std::vector<AIStrategicObject*>& objects)
+{
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    const unsigned int attacks = m_activeStrategy->m_strategy->getNumberOfAttacks();
+    std::list<SquareInfo> squares;
+    int released = 0;
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (!*it)
+            continue;
+        const float value = (*it)->calculateAttackValue(m_side);
+        if (0.001f < value)
+        {
+            const SquareInfo square = { (*it)->getIndex(), value };
+            squares.push_back(square);
+        }
+    }
+    squares.sort();
+    squares.reverse();
+    if (squares.empty())
+        return;
+
+    float cut = 0.0f;
+    unsigned int rank = 0;
+    std::list<SquareInfo>::iterator square = squares.begin();
+    for (; square != squares.end(); ++square)
+    {
+        ++rank;
+        if (rank <= attacks)
+            cut = square->m_need;
+        else if (attacks * 2 < rank ||
+                 static_cast<double>(square->m_need) < static_cast<double>(cut) * 0.8f)
+            break;
+    }
+    while (square != squares.end())
+    {
+        AIStrategicObject* const object = manager->getStrategicObject(square->m_index);
+        if (object && object->isAttack(m_side))
+            released += object->releaseAssignedResources(m_side);
+        square = squares.erase(square);
+    }
+    const bool withdrawing = m_flag1CD && !m_flag1CE && released == 0;
+    if (withdrawing && !squares.empty())
+        squares.pop_back();
+    if (squares.empty())
+        return;
+
+    if (withdrawing)
+    {
+        for (square = squares.begin(); square != squares.end(); ++square)
+        {
+            AIStrategicObject* const object = manager->getStrategicObject(square->m_index);
+            if (object && object->isAttack(m_side))
+            {
+                released += object->releaseAssignedResources(m_side);
+                if (0 < released)
+                    return;
+            }
+        }
+        return;
+    }
+
+    std::list<SquareInfo> chosen;
+    for (square = squares.begin(); square != squares.end();)
+    {
+        if (attacks < chosen.size())
+            break;
+        AIStrategicObject* const object = manager->getStrategicObject(square->m_index);
+        if (object && object->isAttack(m_side))
+        {
+            chosen.push_back(*square);
+            square = squares.erase(square);
+        }
+        else
+        {
+            ++square;
+        }
+    }
+    for (square = squares.begin(); square != squares.end() && chosen.size() <= attacks; ++square)
+        chosen.push_back(*square);
+
+    for (std::list<SquareInfo>::iterator it = chosen.begin(); it != chosen.end(); ++it)
+    {
+        AIStrategicObject* const object = manager->getStrategicObject(it->m_index);
+        if (object)
+        {
+            object->setAttack(true, m_side);
+            object->collectSquadResources(m_side, this);
+        }
+    }
+
+    const sobOrdering ordering = { m_side };
+    std::vector<AIStrategicObject*> heap;
+    for (std::list<SquareInfo>::iterator it = chosen.begin(); it != chosen.end(); ++it)
+    {
+        AIStrategicObject* const object = manager->getStrategicObject(it->m_index);
+        if (!object)
+            continue;
+        heap.push_back(object);
+        std::push_heap(heap.begin(), heap.end(), ordering);
+    }
+    while (!heap.empty())
+    {
+        std::pop_heap(heap.begin(), heap.end(), ordering);
+        AIStrategicObject* const object = heap.back();
+        heap.pop_back();
+        if (object->collectAdditionalSquadResources(1, m_side, this) != 0)
+        {
+            heap.push_back(object);
+            std::push_heap(heap.begin(), heap.end(), ordering);
+        }
+    }
 }
 
 void SAI::distributeWithNoAreas()

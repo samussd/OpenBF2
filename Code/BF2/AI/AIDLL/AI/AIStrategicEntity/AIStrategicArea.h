@@ -78,8 +78,14 @@ public:
     // 0 unless owned; else the temperature plus the enemy strength, scaled down by the need
     // curve, and by 1.5 next to a hostile area or 1.25 next to a neutral one.
     virtual float calculateDefenseNeed(int side);                  // slot 11,
-    virtual int  calculateAttackValue(int side);                   // slot 12,
-    virtual int  calculateAttackCost(int side);                    // slot 13,
+    // Less the attack cost. Above zero only for an area not owned beside an owned one: the
+    // temperature raised by the need curve input, by 1.5 beside a neutral area or 1.25 beside
+    // none (not beside a hostile one), times 100 over the distance to the closest squad when
+    // that lies between 1 and 100000.
+    virtual float calculateAttackValue(int side);                  // slot 12,
+    // (1 + friendly ratio) * (1.5 - need curve input / 2) * the second strategic strength
+    // statistic, or -1 when there is no second statistic.
+    virtual float calculateAttackCost(int side);                   // slot 13,
     virtual bool isNeighbour(AIStrategicObject* object) const;     // slot 14,
     virtual bool hasNeighbourWithStatus(StatusMap::Status status,
                                         int side) const;           // slot 15,
@@ -92,7 +98,9 @@ public:
     virtual bool hasObjectTypeFlags(int flags) const;              // slot 20,
     virtual int  getTacticalStatus(int side) const;                // slot 21,
     virtual bool isAreaTakeable();                                 // slot 22,
-    virtual int  collectSquadResources(int side, ISAI* sai);       // slot 23,
+    // Orders the closest available squads here, as collectAdditionalSquadResources does, until
+    // the assigned strength exceeds the need. False when the squads ran out first.
+    virtual bool collectSquadResources(int side, ISAI* sai);       // slot 23,
     // Orders up to count of the closest available squads here: to defend when the area is
     // owned, or neutral while the enemy is taking it, else to attack. Returns how many came.
     virtual int  collectAdditionalSquadResources(int count, int side, ISAI* sai);

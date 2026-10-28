@@ -3,6 +3,8 @@
 
 #include "SquadManager.h"
 
+#include <cmath>
+
 #include "SquadCoordinator.h"                        // the constructor builds two per squad
 #include "SquadMember.h"                             // addSquadMember moves a member between squads
 #include "BotMain.h"
@@ -68,6 +70,31 @@ SquadCoordinator* SquadManager::getClosestAvailableSquad(AIStrategicArea* area, 
         }
     }
     return closest;
+}
+
+// 0x1bfaa0 (Ghidra). From the leaders of the side's squads with members and a position;
+// sqrt(FLT_MAX) when there is none.
+float SquadManager::getDistanceToClosestSquad(const Vec3& position, int side)
+{
+    float best = 3.4028235e+38f;
+    Vec3 leader;
+    leader.x = 0.0f;
+    leader.y = 0.0f;
+    leader.z = 0.0f;
+    const std::vector<SquadCoordinator*>& squads = m_coordinators[side - 1];
+    for (std::size_t i = 0; i < squads.size(); ++i)
+    {
+        if (squads[i]->getNumberOfSquadMembers() <= 0)
+            continue;
+        if (!squads[i]->getSquadLeader()->getPosition(leader))
+            continue;
+        const float distance = (position.x - leader.x) * (position.x - leader.x) +
+                               (position.y - leader.y) * (position.y - leader.y) +
+                               (position.z - leader.z) * (position.z - leader.z);
+        if (distance < best)
+            best = distance;
+    }
+    return static_cast<float>(std::sqrt(static_cast<double>(best)));
 }
 
 int SquadManager::getSquadStrengths(int side, int areaIndex, StrategicStrengthType type)
