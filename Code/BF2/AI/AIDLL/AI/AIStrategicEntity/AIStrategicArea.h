@@ -108,8 +108,9 @@ public:
 
     std::vector<AILandingZone*>& getLandingZones();
     const std::vector<AILandingZone*>& getLandingZones() const;
-    // Bit test on the equipment types that use this area's landing zones. Not virtual.
-    bool isLandingZoneUser(int equipmentType);
+    // Bit test on m_landingZoneUsers. Callers pass an equipment type or a vehicle number.
+    // Not virtual.
+    bool isLandingZoneUser(int index);
 
 // [FRONTIER] Additional area operations remain undeclared until their signatures are established.
 
@@ -130,7 +131,7 @@ public:
     /* +324 */ int m_i324;                         // = 25
     // Landing zones associated with this area.
     /* +328 */ std::vector<AILandingZone*> m_landingZones;
-    /* +340 */ int m_landingZoneUsers;             // bit per equipment type; 0, none
+    /* +340 */ int m_landingZoneUsers;             // 0, none
 // Per-vehicle-group arrays; each allocation has at least one element.
 // [INFERRED] Container element types remain partly uncertain. Side-indexed flags use side - 1.
     /* +344 */ bool m_distancesDirty[2];           // both = true [INFERRED] name

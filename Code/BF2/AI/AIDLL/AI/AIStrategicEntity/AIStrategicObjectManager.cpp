@@ -14,6 +14,8 @@
 #include "../AIUtils/checkPointer.h"
 #include "../AIUtils/DebugRendering/AIRenderUtil.h"   // addStrategicObject's null-guarded tail
 #include "../Main/AIDllFrontier.h"
+#include "../Main/AISettingsInterfaces.h"                  // getClosestObject's vehicle group
+#include "../Main/CommonSingletonServer.h"
 #include "../../../../Core/ConsoleObjectMacro.h"      // the aiStrategicArea.* binding at the foot
 
 namespace dice {
@@ -38,6 +40,34 @@ AIStrategicObject* AIStrategicObjectManager::getClosestObject(
         if (gravity > best)
         {
             best = static_cast<float>(gravity);
+            closest = *it;
+        }
+    }
+    return closest;
+}
+
+// 0x354f30 (Ghidra). The strongest gravity above zero among the objects that accept the
+// equipment's vehicle group and do not expel it. An area must also not list the vehicle number
+// as a landing-zone user, unless the number is -1.
+AIStrategicObject* AIStrategicObjectManager::getClosestObject(
+    const Vec3& position, int equipmentType, int vehicleNumber, int side) const
+{
+    float best = 0.0f;
+    AIStrategicObject* closest = 0;
+    const int group =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleGroup(equipmentType);
+    for (std::vector<AIStrategicObject*>::const_iterator it = m_strategicObjects.begin();
+         it != m_strategicObjects.end(); ++it)
+    {
+        if (!(*it)->isAllowedVehicleGroup(group) || (*it)->isExpelledUnit(equipmentType))
+            continue;
+        if ((*it)->getType() == 0 && vehicleNumber != -1 &&
+            static_cast<AIStrategicArea*>(*it)->isLandingZoneUser(vehicleNumber))
+            continue;
+        const float gravity = (*it)->gravity(position, side);
+        if (best < gravity)
+        {
+            best = gravity;
             closest = *it;
         }
     }

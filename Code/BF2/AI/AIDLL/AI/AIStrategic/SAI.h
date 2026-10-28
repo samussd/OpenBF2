@@ -171,13 +171,21 @@ public:
         // the available attackers or else defenders, and advances the cursor past it.
         void occupy(std::set<int>::iterator& it, AIStrategicObject* from, AIStrategicObject* to,
                     SAI* sai);
+        // Places the bot in the object and keeps it among the side's free bots.
+        void respawn(AIStrategicObject* object, SAI* sai);
+        // Makes the bot an available attacker or defender of the object it occupies, which must
+        // exist, and moves it from the free bots, at the cursor, to the busy bots.
+        void assign(std::set<int>::iterator& it, bool attacker, SAI* sai);
+        // Records the order's object and time; returns the object index.
+        int setLastOrderedSquare(int square);
 
+        // The three object indices and the order time are [INFERRED] names.
         /* +0x00 */ Bot*   m_bot;
-        /* +0x04 */ int    m_int04;       // = -1
-        /* +0x08 */ int    m_int08;       // = -1
-        /* +0x0C */ int    m_occupiedObject;   // = -1; strategic object index [INFERRED] name
+        /* +0x04 */ int    m_assignedObject;     // = -1
+        /* +0x08 */ int    m_lastOrderedSquare;  // = -1
+        /* +0x0C */ int    m_occupiedObject;     // = -1
         /* +0x10 */ float  m_float10;     // = 0.0f; update accumulates the frame interval here
-        /* +0x14 */ double m_lastRetainTime;   // = 0.0; game time [INFERRED] name
+        /* +0x14 */ double m_lastOrderTime;      // = 0.0; game time
     };
 
     // Layout recovered from the inlined request producers and deny-timer sweep. No vptr.

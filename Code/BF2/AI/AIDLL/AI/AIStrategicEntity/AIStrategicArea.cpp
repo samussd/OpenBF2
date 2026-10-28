@@ -181,9 +181,9 @@ const std::vector<AILandingZone*>& AIStrategicArea::getLandingZones() const
 }
 
 // 0x34bd30 (Ghidra).
-bool AIStrategicArea::isLandingZoneUser(int equipmentType)
+bool AIStrategicArea::isLandingZoneUser(int index)
 {
-    return ((m_landingZoneUsers >> equipmentType) & 1) != 0;
+    return ((m_landingZoneUsers >> index) & 1) != 0;
 }
 
 // Initializes per-vehicle-group area arrays, with at least one element in each allocation.

@@ -36,6 +36,7 @@
 #include "Strategy.h"
 #include "../Main/IBotManager.h"                         // updateBotPositions' bot lookup
 #include "../AIBot/WaypointList.h"
+#include "../AIKnowledge/IPIMobile.h"                    // distributeResources' vehicle number
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"  // the soldier's information handle
 #include "../../../../Core/Debug.h"                      // update's shipped invalid-state diagnostic
 
@@ -243,11 +244,11 @@ SAI* ISAI::create(int side, int gridWidth, int gridHeight, Vec2 min, Vec2 max)
 // Starts the three integer states at -1 and the float accumulator at zero.
 SAI::BotInfo::BotInfo(Bot* bot)
     : m_bot(bot)
-    , m_int04(-1)
-    , m_int08(-1)
+    , m_assignedObject(-1)
+    , m_lastOrderedSquare(-1)
     , m_occupiedObject(-1)
     , m_float10(0.0f)
-    , m_lastRetainTime(0.0)
+    , m_lastOrderTime(0.0)
 {
 }
 
@@ -856,9 +857,18 @@ bool SAI::isPosInsideOwnedControlPoint(AIStrategicObject*&, Vec3, float)
     BF2_AI_FRONTIER("dice::hfe::ai::SAI::isPosInsideOwnedControlPoint");
 }
 
-bool SAI::haveAnyOwnedCps(int)
+// 0x338590 (Ghidra). Any strategic object the side owns, whatever its type.
+bool SAI::haveAnyOwnedCps(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::haveAnyOwnedCps");
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (*it && (*it)->getStatus(side) == StatusMap::Owned)
+            return true;
+    }
+    return false;
 }
 
 bool SAI::haveAnyOwnedAndTakeableCps(int)
@@ -1279,6 +1289,36 @@ void SAI::BotInfo::occupy(std::set<int>::iterator& it, AIStrategicObject* from,
     m_occupiedObject = to->getIndex();
 }
 
+// 0x33f0e0 (Ghidra). The shipped body also looks the bot up in m_setFC and drops the result.
+void SAI::BotInfo::respawn(AIStrategicObject* object, SAI* sai)
+{
+    m_occupiedObject = object->getIndex();
+    object->setAsPresentUnit(m_bot->getBotId(), sai->m_side);
+    sai->m_set44.insert(m_bot->getBotId());
+}
+
+// 0x33fb10 (Ghidra).
+void SAI::BotInfo::assign(std::set<int>::iterator& it, bool attacker, SAI* sai)
+{
+    AIStrategicObject* const object =
+        AIStrategicObjectManager::getInstance()->getStrategicObject(m_occupiedObject);
+    if (attacker)
+        object->registerAvailableAttacker(m_bot->getBotId(), sai->m_side);
+    else
+        object->registerAvailableDefender(m_bot->getBotId(), sai->m_side);
+    it = sai->m_set44.erase(it);
+    sai->m_setFC.insert(m_bot->getBotId());
+}
+
+// 0x33ffd0 (Ghidra).
+int SAI::BotInfo::setLastOrderedSquare(int square)
+{
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_lastOrderedSquare = square;
+    m_lastOrderTime = now;
+    return square;
+}
+
 // 0x33fdf0 (Ghidra). [CHOSEN] The shipped code erases m_setFC at the lookup's result, which is
 // undefined when the bot is missing; erasing by key gives the same result when it is present.
 void SAI::BotInfo::free(AIStrategicObject* object, bool attacker, std::set<int>::iterator& it,
@@ -1477,7 +1517,7 @@ void SAI::modifyStrategicObjectsTemperatures()
 // neighbouring object that pulls hardest on its position, if that object accepts its vehicle group
 // and equipment. A bot assigned to or available at an area it stands in is retained there once it
 // follows a move-to route with at most one sensed object and has waited 20 seconds on foot or 35
-// otherwise since its last retention.
+// otherwise since its last order.
 void SAI::updateBotPositions()
 {
     IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
@@ -1540,11 +1580,11 @@ void SAI::updateBotPositions()
                                        ? 20.0f
                                        : 35.0f;
                 if (bot->getWaypoints()->m_flag05 && bot->getWaypoints()->getId() == 1 &&
-                    static_cast<double>(wait) < now - m_botInfo[*it]->m_lastRetainTime &&
+                    static_cast<double>(wait) < now - m_botInfo[*it]->m_lastOrderTime &&
                     bot->getSensedObjects().size() < 2 && area->isPresentUnit(*it, m_side))
                 {
                     area->retainBot(m_side, *it, this);
-                    m_botInfo[*it]->m_lastRetainTime = now;
+                    m_botInfo[*it]->m_lastOrderTime = now;
                 }
             }
         };
@@ -1661,9 +1701,126 @@ void SAI::updateDistribution()
     m_intE0 -= static_cast<int>(defence + attack);
 }
 
+// 0x33a690 (Ghidra). Splits the side between attack and defence: everything attacks while it owns
+// no area, everything defends when nothing is left to take, and otherwise the active strategy's
+// aggression is the attack share. Each free bot is placed in the object it occupies, or the
+// closest one that takes it, retained there when that is a new order, and made an attacker
+// while the attack total stays within the attack share, else a defender. Then the side is told
+// to withdraw attackers or defenders when their share of all strength passes 1.2 times theirs,
+// depending on what the last bot became. The shipped body also allocates a cleared flag per
+// bot and two lists, and never reads them.
 void SAI::distributeResources()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::distributeResources");
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    const float* const friendly = m_int1F4 ? m_stateB : m_stateA;
+    float attackShare;
+    float defenceShare = 0.0f;
+    if (friendly[StrategyCondition::NumberOfFriendlyAreas] == 0.0f)
+    {
+        attackShare = 1.0f;
+    }
+    else if (friendly[StrategyCondition::NumberOfNeutralAreas] != 0.0f ||
+             friendly[StrategyCondition::NumberOfHostileAreas] != 0.0f)
+    {
+        attackShare = m_activeStrategy->m_strategy->getAggression();
+        defenceShare = 1.0f - m_activeStrategy->m_strategy->getAggression();
+    }
+    else
+    {
+        attackShare = 0.0f;
+        defenceShare = 1.0f;
+    }
+
+    bool lastWasDefender = true;
+    for (std::set<int>::iterator it = m_set44.begin(); it != m_set44.end();)
+    {
+        BotInfo* const info = m_botInfo[*it];
+        Information* const information =
+            info ? informationManager->getInformation(info->m_bot->getCurrentEquipment()) : 0;
+        if (!information)
+        {
+            ++it;
+            continue;
+        }
+        AIStrategicObject* object = manager->getStrategicObject(info->m_occupiedObject);
+        if (object)
+        {
+            object->setAsPresentUnit(*it, m_side);
+        }
+        else
+        {
+            IPIUnit* const unit = information->getUnit();
+            if (unit)
+            {
+                const int vehicleNumber =
+                    information->getMobile() ? information->getMobile()->getVehicleNumber() : -1;
+                object = manager->getClosestObject(information->getPosition(),
+                                                   unit->getEquipmentType(), vehicleNumber, m_side);
+            }
+            if (!object)
+            {
+                ++it;
+                continue;
+            }
+            info->respawn(object, this);
+        }
+        if (object->getIndex() != info->m_lastOrderedSquare)
+        {
+            object->retainBot(m_side, *it, this);
+            info->setLastOrderedSquare(object->getIndex());
+        }
+
+        // Not checked when the bot already occupied an object, as shipped.
+        IPIUnit* const unit = information->getUnit();
+        const int total = m_intD8 + m_intDC;
+        bool attacker;
+        if (total == 0)
+            attacker = 0.5f <= attackShare;
+        else if (attackShare <= 0.0f)
+            attacker = false;
+        else if (defenceShare <= 0.0f)
+            attacker = true;
+        else
+            attacker = static_cast<double>(m_intD8) / static_cast<double>(total) <= attackShare;
+        if (attacker)
+            m_intD8 += static_cast<int>(unit->getStrategicStrengths()[0]);
+        else
+            m_intDC += static_cast<int>(unit->getStrategicStrengths()[1]);
+        float sum = 0.0f;
+        for (int i = 0; i < unit->getNStrategicStrengths(); ++i)
+            sum += unit->getStrategicStrengths()[i];
+        m_intE0 -= static_cast<int>(sum / static_cast<float>(unit->getNStrategicStrengths()));
+        lastWasDefender = !attacker;
+        info->assign(it, attacker, this);
+    }
+
+    const float total = static_cast<float>(m_intDC + m_intD8 + m_intE0);
+    if (total == 0.0f)
+    {
+        m_flag1CD = false;
+        m_flag1CC = false;
+        return;
+    }
+    if (static_cast<double>(m_intD8) / total > 1.2f * static_cast<double>(attackShare) &&
+        !lastWasDefender)
+    {
+        m_flag1CD = true;
+        m_flag1CE = true;
+    }
+    else
+    {
+        m_flag1CD = false;
+    }
+    if (static_cast<double>(m_intDC) / total > 1.2f * static_cast<double>(defenceShare) &&
+        lastWasDefender)
+    {
+        m_flag1CC = true;
+        m_flag1CE = true;
+    }
+    else
+    {
+        m_flag1CC = false;
+    }
 }
 
 void SAI::distributeDefence()
