@@ -42,6 +42,8 @@ ConsoleObjects::ConsoleObjectList& aiSettingsConsoleObjects();   // AISettings.c
 // AIStrategicEntity/AIStrategicObjectManager.cpp - `aiStrategicArea.createFromControlPoint`, the
 // one command of nine on that object whose whole chain is written.
 ConsoleObjects::ConsoleObjectList& aiStrategicAreaConsoleObjects();
+// StrategyManager.cpp - the commander strategies, prerequisites and conditions.
+ConsoleObjects::ConsoleObjectList& aiStrategyConsoleObjects();
 // Pathfinding console commands for navigation meshes, properties, and the trace map.
 ConsoleObjects::ConsoleObjectList& aiPathfindingConsoleObjects();
 
@@ -106,6 +108,7 @@ bool AIModule::init()
     mainConsoleObjects->registerConsoleObjects(aiConsoleObjects());
     mainConsoleObjects->registerConsoleObjects(aiSettingsConsoleObjects());
     mainConsoleObjects->registerConsoleObjects(aiStrategicAreaConsoleObjects());
+    mainConsoleObjects->registerConsoleObjects(aiStrategyConsoleObjects());
     mainConsoleObjects->registerConsoleObjects(aiPathfindingConsoleObjects());
 
     BF2AI* ai = new BF2AI;
@@ -123,6 +126,7 @@ bool AIModule::close()
     mainConsoleObjects->unregisterConsoleObjects(aiConsoleObjects());
     mainConsoleObjects->unregisterConsoleObjects(aiSettingsConsoleObjects());
     mainConsoleObjects->unregisterConsoleObjects(aiStrategicAreaConsoleObjects());
+    mainConsoleObjects->unregisterConsoleObjects(aiStrategyConsoleObjects());
     mainConsoleObjects->unregisterConsoleObjects(aiPathfindingConsoleObjects());
 
     // getSingleton (+0x4C) searches m_normalSingletons. "AI" was registered into

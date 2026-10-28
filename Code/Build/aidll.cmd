@@ -189,6 +189,12 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\AIStrategicArea.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\SAWayPoint.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategic\SAI.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIStrategic\SCArea.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIStrategic\Strategy.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIStrategic\StrategyCondition.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIStrategic\StrategyPrerequisite.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIStrategic\TemperatureTree.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIUtils\AIStreamOperators.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\BotBehaviourManager.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\CommunicationHub.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\StrategyManager.cpp" ^

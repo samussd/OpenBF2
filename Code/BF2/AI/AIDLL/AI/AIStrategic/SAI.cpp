@@ -4,6 +4,7 @@
 
 #include "SAI.h"
 
+#include <cmath>
 #include <string>
 
 #include "../Main/AIDllFrontier.h"
@@ -31,6 +32,8 @@
 #include "../../../AIInterface/BFKnowledge/BFTerrain.h"    // checkCommanderUseArtillery: impact height
 #include "../AIStrategicEntity/AIStrategicArea.h"         // hostileTakeoveInProgress: the area centre
 #include "../Main/AIRandom.h"
+#include "../Main/StrategyManager.h"                       // chooseStrategy's forced strategy
+#include "Strategy.h"
 #include "../../../../Core/Debug.h"                      // update's shipped invalid-state diagnostic
 
 namespace dice {
@@ -343,7 +346,7 @@ SAI::SAI(int side, int, int, Vec2, Vec2)
         m_botInfo[i] = 0;
 }
 
-// Clears the strategies' two leading floats, the strength snapshots, the update cursor and the
+// Clears the strategies' heat and prerequisite, the strength snapshots, the update cursor and the
 // deny requests, restarts the four review deadlines as the constructor does, and resets every
 // squad, both sides', through the shared squad manager.
 bool SAI::reset()
@@ -351,8 +354,8 @@ bool SAI::reset()
     for (std::vector<StrategyContainer>::iterator it = m_strategies.begin();
          it != m_strategies.end(); ++it)
     {
-        it->m_float04 = 0.0f;
-        it->m_float00 = 0.0f;
+        it->m_prerequisite = 0.0f;
+        it->m_heat = 0.0f;
     }
     for (int i = 0; i < 6; ++i)
     {
@@ -407,9 +410,17 @@ void SAI::setMapYDimension(int)
 }
 
 
-void SAI::addStrategy(Strategy*)
+// Each addition points the active strategy back at the first one.
+void SAI::addStrategy(Strategy* strategy)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::addStrategy");
+    StrategyContainer container;
+    container.m_heat = 0.0f;
+    container.m_prerequisite = 0.0f;
+    container.m_startTime = 0.0f;
+    container.m_activations = 1;
+    container.m_strategy = strategy;
+    m_strategies.push_back(container);
+    m_activeStrategy = &m_strategies[0];
 }
 
 // One resumable pass, with a budget check after each
@@ -1251,6 +1262,13 @@ void SAI::BotInfo::remove(SAI*)
     BF2_AI_FRONTIER("dice::hfe::ai::SAI::BotInfo::remove");
 }
 
+// 0x33fdf0 (Ghidra), 318 bytes; reached when a strategy change finds bots still available.
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+void SAI::BotInfo::free(AIStrategicObject*, bool, std::set<int>::iterator&, SAI*)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::SAI::BotInfo::free");
+}
+
 // Void is inferred from complete
 // bodies and their callers. The spawn-group selector and dead-bot/respawn chain remain absent.
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
@@ -1307,10 +1325,103 @@ bool SAI::updateStrategicObjects()
     return true;
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// 0x339a10 (Ghidra). The band is (0.83, 1.2), from doubles narrowed to float.
 void SAI::chooseStrategy()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::chooseStrategy");
+    float* const friendly = m_int1F4 ? m_stateB : m_stateA;
+    float* const enemy = m_int1F4 ? m_stateD : m_stateC;
+    StrategyManager::getInstance()->isDebugEnabled();
+
+    Strategy* const forced = StrategyManager::getInstance()->getForcedStrategy(m_side);
+    if (forced)
+    {
+        // The forced strategy's prerequisite is computed and dropped.
+        forced->calculatePrerequisite(friendly, enemy, m_activeStrategy->m_strategy, m_side);
+        for (std::vector<StrategyContainer>::iterator it = m_strategies.begin();
+             it != m_strategies.end(); ++it)
+        {
+            if (it->m_strategy == forced)
+                changeStrategy(it);
+        }
+        return;
+    }
+
+    bool outOfBand = false;
+    for (std::vector<StrategyContainer>::iterator it = m_strategies.begin();
+         it != m_strategies.end(); ++it)
+    {
+        it->m_prerequisite = it->m_strategy->calculatePrerequisite(
+            friendly, enemy, m_activeStrategy->m_strategy, m_side);
+        if (it->m_prerequisite < 0.0f)
+            it->m_prerequisite = 0.0f;
+        float ratio;
+        if (it->m_prerequisite != 0.0f)
+            ratio = it->m_heat / it->m_prerequisite;
+        else
+            ratio = it->m_heat == 0.0f ? 1.0f : 0.0f;
+        if (ratio <= 0.83f || 1.2f <= ratio)
+            outOfBand = true;
+    }
+
+    if (!outOfBand)
+    {
+        // The limit grows from 1x towards 2x of the strategy's time limit with each kept turn.
+        const float half = std::pow(0.5f, static_cast<float>(m_activeStrategy->m_activations));
+        const float scale = (0.5f - half) + (0.5f - half) + 1.0f;
+        const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+        if (now - m_activeStrategy->m_startTime < scale * m_activeStrategy->m_strategy->m_timeLimit)
+            return;
+        ++m_activeStrategy->m_activations;
+    }
+
+    float total = 0.0f;
+    for (std::vector<StrategyContainer>::iterator it = m_strategies.begin();
+         it != m_strategies.end(); ++it)
+    {
+        it->m_heat = it->m_prerequisite;
+        total += it->m_prerequisite <= 0.0f ? 0.0f : it->m_prerequisite;
+    }
+
+    float draw = static_cast<float>(static_cast<double>(AIRandom::m_instance->next()) *
+                                    2.3283064e-10f * total);
+    std::vector<StrategyContainer>::iterator it = m_strategies.begin();
+    for (; it != m_strategies.end(); ++it)
+    {
+        draw -= it->m_heat <= 0.0f ? 0.0f : it->m_heat;
+        if (draw <= 0.0f)
+            break;
+    }
+    if (it == m_strategies.end())
+        --it;
+    changeStrategy(it);
+}
+
+// 0x339610 (Ghidra).
+void SAI::changeStrategy(std::vector<StrategyContainer>::iterator& it)
+{
+    StrategyContainer* const container = &*it;
+    if (m_activeStrategy == container)
+        return;
+    m_activeStrategy = container;
+
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator object = objects.begin();
+         object != objects.end(); ++object)
+    {
+        (*object)->releaseAssignedResources(m_side);
+        // free erases the bot from the set and advances the cursor.
+        std::set<int>& attackers = (*object)->getAvailableAttackers(m_side);
+        for (std::set<int>::iterator bot = attackers.begin(); bot != attackers.end();)
+            m_botInfo[*bot]->free(*object, true, bot, this);
+        std::set<int>& defenders = (*object)->getAvailableDefenders(m_side);
+        for (std::set<int>::iterator bot = defenders.begin(); bot != defenders.end();)
+            m_botInfo[*bot]->free(*object, false, bot, this);
+    }
+
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_activeStrategy->m_activations = 1;
+    m_activeStrategy->m_startTime = static_cast<float>(now);
 }
 
 void SAI::modifyStrategicObjectsTemperatures()

@@ -1,6 +1,5 @@
-// Owns strategies and their conditions.
-// [FRONTIER] Operations with unresolved nested parameter types remain undeclared.
-// [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
+// Owns the commander strategies, prerequisites and conditions the aiStrategy console builds, and
+// the strategy forced on each side.
 
 #ifndef AI_AIDLL_AI_MAIN_STRATEGYMANAGER_H
 #define AI_AIDLL_AI_MAIN_STRATEGYMANAGER_H
@@ -10,6 +9,8 @@
 #include <string>
 
 #include "AIDllTypes.h"
+#include "../AIStrategic/StatusMap.h"
+#include "../AIStrategic/StrategyCondition.h"
 
 namespace dice {
 namespace hfe {
@@ -17,23 +18,26 @@ namespace ai {
 
 class SCArea;
 class Strategy;
-class StrategyCondition;
 class StrategyPrerequisite;
 
 class StrategyManager
 {
 public:
-    // Object, strategy and modifier association.
+    // A strategy's weight for one named area, resolved to an object index by completeStrategies.
     class ObjectStrategyModifierTuple
     {
     public:
-        char m_opaque[12];      // [UNRESOLVED] fields; size attested
+        std::string m_areaName;
+        Strategy* m_strategy;
+        float m_value;
     };
 
-    StrategyManager();                              // 0x?? /
-    ~StrategyManager();                             // 0x??, - not virtual
+    StrategyManager();
+    ~StrategyManager();                             // not virtual
 
-    virtual void reset();                           // the only virtual, vtable slot 0
+    // Deletes every strategy, prerequisite and condition and clears the forced strategies and the
+    // debug flag. The object modifiers and the area list are kept, as shipped. Returns true.
+    virtual bool reset();                           // the only virtual, vtable slot 0
 
     static StrategyManager* getInstance();
     static void setInstance(StrategyManager *);
@@ -43,33 +47,61 @@ public:
     bool isDebugEnabled();
 
     Strategy* getActiveStrategy();
-    std::string getActiveStrategyName();            // , returns by value
+    std::string getActiveStrategyName();            // returns by value
     StrategyPrerequisite* getActivePrerequisite();
     StrategyCondition* getActiveCondition();
     Strategy* getForcedStrategy(int);
 
     std::string getActivePrerequisiteName();
+    // Empty when no condition is active.
     std::string getActiveConditionName();
+    // Each lookup answers 0 for an unknown name.
     Strategy* getStrategy(std::string);
     StrategyCondition* getCondition(std::string);
     StrategyPrerequisite* getPrerequisite(std::string);
-    void setActiveStrategy(std::string);
-    void setActivePrerequisite(std::string);
-    void setActiveCondition(std::string);
+    // An unknown name clears the active entry; the strategy is then named "NULL" and the
+    // prerequisite "". Each returns the new active entry.
+    Strategy* setActiveStrategy(std::string);
+    StrategyPrerequisite* setActivePrerequisite(std::string);
+    StrategyCondition* setActiveCondition(std::string);
+    // Needs an active strategy; without one it reports an error and does nothing.
     void setPrerequisite(std::string);
-    void forceStrategy(std::string, int);
-    void createStrategy(std::string);
-    void createPrerequisite(std::string);
+    // side is 1 or 2. An unknown name clears that side's forced strategy. Returns a message for
+    // the console.
+    std::string forceStrategy(std::string, int);
+
+    // Each create makes its entry active. A taken name returns false: createStrategy then clears
+    // the active strategy, the condition creators clear the active condition, and
+    // createPrerequisite leaves the active prerequisite alone.
+    bool createStrategy(std::string);
+    bool createPrerequisite(std::string);
+    bool createConstantCondition(std::string, StrategyCondition::CompareType,
+                                 StrategyCondition::Compare, StrategyCondition::ConditionSide,
+                                 StrategyCondition::Conditional, float constant);
+    bool createHomogenousCondition(std::string, StrategyCondition::CompareType,
+                                   StrategyCondition::Compare, StrategyCondition::Conditional);
+    bool createHeterogeneousCondition(std::string, StrategyCondition::CompareType,
+                                      StrategyCondition::Compare, StrategyCondition::ConditionSide,
+                                      StrategyCondition::Conditional,
+                                      StrategyCondition::Conditional);
+    // The area is resolved by completeConditions.
+    bool createAreaCondition(std::string, std::string areaName, StatusMap::Status);
+
+    // Adds the named condition to the active prerequisite, which must exist. Weight 1 by default.
     void addCondition(std::string);
     void addCondition(std::string, float);
-    void addSpecificObjectModifier(std::string, float);
-    void addRequiredPrecedingStrategy(std::string);
-    void addProhibitedPrecedingStrategy(std::string);
+    // Queued for completeStrategies against the active strategy. Returns true.
+    bool addSpecificObjectModifier(std::string areaName, float);
+    // Need an active strategy; without one they report an error and return false.
+    bool addRequiredPrecedingStrategy(std::string);
+    bool addProhibitedPrecedingStrategy(std::string);
+    // Resolve the queued area names once the strategic areas exist. The queues are not cleared.
     void completeStrategies();
     void completeConditions();
-    void listStrategies();
-    void listPrerequisites();
-    void listConditions();
+    // Every name followed by a newline.
+    std::string listStrategies();
+    std::string listPrerequisites();
+    std::string listConditions();
 
     // the layout, from the 545-byte constructor cross-checked against the destructor
     // the three registries each come as A (name, active-pointer, map) triple, in the same order.
@@ -83,7 +115,7 @@ public:
     // Active condition iterator, initialized to end() and checked before dereference.
     /* +48 */ std::map<std::string, StrategyCondition*>::iterator m_activeCondition;
     /* +52 */ std::map<std::string, StrategyCondition*> m_conditions;
-    /* +64 */ std::list<SCArea*> m_areas;
+    /* +64 */ std::list<SCArea*> m_areas;            // not owned; the conditions map owns them
     /* +68 */ bool m_enableDebug;                    // = false
     // Forced strategy by team - 1. Callers must supply team 1 or 2; no bounds check is performed.
     /* +72 */ Strategy* m_forcedStrategy[2];         // = { 0, 0 }, indexed [team - 1]
@@ -91,6 +123,10 @@ public:
     // first wins, and the destructor does test `== this`.
     static StrategyManager* m_instance;
 };
+
+// The aiStrategy console's receivers; 0 when there is no manager.
+Strategy* getActiveStrategy();
+StrategyCondition* getActiveCondition();
 
 } // namespace ai
 } // namespace hfe

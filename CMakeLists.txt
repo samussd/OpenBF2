@@ -206,6 +206,12 @@ set(bf2_aidll_only_sources
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategicEntity/AIStrategicArea.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategicEntity/SAWayPoint.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/SAI.cpp"   # libaidll only - chunk 02
+    "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/SCArea.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/Strategy.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/StrategyCondition.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/StrategyPrerequisite.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/TemperatureTree.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIUtils/AIStreamOperators.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/BotBehaviourManager.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/Main/CommunicationHub.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/Main/StrategyManager.cpp"   # libaidll only - chunk 02
@@ -1175,6 +1181,12 @@ add_library(bf2_aidll SHARED EXCLUDE_FROM_ALL
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategicEntity/AIStrategicArea.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategicEntity/SAWayPoint.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/SAI.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/SCArea.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/Strategy.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/StrategyCondition.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/StrategyPrerequisite.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/TemperatureTree.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIUtils/AIStreamOperators.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/BotBehaviourManager.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/CommunicationHub.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/StrategyManager.cpp"

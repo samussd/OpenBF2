@@ -23,17 +23,17 @@ class SAI;
 class SquadCoordinator;
 class Strategy;
 
-// `~SAI` deallocates the strategy vector's buffer with a
+// One strategy as a side weighs it. `~SAI` deallocates the strategy vector's buffer with a
 // count that divides by five, so `sizeof(StrategyContainer) == 20`; the destructor also runs
 // `__destroy_aux` over the range, which is what proves the vector holds these by value rather than
-// by pointer. updateStates subtracts the float at +8 from game time.
-// Its name is [INFERRED]; the other sixteen bytes remain [UNRESOLVED].
+// by pointer. The struct and field names are [INFERRED].
 struct StrategyContainer
 {
-    float m_float00;   // [UNRESOLVED] role; SAI::reset zeroes it
-    float m_float04;   // [UNRESOLVED] role; SAI::reset zeroes it
-    float m_startTime; // +8, [INFERRED] name
-    unsigned char m_unresolved0C[8];
+    float m_heat;          // the prerequisite the last draw used
+    float m_prerequisite;  // the latest prerequisite, floored at zero
+    float m_startTime;     // game time of the last activation
+    int m_activations;     // 1 on activation; each kept turn lengthens the next one
+    Strategy* m_strategy;  // not owned
 };
 
 // Running weighted averages over a fixed number of strength categories.
@@ -161,6 +161,9 @@ public:
     {
         explicit BotInfo(Bot* bot);
         void remove(SAI* sai); // named removal frontier
+        // Releases the bot from the object's available attackers or defenders and advances it
+        // past the erased entry. Named frontier; the void return is [INFERRED].
+        void free(AIStrategicObject* object, bool attacker, std::set<int>::iterator& it, SAI* sai);
 
         /* +0x00 */ Bot*   m_bot;
         /* +0x04 */ int    m_int04;       // = -1
@@ -245,7 +248,13 @@ public:
     void clearSpawnsToPoints();                      // PE inlined in prepareUpdate
     void handleTeleportingBot(int botId);            // named frontier
     bool updateStrategicObjects();
+    // Keeps the active strategy while every prerequisite stays within its band of the heat the
+    // last draw used and the time limit has not run out; otherwise draws one weighted by
+    // prerequisite. A forced strategy wins outright. Needs at least one strategy, as shipped.
     void chooseStrategy();
+    // Activates the strategy and frees every bot this side had made available to any object.
+    // Does nothing when it is already active.
+    void changeStrategy(std::vector<StrategyContainer>::iterator& it);
     void modifyStrategicObjectsTemperatures();
     void updateBotPositions();
     void updateDistribution();

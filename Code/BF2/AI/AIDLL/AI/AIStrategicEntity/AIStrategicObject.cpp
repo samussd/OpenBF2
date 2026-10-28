@@ -116,6 +116,17 @@ int AIStrategicObject::releaseAssignedResources(int side)
     return sai->releaseSquadsFromObject(m_index, side);
 }
 
+// 0x3522d0 and 0x3522f0 (Ghidra). Unchecked side.
+std::set<int>& AIStrategicObject::getAvailableAttackers(int side)
+{
+    return m_set20[side - 1];
+}
+
+std::set<int>& AIStrategicObject::getAvailableDefenders(int side)
+{
+    return m_set44[side - 1];
+}
+
 // The ten accessors. Every one of them is between seven and thirty-three bytes in the image.
 
 // Returns type code 3; AIStrategicArea returns 0.

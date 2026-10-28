@@ -10,6 +10,8 @@
 #include "AIMain.h"                                // IAIMain::m_instance
 #include "../../../../Core/ConsoleObjectMacro.h"   // the ai.init binding at the tail
 #include "CommonSingletonServer.h"
+#include "StrategyManager.h"                       // addSAIStrategy's lookup
+#include "../AIStrategic/SAI.h"                    // ISAI::addStrategy
 
 namespace dice {
 namespace hfe {
@@ -297,9 +299,17 @@ void AIConsole::activateDefaultInterpreter(std::string, BAPStatementType, BotLod
     BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::activateDefaultInterpreter");
 }
 
-void AIConsole::addSAIStrategy(int, std::string)
+// An unknown side or strategy name is ignored.
+void AIConsole::addSAIStrategy(int side, std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::addSAIStrategy");
+    if (!getActiveAIMain())
+        return;
+    SAI* const sai = getActiveAIMain()->getSAI(side);
+    if (!sai)
+        return;
+    Strategy* const strategy = StrategyManager::getInstance()->getStrategy(name);
+    if (strategy)
+        sai->addStrategy(strategy);
 }
 
 void AIConsole::addSensingAgentPattern(const std::string&, const std::string&)
@@ -387,7 +397,8 @@ float AIConsole::getCurrentYawAngle()
     BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::getCurrentYawAngle");
 }
 
-// Console binding for ai.init. Calls may reach named stops in dependent subsystems.
+// Console bindings for ai.init and ai.addSAIStrategy. Calls may reach named stops in dependent
+// subsystems.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 
 namespace {
@@ -400,10 +411,18 @@ void consoleAiInit(int n)
     AIConsole::m_instance->init(n);
 }
 
+void consoleAiAddSAIStrategy(int side, std::string name)
+{
+    AIConsole::m_instance->addSAIStrategy(side, name);
+}
+
 } // anonymous namespace
 
 BF2_CONSOLE_OBJECT("ai", 2, 0)
 BF2_CONSOLE_METHOD_1(init, consoleAiInit, int, kAiConsoleTag)
+// ELF class 206.
+BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(addSAIStrategy, consoleAiAddSAIStrategy,
+                                   AIConsole::m_instance != 0, int, std::string, kAiConsoleTag)
 
 // Handed to the console registry by AIModule::init.
 ConsoleObjectList& aiConsoleObjects()

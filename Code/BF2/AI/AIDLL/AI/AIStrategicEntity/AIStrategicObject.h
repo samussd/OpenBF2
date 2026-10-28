@@ -111,6 +111,9 @@ public:
     // Borrowed mutable statistics at m_statistics[side - 1]; reference spelling is [INFERRED].
     EnemyStatistics& getBattleStatistics(int side) const;
     int releaseAssignedResources(int side);
+    // Bot indices free to attack or to defend this object, by side (1 or 2).
+    std::set<int>& getAvailableAttackers(int side);
+    std::set<int>& getAvailableDefenders(int side);
 
     // [INFERRED] accessor names/forms. SAI::updateStates and the area's neighbour scans inline
     // these loads: status is at +0x70 + 4*side and index at +0xF0 in both shipped x86 ports.
@@ -121,10 +124,10 @@ public:
     // [CHOSEN, not recovered] Public fields allow manager access; the original may have
     // used friendship instead. Offsets document ELF layout and do not constrain modern STL sizes.
     /*   +4 */ EnemyStatistics* m_statistics[4];   // new EnemyStatistics(6), (6), (2), (2) in order
-    // Per-side strategic-object sets. [UNRESOLVED] Exact roles of these four pairs remain
-    // unidentified; at least two pairs represent neighboring areas and objects.
-    /*  +20 */ std::set<int> m_set20[2];
-    /*  +44 */ std::set<int> m_set44[2];
+    // Per-side sets. m_set20 and m_set44 hold bot indices into SAI's BotInfo table; the role of
+    // m_set92 is [UNRESOLVED].
+    /*  +20 */ std::set<int> m_set20[2]; // getAvailableAttackers
+    /*  +44 */ std::set<int> m_set44[2]; // getAvailableDefenders
     /*  +68 */ std::set<int> m_set68[2]; // assigned units, one-based side accessor
     /*  +92 */ std::set<int> m_set92[2];
 

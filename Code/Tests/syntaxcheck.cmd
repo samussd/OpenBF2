@@ -1064,6 +1064,18 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategicEntity\AIStrategicArea.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategicEntity\SAWayPoint.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategic\SAI.cpp"
 if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategic\SCArea.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategic\Strategy.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategic\StrategyCondition.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategic\StrategyPrerequisite.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategic\TemperatureTree.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIUtils\AIStreamOperators.cpp"
+if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\BotBehaviourManager.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\CommunicationHub.cpp"

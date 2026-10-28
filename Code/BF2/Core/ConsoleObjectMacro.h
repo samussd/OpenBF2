@@ -1375,4 +1375,113 @@ class BF2_CC_NAME : public ::dice::hfe::ConsoleObjectBaseImpl                   
 static BF2_CC_NAME BF2_CC_INSTANCE;                                                                \
 }
 
+// Registers a static void command taking two or three arguments; each count calls its own
+// overload of target.
+#define BF2_CONSOLE_METHOD_2_3_STATIC_ACTIVE(fnName, target, activeExpr, A0, A1, A2, listTag)      \
+namespace {                                                                                        \
+class BF2_CC_NAME : public ::dice::hfe::ConsoleObjectBaseImpl                                      \
+{                                                                                                  \
+    BF2_CC_HEAD(fnName, 0, 2, 3, "void", false)                                                    \
+            m_argTypes[0] = #A0;                                                                   \
+            m_argTypes[1] = #A1;                                                                   \
+            m_argTypes[2] = #A2;                                                                   \
+    BF2_CC_TAIL(3, listTag)                                                                        \
+    virtual bool isObjectActive() const { return (activeExpr); }                                   \
+    virtual void executeObjectMethod()                                                             \
+    {                                                                                              \
+        if (m_argCount == 2)                                                                       \
+        {                                                                                          \
+            m_hasReturnValue = false;                                                              \
+            target(BF2_CC_ARG(A0, 0), BF2_CC_ARG(A1, 1));                                          \
+        }                                                                                          \
+        else if (m_argCount == 3)                                                                  \
+        {                                                                                          \
+            m_hasReturnValue = false;                                                              \
+            target(BF2_CC_ARG(A0, 0), BF2_CC_ARG(A1, 1), BF2_CC_ARG(A2, 2));                       \
+        }                                                                                          \
+    }                                                                                              \
+    virtual void setArgFromString(int index, const std::string& value)                             \
+    {                                                                                              \
+        BF2_CC_CONVERT(A0, 1)                                                                      \
+        BF2_CC_CONVERT(A1, 2)                                                                      \
+        BF2_CC_CONVERT(A2, 3)                                                                      \
+    }                                                                                              \
+    BF2_CC_NO_RETURN_AS_STRING                                                                     \
+    BF2_CC_COMMON_HOOKS                                                                            \
+};                                                                                                 \
+static BF2_CC_NAME BF2_CC_INSTANCE;                                                                \
+}
+
+// Registers a four-argument command with a typed result and availability check.
+#define BF2_CONSOLE_METHOD_4_RET_ACTIVE(fnName, target, RET, activeExpr, A0, A1, A2, A3, listTag)  \
+namespace {                                                                                        \
+class BF2_CC_NAME : public ::dice::hfe::ConsoleObjectBaseImpl                                      \
+{                                                                                                  \
+    BF2_CC_HEAD(fnName, 0, 4, 4, #RET, true)                                                       \
+            m_argTypes[0] = #A0;                                                                   \
+            m_argTypes[1] = #A1;                                                                   \
+            m_argTypes[2] = #A2;                                                                   \
+            m_argTypes[3] = #A3;                                                                   \
+    BF2_CC_TAIL(4, listTag)                                                                        \
+    virtual bool isObjectActive() const { return (activeExpr); }                                   \
+    virtual void executeObjectMethod()                                                             \
+    {                                                                                              \
+        if (m_argCount != 4) return;                                                               \
+        m_hasReturnValue = true;                                                                   \
+        m_returnValue = target(BF2_CC_ARG(A0, 0), BF2_CC_ARG(A1, 1),                               \
+                               BF2_CC_ARG(A2, 2), BF2_CC_ARG(A3, 3));                              \
+    }                                                                                              \
+    virtual void setArgFromString(int index, const std::string& value)                             \
+    {                                                                                              \
+        BF2_CC_CONVERT(A0, 1)                                                                      \
+        BF2_CC_CONVERT(A1, 2)                                                                      \
+        BF2_CC_CONVERT(A2, 3)                                                                      \
+        BF2_CC_CONVERT(A3, 4)                                                                      \
+    }                                                                                              \
+    BF2_CC_RETURN_AS_STRING                                                                        \
+    BF2_CC_COMMON_HOOKS                                                                            \
+private:                                                                                           \
+    RET m_returnValue;                                                                             \
+};                                                                                                 \
+static BF2_CC_NAME BF2_CC_INSTANCE;                                                                \
+}
+
+// Registers a six-argument command with a typed result and availability check.
+#define BF2_CONSOLE_METHOD_6_RET_ACTIVE(fnName, target, RET, activeExpr, A0, A1, A2, A3, A4, A5, listTag)\
+namespace {                                                                                        \
+class BF2_CC_NAME : public ::dice::hfe::ConsoleObjectBaseImpl                                      \
+{                                                                                                  \
+    BF2_CC_HEAD(fnName, 0, 6, 6, #RET, true)                                                       \
+            m_argTypes[0] = #A0;                                                                   \
+            m_argTypes[1] = #A1;                                                                   \
+            m_argTypes[2] = #A2;                                                                   \
+            m_argTypes[3] = #A3;                                                                   \
+            m_argTypes[4] = #A4;                                                                   \
+            m_argTypes[5] = #A5;                                                                   \
+    BF2_CC_TAIL(6, listTag)                                                                        \
+    virtual bool isObjectActive() const { return (activeExpr); }                                   \
+    virtual void executeObjectMethod()                                                             \
+    {                                                                                              \
+        if (m_argCount != 6) return;                                                               \
+        m_hasReturnValue = true;                                                                   \
+        m_returnValue = target(BF2_CC_ARG(A0, 0), BF2_CC_ARG(A1, 1), BF2_CC_ARG(A2, 2),            \
+                               BF2_CC_ARG(A3, 3), BF2_CC_ARG(A4, 4), BF2_CC_ARG(A5, 5));           \
+    }                                                                                              \
+    virtual void setArgFromString(int index, const std::string& value)                             \
+    {                                                                                              \
+        BF2_CC_CONVERT(A0, 1)                                                                      \
+        BF2_CC_CONVERT(A1, 2)                                                                      \
+        BF2_CC_CONVERT(A2, 3)                                                                      \
+        BF2_CC_CONVERT(A3, 4)                                                                      \
+        BF2_CC_CONVERT(A4, 5)                                                                      \
+        BF2_CC_CONVERT(A5, 6)                                                                      \
+    }                                                                                              \
+    BF2_CC_RETURN_AS_STRING                                                                        \
+    BF2_CC_COMMON_HOOKS                                                                            \
+private:                                                                                           \
+    RET m_returnValue;                                                                             \
+};                                                                                                 \
+static BF2_CC_NAME BF2_CC_INSTANCE;                                                                \
+}
+
 #endif // CORE_CONSOLEOBJECTMACRO_H
