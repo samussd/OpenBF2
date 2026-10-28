@@ -3,6 +3,9 @@
 
 #include "AIStreamOperators.h"
 
+#include "../AIBot/BotMain.h"                         // BotLodLevel
+#include "../AIPlanInterpreter/BAPStatementType.h"
+
 #include <string>
 
 namespace dice {
@@ -77,6 +80,49 @@ const char* const kObjectTypeNames[] = {
     0, "Flank", "Centre", "Base", "Close", "Remote", "AirSpawner", "LandSpawner", "NavalSpawner",
     "SoldierSpawner", "StrongPoint", "ChokePoint", "Bridge", "AirField", "SupplyPoint", "Route",
     "ControlPoint", "North", "West", "South", "East", 0, "Front", "Safe", "Enemy", 0, "Neutral",
+};
+
+const NamedValue kLodLevelTokens[] = {
+    { "BLLFull", 0 }, { "Full", 0 }, { "0", 0 }, { "BLLMedium", 1 }, { "Medium", 1 }, { "1", 1 },
+    { "BLLLight", 2 }, { "Light", 2 }, { "2", 2 }, { "BLLNone", 3 },
+};
+
+// In the shipped comparison order: each full name, then its short form.
+const NamedValue kStatementTypeTokens[] = {
+    { "BAPSTParallel", 0 }, { "Parallel", 0 }, { "BAPSTSerial", 1 }, { "Serial", 1 },
+    { "BAPSTPlanEnd", 2 }, { "PlanEnd", 2 }, { "BAPSTIf", 3 }, { "If", 3 },
+    { "BAPSTWait", 4 }, { "Wait", 4 }, { "BAPSTWhile", 5 }, { "While", 5 },
+    { "BAPSTAimAt", 6 }, { "AImAt", 6 }, { "BAPSTMoveTo", 7 }, { "MoveTo", 7 },
+    { "BAPSTTurn", 24 }, { "Turn", 24 }, { "BAPSTMoveToDirection", 8 }, { "MoveToDirection", 8 },
+    { "BAPSTMoveToObject", 9 }, { "MoveToObject", 9 },
+    { "BAPSTMoveAwayFromObject", 10 }, { "MoveAwayFromObject", 10 },
+    { "BAPSTTrigger", 11 }, { "Trigger", 11 },
+    { "BAPSTTriggerContinously", 12 }, { "TriggerContinously", 12 },
+    { "BAPSTIdle", 13 }, { "Idle", 13 }, { "BAPSTResetControls", 14 }, { "ResetControls", 14 },
+    { "BAPSTInfoWrapper", 15 }, { "InfoWrapper", 15 }, { "BAPSTSense", 20 }, { "Sense", 20 },
+    { "BAPSTLookAt", 23 }, { "LookAt", 23 },
+    { "BAPSTOverrideSensingAgent", 21 }, { "OverrideSensingAgent", 21 },
+    { "BAPSTPlaceC4", 22 }, { "PlaceC4", 22 }, { "BAPSTRoll3d", 25 }, { "Roll3d", 25 },
+    { "BAPSTSoldierPose", 26 }, { "SoldierPose", 26 },
+    { "BAPSTUpdateVehicle", 27 }, { "UpdateVehicle", 27 },
+    { "BAPSTChangeWeapon", 28 }, { "ChangeWeapon", 28 },
+    { "BAPSTICTurnLock", 31 }, { "TurnLock", 31 },
+    { "BAPSTICChangeVehicle", 29 }, { "ChangeVehicle", 29 },
+    { "BAPSTEvaluate", 32 }, { "Evaluate", 32 }, { "BAPSTNotifyBot", 33 }, { "NotifyBot", 33 },
+    { "BAPSTAimingWrapper", 16 }, { "AimingWrapper", 16 },
+    { "BAPSTWeaponWrapper", 18 }, { "WeaponWrapper", 18 },
+    { "BAPSTLookAtWrapper", 19 }, { "LookAtWrapper", 19 },
+    { "BAPSTFinishedWrapper", 17 }, { "FinishedWrapper", 17 },
+    { "BAPSTPhysicsEnable", 34 }, { "PhysicsEnable", 34 },
+    { "BAPSTSetSensingAgentFocus", 35 }, { "SetSensingAgentFocus", 35 },
+    { "BAPSTMergeSoldierInputs", 36 }, { "MergeSoldierInputs", 36 },
+    { "BAPSTSendRadioMessage", 37 }, { "SendRadioMessage", 37 },
+    { "BAPSTDebug", 38 }, { "Debug", 38 }, { "BAPSTForgetTarget", 39 }, { "ForgetTarget", 39 },
+    { "BAPSTUseFlareOnMissileLock", 40 }, { "UseFlareOnMissileLock", 40 },
+    { "BAPSTRunOverObject", 41 }, { "RunOverObject", 41 },
+    { "BAPSTHonkHorn", 42 }, { "HonkHorn", 42 },
+    { "BAPSTEvaluateCondition", 43 }, { "EvaluateCondition", 43 },
+    { "BAPSTRevive", 44 }, { "Revive", 44 },
 };
 
 // Stores unknown for an unmatched token, including when the read fails.
@@ -183,6 +229,16 @@ std::ostream& operator<<(std::ostream& stream, StatusMap::Status value)
     case StatusMap::Neutral: return stream << "Neutral";
     default:                 return stream << "Unknown";
     }
+}
+
+std::istream& operator>>(std::istream& stream, BotLodLevel& value)
+{
+    return readNamed(stream, value, kLodLevelTokens, 3);
+}
+
+std::istream& operator>>(std::istream& stream, BAPStatementType& value)
+{
+    return readNamed(stream, value, kStatementTypeTokens, 45);
 }
 
 } // namespace ai

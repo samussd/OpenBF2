@@ -444,6 +444,39 @@ class BF2_CC_NAME : public ::dice::hfe::ConsoleObjectBaseImpl                   
 static BF2_CC_NAME BF2_CC_INSTANCE;                                                                \
 }
 
+#define BF2_CONSOLE_METHOD_5_STATIC_ACTIVE(fnName, target, activeExpr, A0, A1, A2, A3, A4, listTag)\
+namespace {                                                                                        \
+class BF2_CC_NAME : public ::dice::hfe::ConsoleObjectBaseImpl                                      \
+{                                                                                                  \
+    BF2_CC_HEAD(fnName, 0, 5, 5, "void", false)                                                    \
+            m_argTypes[0] = #A0;                                                                   \
+            m_argTypes[1] = #A1;                                                                   \
+            m_argTypes[2] = #A2;                                                                   \
+            m_argTypes[3] = #A3;                                                                   \
+            m_argTypes[4] = #A4;                                                                   \
+    BF2_CC_TAIL(5, listTag)                                                                        \
+    virtual bool isObjectActive() const { return (activeExpr); }                                   \
+    virtual void executeObjectMethod()                                                             \
+    {                                                                                              \
+        if (m_argCount != 5) return;                                                               \
+        m_hasReturnValue = false;                                                                  \
+        target(BF2_CC_ARG(A0, 0), BF2_CC_ARG(A1, 1), BF2_CC_ARG(A2, 2), BF2_CC_ARG(A3, 3),         \
+               BF2_CC_ARG(A4, 4));                                                                 \
+    }                                                                                              \
+    virtual void setArgFromString(int index, const std::string& value)                             \
+    {                                                                                              \
+        BF2_CC_CONVERT(A0, 1)                                                                      \
+        BF2_CC_CONVERT(A1, 2)                                                                      \
+        BF2_CC_CONVERT(A2, 3)                                                                      \
+        BF2_CC_CONVERT(A3, 4)                                                                      \
+        BF2_CC_CONVERT(A4, 5)                                                                      \
+    }                                                                                              \
+    BF2_CC_NO_RETURN_AS_STRING                                                                     \
+    BF2_CC_COMMON_HOOKS                                                                            \
+};                                                                                                 \
+static BF2_CC_NAME BF2_CC_INSTANCE;                                                                \
+}
+
 // Registers a static void command accepting one or two arguments. Any target result is discarded.
 #define BF2_CONSOLE_METHOD_1_2_STATIC_ACTIVE(fnName, target, activeExpr, A0, A1, listTag)           \
 namespace {                                                                                        \

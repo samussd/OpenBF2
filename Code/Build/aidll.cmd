@@ -132,6 +132,7 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIBot\CommunicationAgent.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotSenses.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIPlanInterpreter\BAPContext.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIPlanInterpreter\BAPInterpreter.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\InformationManager.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\Information.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\WeaponInfo.cpp" ^

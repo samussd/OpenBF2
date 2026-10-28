@@ -44,7 +44,8 @@ class SquadMember;
 class UrgencyGenerator;
 class WaypointList;
 
-enum BotLodLevel { BotLodFull = 0, BotLodMedium = 1, BotLodLight = 2 };  // [CHOSEN] - see BotManager
+// Script names BLLFull, BLLMedium, BLLLight and BLLNone; the enumerator spellings are [CHOSEN].
+enum BotLodLevel : int { BotLodFull = 0, BotLodMedium = 1, BotLodLight = 2, BotLodNone = 3 };
 
 // Base interface used by the bot manager to schedule and query bots.
 // [RETIRE-WHEN: botmain-bases] Remove when the corresponding implementation is complete and validated.

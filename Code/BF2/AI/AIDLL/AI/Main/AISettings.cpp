@@ -16,6 +16,10 @@
 #include "../AIPathFinding/Material/Material.h"     // materialId console spelling and extractor
 #include "../AIPathFinding/Material/MaterialManager.h"
 #include "../AIUtils/checkPointer.h"
+#include "../AIUtils/AIStreamOperators.h"               // the BotLodLevel / BAPStatementType arguments
+#include "../AIPlanInterpreter/BAPInterpreter.h"       // one per vehicle
+#include "AIConsole.h"                                  // the behaviour bindings' receiver
+#include "BotBehaviourManager.h"                        // the urge-curve bindings' receiver
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"  // IAIPlayer::setViewDistance, slot +0x68
 
 namespace dice {
@@ -67,7 +71,7 @@ BotBehaviour* AISettings::getDefaultBehaviour(int vehicle) const
     return 0;
 }
 
-void* AISettings::getPlanInterpreter(int vehicle) const
+PlanInterpreter* AISettings::getPlanInterpreter(int vehicle) const
 {
     return m_planInterpreters[vehicle];
 }
@@ -115,7 +119,7 @@ const std::string& AISettings::getVehicle(int vehicle) const
         Debug(DebugTypeError, __FILE__, __LINE__, "") << "Error: Illegal vehicle id: " << vehicle;
 
         // Shipped fallthrough if Debug ever returns; DebugTypeError aborts in this tree.
-        return m_sensingAgentPatternName;
+        return m_string236;
     }
 
     return m_vehicleNames[vehicle];
@@ -253,49 +257,98 @@ void AISettings::setMaxNumberOfBehaviours(int count)
     m_numberOfBehaviours = count;
 }
 
-void AISettings::setVehicleMods(int, float *)
+void AISettings::setVehicleMods(int vehicle, float* mods)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::setVehicleMods");
+    if (static_cast<int>(m_vehicleMods.size()) <= vehicle)
+        m_vehicleMods.resize(vehicle + 1, 0);
+    m_vehicleMods[vehicle] = mods;
 }
 
-void AISettings::addBehaviour(int, int, BotBehaviour *)
+void AISettings::addBehaviour(int vehicle, int behaviourId, BotBehaviour* behaviour)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::addBehaviour");
+    prepareBehaviourPool(vehicle, behaviourId);
+    m_behaviours[vehicle][behaviourId] = behaviour;
 }
 
-void AISettings::setDefaultBehaviour(int, int)
+void AISettings::setDefaultBehaviour(int vehicle, int behaviourId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::setDefaultBehaviour");
+    prepareBehaviourPool(vehicle, behaviourId);
+    m_defaultBehaviour[vehicle] = behaviourId;
 }
 
-void AISettings::addInterpreterEntry(int, BAPEntry *)
+void AISettings::addInterpreterEntry(int vehicle, BAPEntry* entry)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::addInterpreterEntry");
+    preparePlanInterpreterPool(vehicle);
+    static_cast<BAPInterpreter*>(m_planInterpreters[vehicle])->addEntry(entry);
 }
 
-void AISettings::addInterpreterEntry(int, BotLodLevel, BAPEntry *)
+void AISettings::addInterpreterEntry(int vehicle, BotLodLevel lod, BAPEntry* entry)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::addInterpreterEntry");
+    preparePlanInterpreterPool(vehicle);
+    static_cast<BAPInterpreter*>(m_planInterpreters[vehicle])->addEntry(lod, entry);
 }
 
-void AISettings::removeInterpreterEntry(int, BotLodLevel, BAPEntry *)
+void AISettings::removeInterpreterEntry(int vehicle, BotLodLevel lod, BAPEntry* entry)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::removeInterpreterEntry");
+    preparePlanInterpreterPool(vehicle);
+    static_cast<BAPInterpreter*>(m_planInterpreters[vehicle])->removeEntry(lod, entry);
 }
 
-void AISettings::activateDefaultInterpreter(int, BAPStatementType, BotLodLevel)
+void AISettings::activateDefaultInterpreter(int vehicle, BAPStatementType type, BotLodLevel lod)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::activateDefaultInterpreter");
+    preparePlanInterpreterPool(vehicle);
+    static_cast<BAPInterpreter*>(m_planInterpreters[vehicle])->activateEntry(type, lod);
 }
 
-void AISettings::addGenerator(int, int, PlanGenerator *)
+void AISettings::addGenerator(int vehicle, int behaviourId, PlanGenerator* generator)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::addGenerator");
+    preparePlanGeneratorPool(vehicle, behaviourId);
+    m_planGenerators[vehicle][behaviourId] = generator;
 }
 
-void AISettings::setBasicBotWeights(float *)
+void AISettings::setBasicBotWeights(float* weights)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::setBasicBotWeights");
+    BotMain::setBasicWeights(weights);
+}
+
+// Grows the vehicle table to hold vehicle, and that vehicle's row to the behaviour count once
+// behaviourId falls outside it. A behaviourId at or past the count is not caught.
+void AISettings::prepareBehaviourPool(int vehicle, int behaviourId)
+{
+    if (static_cast<int>(m_behaviours.size()) <= vehicle)
+        m_behaviours.resize(vehicle + 1);
+    std::vector<BotBehaviour*>& row = m_behaviours[vehicle];
+    if (static_cast<int>(row.size()) <= behaviourId)
+        row.resize(m_numberOfBehaviours, 0);
+    prepareVehicleGroup(vehicle);
+    if (static_cast<int>(m_defaultBehaviour.size()) <= vehicle)
+        m_defaultBehaviour.resize(vehicle + 1, -1);
+}
+
+// The same shape as prepareBehaviourPool, without the default-behaviour column.
+void AISettings::preparePlanGeneratorPool(int vehicle, int behaviourId)
+{
+    if (static_cast<int>(m_planGenerators.size()) <= vehicle)
+        m_planGenerators.resize(vehicle + 1);
+    prepareVehicleGroup(vehicle);
+    std::vector<PlanGenerator*>& row = m_planGenerators[vehicle];
+    if (static_cast<int>(row.size()) <= behaviourId)
+        row.resize(m_numberOfBehaviours, 0);
+}
+
+// Every vehicle up to and including this one gets its own interpreter.
+void AISettings::preparePlanInterpreterPool(int vehicle)
+{
+    while (m_planInterpreters.size() < static_cast<unsigned int>(vehicle + 1))
+        m_planInterpreters.push_back(checkPointer(new BAPInterpreter(BAPSTNumberOfTypes)));
+    prepareVehicleGroup(vehicle);
+}
+
+// New vehicles start in group 0.
+void AISettings::prepareVehicleGroup(int vehicle)
+{
+    if (static_cast<int>(m_vehicleGroups.size()) <= vehicle)
+        m_vehicleGroups.resize(vehicle + 1, 0);
 }
 
 void AISettings::setStatsViewDistance(float distance)
@@ -405,9 +458,11 @@ void AISettings::setDraw(bool)
     BF2_AI_FRONTIER("dice::hfe::ai::AISettings::setDraw");
 }
 
-void AISettings::setSensingAgentPatternName(const std::string&)
+// A name already known keeps its id.
+void AISettings::setSensingAgentPatternName(const std::string& name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::setSensingAgentPatternName");
+    m_sensingAgentPatternIds.insert(
+        std::make_pair(name, static_cast<int>(m_sensingAgentPatternIds.size())));
 }
 
 void AISettings::setSensingAgentNullPattern(ISensingAgentPattern* pattern)
@@ -415,9 +470,10 @@ void AISettings::setSensingAgentNullPattern(ISensingAgentPattern* pattern)
     m_sensingAgentNullPattern = pattern;
 }
 
-void AISettings::addSensingAgentPattern(int, ISensingAgentPattern *)
+// One pattern per vehicle; a second one for the same vehicle is ignored.
+void AISettings::addSensingAgentPattern(int vehicle, ISensingAgentPattern* pattern)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::addSensingAgentPattern");
+    m_sensingAgentPatterns.insert(std::make_pair(vehicle, pattern));
 }
 
 void AISettings::setManDownEquipment(const std::string& equipment)
@@ -731,6 +787,89 @@ void consoleAiSettingsAddVehicleToVehicleGroup(std::string vehicle,
     consoleAiSettingsModifier()->addVehicleToVehicleGroup(vehicle, group);
 }
 
+// The behaviour script's commands run on AIConsole; the urge curves on BotBehaviourManager.
+void consoleAiSettingsSetVehicleMods(std::string vehicle, std::string mods)
+{
+    AIConsole::m_instance->setVehicleMods(vehicle, mods);
+}
+
+void consoleAiSettingsSetStandardPersonality(std::string weights, int side)
+{
+    AIConsole::m_instance->setStandardPersonality(weights, side);
+}
+
+void consoleAiSettingsSetVehicleDefaultBehaviour(std::string vehicle, std::string behaviour)
+{
+    AIConsole::m_instance->setVehicleDefaultBehaviour(vehicle, behaviour);
+}
+
+void consoleAiSettingsAddInterpreterEntry(std::string vehicle, std::string entry)
+{
+    AIConsole::m_instance->addInterpreterEntry(vehicle, entry);
+}
+
+void consoleAiSettingsAddInterpreterEntry(std::string vehicle, std::string entry, BotLodLevel lod)
+{
+    AIConsole::m_instance->addInterpreterEntry(vehicle, entry, lod);
+}
+
+void consoleAiSettingsActivateDefaultInterpreter(std::string vehicle, BAPStatementType type,
+                                                 BotLodLevel lod)
+{
+    AIConsole::m_instance->activateDefaultInterpreter(vehicle, type, lod);
+}
+
+void consoleAiSettingsSetBasicBotWeights(std::string weights)
+{
+    AIConsole::m_instance->setBasicBotWeights(weights);
+}
+
+void consoleAiSettingsSetBehaviour(int id, std::string name)
+{
+    AIConsole::m_instance->setBehaviour(id, name);
+}
+
+void consoleAiSettingsCreateBehaviourModifiers(std::string name)
+{
+    AIConsole::m_instance->createBehaviourModifiers(name);
+}
+
+void consoleAiSettingsSetBehaviourModifier(std::string behaviour, float value)
+{
+    AIConsole::m_instance->setBehaviourModifier(behaviour, value);
+}
+
+void consoleAiSettingsCreateUCConstant(std::string name, float value)
+{
+    BotBehaviourManager::m_instance->createUCConstant(name, value);
+}
+
+void consoleAiSettingsCreateUCLinear(std::string name, float slope, float offset)
+{
+    BotBehaviourManager::m_instance->createUCLinear(name, slope, offset);
+}
+
+void consoleAiSettingsCreateUCXInverse(std::string name, float numerator, float offset,
+                                       float slope, float bias)
+{
+    BotBehaviourManager::m_instance->createUCXInverse(name, numerator, offset, slope, bias);
+}
+
+void consoleAiSettingsSetSensingAgentPatternName(std::string name)
+{
+    AIConsole::m_instance->setSensingAgentPatternName(name);
+}
+
+void consoleAiSettingsSetSensingAgentNullPattern(std::string name)
+{
+    AIConsole::m_instance->setSensingAgentNullPattern(name);
+}
+
+void consoleAiSettingsAddSensingAgentPattern(std::string vehicle, std::string pattern)
+{
+    AIConsole::m_instance->addSensingAgentPattern(vehicle, pattern);
+}
+
 // Generic generated arguments retain the shared temp-and-commit extraction rule. materialId is the
 // one recovered exception: its generated class calls the AI material extractor directly into the
 // byte-sized static storage.
@@ -805,6 +944,43 @@ BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(addVehicleToVehicleGroup,
                                    consoleAiSettingsAddVehicleToVehicleGroup,
                                    CommonSingletonServer::m_iaiSettingsModifier != 0,
                                    std::string, std::string, kAiSettingsConsoleTag)
+
+// The ELF generated classes 296-318 that AIBehaviours.ai uses, in class order. 298,
+// setVehicleBehaviour, arrives with the behaviour factories.
+BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(setVehicleMods, consoleAiSettingsSetVehicleMods,
+                                   AIConsole::m_instance != 0, std::string, std::string, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(setStandardPersonality, consoleAiSettingsSetStandardPersonality,
+                                   AIConsole::m_instance != 0, std::string, int, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(setVehicleDefaultBehaviour,
+                                   consoleAiSettingsSetVehicleDefaultBehaviour,
+                                   AIConsole::m_instance != 0, std::string, std::string, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_2_3_STATIC_ACTIVE(addInterpreterEntry, consoleAiSettingsAddInterpreterEntry,
+                                     AIConsole::m_instance != 0, std::string, std::string, BotLodLevel, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_3_STATIC_ACTIVE(activateDefaultInterpreter,
+                                   consoleAiSettingsActivateDefaultInterpreter,
+                                   AIConsole::m_instance != 0, std::string, BAPStatementType, BotLodLevel, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_1_STATIC_ACTIVE(setBasicBotWeights, consoleAiSettingsSetBasicBotWeights,
+                                   AIConsole::m_instance != 0, std::string, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(setBehaviour, consoleAiSettingsSetBehaviour,
+                                   AIConsole::m_instance != 0, int, std::string, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_1_STATIC_ACTIVE(createBehaviourModifiers, consoleAiSettingsCreateBehaviourModifiers,
+                                   AIConsole::m_instance != 0, std::string, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(setBehaviourModifier, consoleAiSettingsSetBehaviourModifier,
+                                   AIConsole::m_instance != 0, std::string, float, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(createUCConstant, consoleAiSettingsCreateUCConstant,
+                                   BotBehaviourManager::m_instance != 0, std::string, float, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_3_STATIC_ACTIVE(createUCLinear, consoleAiSettingsCreateUCLinear,
+                                   BotBehaviourManager::m_instance != 0, std::string, float, float, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_5_STATIC_ACTIVE(createUCXInverse, consoleAiSettingsCreateUCXInverse,
+                                   BotBehaviourManager::m_instance != 0, std::string, float, float, float, float, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_1_STATIC_ACTIVE(setSensingAgentPatternName,
+                                   consoleAiSettingsSetSensingAgentPatternName,
+                                   AIConsole::m_instance != 0, std::string, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_1_STATIC_ACTIVE(setSensingAgentNullPattern,
+                                   consoleAiSettingsSetSensingAgentNullPattern,
+                                   AIConsole::m_instance != 0, std::string, kAiSettingsConsoleTag)
+BF2_CONSOLE_METHOD_2_STATIC_ACTIVE(addSensingAgentPattern, consoleAiSettingsAddSensingAgentPattern,
+                                   AIConsole::m_instance != 0, std::string, std::string, kAiSettingsConsoleTag)
 
 #pragma pop_macro("BF2_CC_CONVERT")
 

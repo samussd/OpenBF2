@@ -18,6 +18,9 @@ namespace dice {
 namespace hfe {
 namespace ai {
 
+enum BotLodLevel : int;
+enum BAPStatementType : int;
+
 std::istream& operator>>(std::istream& stream, StrategyCondition::ConditionStrength& value);
 std::ostream& operator<<(std::ostream& stream, StrategyCondition::ConditionStrength value);
 std::istream& operator>>(std::istream& stream, StrategyCondition::CompareType& value);
@@ -35,6 +38,10 @@ std::istream& operator>>(std::istream& stream, AIStrategicObject::StrategicObjec
 std::ostream& operator<<(std::ostream& stream, AIStrategicObject::StrategicObjectType value);
 std::istream& operator>>(std::istream& stream, StatusMap::Status& value);
 std::ostream& operator<<(std::ostream& stream, StatusMap::Status value);
+// Also reads "0", "1" and "2". Any other word, "None" included, reads as BLLNone.
+std::istream& operator>>(std::istream& stream, BotLodLevel& value);
+// Reads each type with or without its BAPST prefix, and AimAt also as "AImAt".
+std::istream& operator>>(std::istream& stream, BAPStatementType& value);
 
 } // namespace ai
 } // namespace hfe

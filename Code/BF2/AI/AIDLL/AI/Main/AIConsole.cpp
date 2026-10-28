@@ -12,6 +12,8 @@
 #include "CommonSingletonServer.h"
 #include "StrategyManager.h"                       // addSAIStrategy's lookup
 #include "../AIStrategic/SAI.h"                    // ISAI::addStrategy
+#include "AISettingsInterfaces.h"                  // the behaviour settings' two interfaces
+#include "BotBehaviourManager.h"                   // behaviour names and ids
 
 namespace dice {
 namespace hfe {
@@ -132,14 +134,30 @@ Vec3 AIConsole::getRendCameraRotation()
 
 // [FRONTIER] Remaining bot, behavior and interpreter commands require implementation.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
-BAPEntry* AIConsole::getBAPEntryFromName(std::string)
+namespace {
+
+IAISettings* settings()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::getBAPEntryFromName");
+    return static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
 }
 
-ISensingAgentPattern* AIConsole::getSensingAgentPatternFromName(std::string)
+IAISettingsModifier* modifier()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::getSensingAgentPatternFromName");
+    return static_cast<IAISettingsModifier*>(CommonSingletonServer::m_iaiSettingsModifier);
+}
+
+} // namespace
+
+// An unknown name is added to the map with no entry.
+BAPEntry* AIConsole::getBAPEntryFromName(std::string name)
+{
+    return m_bapEntries[name];
+}
+
+// An unknown name is added to the map with no pattern.
+ISensingAgentPattern* AIConsole::getSensingAgentPatternFromName(std::string name)
+{
+    return m_sensingAgentPatterns[name];
 }
 
 // Initializes AI from a level script. Returns immediately when an active AI runtime already exists.
@@ -223,9 +241,10 @@ void AIConsole::botGiveOrder(int, std::string, std::string)
     BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::botGiveOrder");
 }
 
-void AIConsole::setBehaviour(int, std::string)
+void AIConsole::setBehaviour(int id, std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::setBehaviour");
+    if (CommonSingletonServer::m_iaiSettings)
+        BotBehaviourManager::m_instance->setBehaviourName(id, name);
 }
 
 std::string AIConsole::getBehaviour(int)
@@ -233,9 +252,17 @@ std::string AIConsole::getBehaviour(int)
     BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::getBehaviour");
 }
 
-void AIConsole::setVehicleDefaultBehaviour(std::string&, std::string&)
+// Settings with no bot count yet (getMaxNBots -1) take no behaviour configuration.
+void AIConsole::setVehicleDefaultBehaviour(std::string& vehicleName, std::string& behaviourName)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::setVehicleDefaultBehaviour");
+    if (settings()->getMaxNBots() == -1)
+        return;
+    const int vehicle = settings()->getVehicle(vehicleName);
+    if (vehicle == -1)
+        return;
+    const int behaviourId = BotBehaviourManager::m_instance->getBehaviourId(behaviourName);
+    if (behaviourId != -1)
+        modifier()->setDefaultBehaviour(vehicle, behaviourId);
 }
 
 void AIConsole::setVehicleBehaviour(std::string, std::string, std::string, std::string, int,
@@ -244,14 +271,25 @@ void AIConsole::setVehicleBehaviour(std::string, std::string, std::string, std::
     BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::setVehicleBehaviour");
 }
 
-void AIConsole::setBasicBotWeights(std::string)
+// An unknown name is added to the modifier map with no weights and nothing else happens.
+void AIConsole::setBasicBotWeights(std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::setBasicBotWeights");
+    float* const weights = m_behaviourModifiers[name];
+    if (weights)
+        modifier()->setBasicBotWeights(weights);
 }
 
-void AIConsole::createBehaviourModifiers(std::string)
+// A new set starts at zero for every behaviour and becomes the one setBehaviourModifier
+// writes. An existing name changes nothing, not even the active set.
+void AIConsole::createBehaviourModifiers(std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::createBehaviourModifiers");
+    if (m_behaviourModifiers.find(name) != m_behaviourModifiers.end())
+        return;
+    float* const weights = new float[settings()->getNumberOfBehaviours()];
+    for (int i = 0; i < settings()->getNumberOfBehaviours(); ++i)
+        weights[i] = 0.0f;
+    m_behaviourModifiers.insert(std::make_pair(name, weights));
+    m_activeBehaviourModifiers = m_behaviourModifiers.find(name);
 }
 
 void AIConsole::setActiveBehaviourModifiers(std::string)
@@ -269,9 +307,13 @@ float AIConsole::getBehaviourModifier(std::string)
     BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::getBehaviourModifier");
 }
 
-void AIConsole::setBehaviourModifier(std::string, float)
+void AIConsole::setBehaviourModifier(std::string behaviourName, float value)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::setBehaviourModifier");
+    if (m_activeBehaviourModifiers == m_behaviourModifiers.end())
+        return;
+    const int behaviourId = BotBehaviourManager::m_instance->getBehaviourId(behaviourName);
+    if (behaviourId != -1)
+        m_activeBehaviourModifiers->second[behaviourId] = value;
 }
 
 void AIConsole::listBehaviourModifiers()
@@ -279,14 +321,24 @@ void AIConsole::listBehaviourModifiers()
     BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::listBehaviourModifiers");
 }
 
-void AIConsole::addInterpreterEntry(std::string, std::string)
+void AIConsole::addInterpreterEntry(std::string vehicleName, std::string entryName)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::addInterpreterEntry");
+    BAPEntry* const entry = getBAPEntryFromName(entryName);
+    if (!entry)
+        return;
+    const int vehicle = settings()->getVehicle(vehicleName);
+    if (vehicle != -1)
+        modifier()->addInterpreterEntry(vehicle, entry);
 }
 
-void AIConsole::addInterpreterEntry(std::string, std::string, BotLodLevel)
+void AIConsole::addInterpreterEntry(std::string vehicleName, std::string entryName, BotLodLevel lod)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::addInterpreterEntry");
+    BAPEntry* const entry = getBAPEntryFromName(entryName);
+    if (!entry)
+        return;
+    const int vehicle = settings()->getVehicle(vehicleName);
+    if (vehicle != -1)
+        modifier()->addInterpreterEntry(vehicle, lod, entry);
 }
 
 void AIConsole::removeInterpreterEntry(std::string, std::string, BotLodLevel)
@@ -294,9 +346,12 @@ void AIConsole::removeInterpreterEntry(std::string, std::string, BotLodLevel)
     BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::removeInterpreterEntry");
 }
 
-void AIConsole::activateDefaultInterpreter(std::string, BAPStatementType, BotLodLevel)
+void AIConsole::activateDefaultInterpreter(std::string vehicleName, BAPStatementType type,
+                                           BotLodLevel lod)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::activateDefaultInterpreter");
+    const int vehicle = settings()->getVehicle(vehicleName);
+    if (vehicle != -1)
+        modifier()->activateDefaultInterpreter(vehicle, type, lod);
 }
 
 // An unknown side or strategy name is ignored.
@@ -312,19 +367,25 @@ void AIConsole::addSAIStrategy(int side, std::string name)
         sai->addStrategy(strategy);
 }
 
-void AIConsole::addSensingAgentPattern(const std::string&, const std::string&)
+void AIConsole::addSensingAgentPattern(const std::string& vehicleName, const std::string& patternName)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::addSensingAgentPattern");
+    ISensingAgentPattern* const pattern = getSensingAgentPatternFromName(patternName);
+    if (!pattern)
+        return;
+    const int vehicle = settings()->getVehicle(vehicleName);
+    if (vehicle != -1)
+        modifier()->addSensingAgentPattern(vehicle, pattern);
 }
 
-void AIConsole::setSensingAgentPatternName(const std::string&)
+void AIConsole::setSensingAgentPatternName(const std::string& name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::setSensingAgentPatternName");
+    modifier()->setSensingAgentPatternName(name);
 }
 
-void AIConsole::setSensingAgentNullPattern(const std::string&)
+// An unknown name stores a null pattern.
+void AIConsole::setSensingAgentNullPattern(const std::string& name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::setSensingAgentNullPattern");
+    modifier()->setSensingAgentNullPattern(getSensingAgentPatternFromName(name));
 }
 
 void AIConsole::sensingAgentDebug()
@@ -347,14 +408,20 @@ void AIConsole::addLandingZoneUnit(const std::string&)
     BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::addLandingZoneUnit");
 }
 
-void AIConsole::setVehicleMods(const std::string&, const std::string&)
+// The vehicle id is not checked: AISettings writes an unknown vehicle's mods at index -1.
+void AIConsole::setVehicleMods(const std::string& vehicleName, const std::string& modsName)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::setVehicleMods");
+    const int vehicle = settings()->getVehicle(vehicleName);
+    std::map<std::string, float*>::iterator mods = m_behaviourModifiers.find(modsName);
+    if (mods != m_behaviourModifiers.end())
+        modifier()->setVehicleMods(vehicle, mods->second);
 }
 
-void AIConsole::setStandardPersonality(const std::string&, int)
+void AIConsole::setStandardPersonality(const std::string& name, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::setStandardPersonality");
+    std::map<std::string, float*>::iterator weights = m_behaviourModifiers.find(name);
+    if (weights != m_behaviourModifiers.end())
+        modifier()->setStandardPersonality(weights->second, side);
 }
 
 float AIConsole::getFastThreshold()

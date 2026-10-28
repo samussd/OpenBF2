@@ -965,6 +965,8 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBot\CommunicationAgent.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBot\BotSenses.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIPlanInterpreter\BAPContext.cpp"
 if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIPlanInterpreter\BAPInterpreter.cpp"
+if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\InformationManager.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\Information.cpp"
 if errorlevel 1 set /a RC+=1

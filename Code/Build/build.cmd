@@ -185,6 +185,7 @@ for /r "%ROOT%" %%F in (*.cpp) do (
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIBot\CommunicationAgent.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIBot\BotSenses.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIPlanInterpreter\BAPContext.cpp" set "ENGINE_OBJECT=0"
+            if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIPlanInterpreter\BAPInterpreter.cpp" set "ENGINE_OBJECT=0"
             rem 2026-09-08, chunk 02: both managers are libaidll-only (CLASS_CENSUS_LIBAIDLL.tsv rows
             rem WeaponInfoManager 0x36CF40 and the fully inlined InformationManager); neither has a
             rem counterpart in bf2. Core\SpHandlePool.h is a header-only template and needs no row.

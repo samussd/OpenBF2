@@ -19,6 +19,7 @@ class BotBehaviour;
 class BotMoralAdmin;
 class ISensingAgentPattern;
 class PlanGenerator;
+class PlanInterpreter;
 
 // [UNRESOLVED] enumerators. Both are one dword on the stack at every call site.
 enum BotLodLevel : int;
@@ -38,7 +39,7 @@ public:
     virtual float* getVehicleMods(int) const = 0;
     virtual BotBehaviour* getBehaviour(int, int) const = 0;
     virtual BotBehaviour* getDefaultBehaviour(int) const = 0;
-    virtual void* getPlanInterpreter(int) const = 0;
+    virtual PlanInterpreter* getPlanInterpreter(int) const = 0;
     virtual PlanGenerator* getPlanGenerator(int, int) const = 0;
     virtual float getViewDistance() const = 0;
     virtual float getStatsViewDistance() const = 0;
