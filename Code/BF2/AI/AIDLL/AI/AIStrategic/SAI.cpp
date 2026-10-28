@@ -4,6 +4,7 @@
 
 #include "SAI.h"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -1823,9 +1824,138 @@ void SAI::distributeResources()
     }
 }
 
+// 0x33ae70 (Ghidra). Category by category when the map has categories.
 void SAI::distributeDefence()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::distributeDefence");
+    if (m_activeStrategy->m_strategy->getNumberOfDefences() == 0)
+        return;
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    if (manager->getNumberOfCategories() == 0)
+    {
+        categoryDistributeDefence(manager->getStrategicObjects());
+        return;
+    }
+    for (int category = 0; category < manager->getNumberOfCategories(); ++category)
+        categoryDistributeDefence(manager->getStrategicObjectsOfCategory(category));
+}
+
+namespace {
+
+// An area and its defence need; sorted by need.
+struct SquareInfo
+{
+    int m_index;
+    float m_need;
+    bool operator<(const SquareInfo& other) const { return m_need < other.m_need; }
+};
+
+// Heap order that brings the area with the least assigned part of its wanted strength first.
+struct sobOrdering
+{
+    int m_side;
+    bool operator()(AIStrategicObject* a, AIStrategicObject* b) const
+    {
+        return a->getAssignedPartOfWantedStrength(m_side) > b->getAssignedPartOfWantedStrength(m_side);
+    }
+};
+
+} // anonymous namespace
+
+// 0x33af10 (Ghidra). Areas needing more than 0.1 are ranked by need; past twice the strategy's
+// defences, those below 0.9 of the need at that rank are released with the rest. While the side
+// is withdrawing defenders and nothing was freed, the least needy area is released instead of
+// filling the others. [PLATFORM] Equal heap keys may pop in another order than libstdc++'s.
+void SAI::categoryDistributeDefence(const std::vector<AIStrategicObject*>& objects)
+{
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    const unsigned int defences = m_activeStrategy->m_strategy->getNumberOfDefences();
+    std::list<SquareInfo> squares;
+    int released = 0;
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (!*it)
+            continue;
+        const float need = (*it)->calculateDefenseNeed(m_side);
+        if (0.1f < need)
+        {
+            const SquareInfo square = { (*it)->getIndex(), need };
+            squares.push_back(square);
+        }
+        else if (need <= 0.0f && !(*it)->isAttack(m_side))
+        {
+            released += (*it)->releaseAssignedResources(m_side);
+        }
+    }
+    squares.sort();
+    squares.reverse();
+    if (squares.empty())
+        return;
+
+    float cut = 0.0f;
+    unsigned int rank = 0;
+    std::list<SquareInfo>::iterator square = squares.begin();
+    for (; square != squares.end(); ++square)
+    {
+        ++rank;
+        if (rank == defences * 2)
+            cut = square->m_need;
+        else if (defences * 2 < rank &&
+                 static_cast<double>(square->m_need) < static_cast<double>(cut) * 0.9f)
+            break;
+    }
+    while (square != squares.end())
+    {
+        AIStrategicObject* const object = manager->getStrategicObject(square->m_index);
+        if (object && !object->isAttack(m_side))
+            released += object->releaseAssignedResources(m_side);
+        square = squares.erase(square);
+    }
+    if (squares.empty())
+        return;
+
+    if (m_flag1CC && !m_flag1CE && released == 0)
+    {
+        squares.reverse();
+        for (square = squares.begin(); square != squares.end(); ++square)
+        {
+            AIStrategicObject* const object = manager->getStrategicObject(square->m_index);
+            if (object && !object->isAttack(m_side))
+            {
+                released += object->releaseAssignedResources(m_side);
+                if (0 < released)
+                    break;
+            }
+        }
+        return;
+    }
+
+    const sobOrdering ordering = { m_side };
+    std::vector<AIStrategicObject*> heap;
+    unsigned int count = 0;
+    for (square = squares.begin(); square != squares.end(); ++square)
+    {
+        AIStrategicObject* const object = manager->getStrategicObject(square->m_index);
+        if (!object)
+            continue;
+        object->setAttack(false, m_side);
+        heap.push_back(object);
+        std::push_heap(heap.begin(), heap.end(), ordering);
+        ++count;
+        if (defences <= count)
+            break;
+    }
+    while (!heap.empty())
+    {
+        std::pop_heap(heap.begin(), heap.end(), ordering);
+        AIStrategicObject* const object = heap.back();
+        heap.pop_back();
+        if (object->collectAdditionalSquadResources(1, m_side, this) != 0)
+        {
+            heap.push_back(object);
+            std::push_heap(heap.begin(), heap.end(), ordering);
+        }
+    }
 }
 
 void SAI::distributeAttack()
@@ -1865,9 +1995,10 @@ void SampleHelper::clear(float* strength, int* count)
     }
 }
 
+// 0x341b80 (Ghidra).
 CommanderInterface* SAI::getCommanderInterface() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getCommanderInterface");
+    return m_commander;
 }
 
 } // namespace ai

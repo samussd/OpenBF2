@@ -58,6 +58,9 @@ public:
     int getSide();
     int getMissionStatus();                       // integer payload, enum spelling unresolved
     bool isSquadAssignedToArea(int areaIndex);
+    // Whether the squad has no mission, and whether it was requested to the area.
+    bool isSquadAvailable();
+    bool isSquadRequestedToArea(int areaIndex);
     int getStrategicStrength(StrategicStrengthType type); // nonnull vehicle seam
     void getSquadPosition(Vec3& position);       // inferred void
     SquadMember* getSquadLeader();
@@ -95,7 +98,7 @@ public:
     /*  +44 */ int m_i44;                      // = 0 [UNRESOLVED]
     /*  +48 */ double m_d48;                   // = -20.0 a "never happened" sentinel, not a time
     /*  +56 */ char m_gap56[4];                // never written by the constructor
-    /*  +60 */ int m_i60;                      // = 0 [UNRESOLVED]
+    /*  +60 */ AIStrategicArea* m_requestedArea;   // = 0 [INFERRED] name
     /*  +64 */ Vec3 m_v64;                     // zeroed [UNRESOLVED]
     /*  +76 */ int m_i76;                      // = 4 [UNRESOLVED] - the twin of m_i40
     /*  +80 */ int m_i80;                      // = 0 [UNRESOLVED]

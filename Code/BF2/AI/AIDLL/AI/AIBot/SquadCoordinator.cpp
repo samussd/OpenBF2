@@ -571,6 +571,18 @@ bool SquadCoordinator::isSquadAssignedToArea(int areaIndex)
     return m_strategicAreaAssignment && m_strategicAreaAssignment->getIndex() == areaIndex;
 }
 
+// 0x1b7fa0 (Ghidra).
+bool SquadCoordinator::isSquadAvailable()
+{
+    return m_i120 == 0;
+}
+
+// 0x1b7f60 (Ghidra).
+bool SquadCoordinator::isSquadRequestedToArea(int areaIndex)
+{
+    return m_requestedArea && m_requestedArea->getIndex() == areaIndex;
+}
+
 // Each qualifying
 // live member needs an IAIObject information-handle query before any strength can be added.
 int SquadCoordinator::getStrategicStrength(StrategicStrengthType type)
@@ -608,7 +620,7 @@ SquadCoordinator::SquadCoordinator(int side, int squadIndex)
     , m_i40(4)
     , m_i44(0)
     , m_d48(-20.0)
-    , m_i60(0)
+    , m_requestedArea(0)
     , m_i76(4)
     , m_i80(0)
     , m_i96(-1)
@@ -884,7 +896,7 @@ void SquadCoordinator::reset()
     m_d48 = -20.0;
     m_i44 = 0;
     m_i76 = 4;
-    m_i60 = 0;
+    m_requestedArea = 0;
     m_i80 = 0;
     m_i120 = 0;
     m_formation->joinSquadLeader();

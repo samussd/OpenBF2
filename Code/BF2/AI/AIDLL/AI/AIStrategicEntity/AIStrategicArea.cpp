@@ -212,13 +212,13 @@ void AIStrategicArea::internalConstructorCall(const Vec2& topLeft, const Vec2& c
     m_groupsDirty[0] = checkPointer(new bool[groups]);
     m_groupsDirty[1] = checkPointer(new bool[groups]);
 
-    m_listsA = checkPointer(new std::list<std::pair<float, AIStrategicObject*> >[groups]);
-    m_listsB = checkPointer(new std::list<std::pair<float, AIStrategicObject*> >[groups]);
+    m_sortedDistances[0] = checkPointer(new std::list<std::pair<float, AIStrategicObject*> >[groups]);
+    m_sortedDistances[1] = checkPointer(new std::list<std::pair<float, AIStrategicObject*> >[groups]);
 
-    m_mapsA = checkPointer(new std::map<AIStrategicObject*, float>[groups]);
-    m_mapsB = checkPointer(new std::map<AIStrategicObject*, float>[groups]);
-    m_mapsC = checkPointer(new std::map<AIStrategicObject*, float>[groups]);
-    m_mapsD = checkPointer(new std::map<AIStrategicObject*, float>[groups]);
+    m_routes[0] = checkPointer(new std::map<AIStrategicObject*, std::list<AIStrategicObject*> >[groups]);
+    m_routes[1] = checkPointer(new std::map<AIStrategicObject*, std::list<AIStrategicObject*> >[groups]);
+    m_groupDistances[0] = checkPointer(new std::map<AIStrategicObject*, float>[groups]);
+    m_groupDistances[1] = checkPointer(new std::map<AIStrategicObject*, float>[groups]);
 
     m_distancesDirty[0] = true;
     m_distancesDirty[1] = true;
@@ -615,9 +615,19 @@ bool AIStrategicArea::isEnemyTakingOverBase(int side)
     return m_enemyTakeover[side - 1];
 }
 
-int AIStrategicArea::calculateDefenseNeed(int)
+// 0x348c10 (Ghidra).
+float AIStrategicArea::calculateDefenseNeed(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::calculateDefenseNeed");
+    if (m_status[side - 1] != StatusMap::Owned)
+        return 0.0f;
+    const float base = static_cast<float>(
+        (static_cast<double>(m_enemyBattleStrength[side - 1]) + m_f164[side - 1]) *
+        (2.0 - static_cast<double>(SCurve::calculate(m_needCurveInput[side - 1]))));
+    if (hasNeighbourWithStatus(StatusMap::Hostile, side))
+        return 1.5f * base;
+    if (hasNeighbourWithStatus(StatusMap::Neutral, side))
+        return 1.25f * base;
+    return base;
 }
 
 int AIStrategicArea::calculateAttackValue(int)
@@ -684,9 +694,177 @@ int AIStrategicArea::collectSquadResources(int, ISAI*)
     BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::collectSquadResources");
 }
 
-int AIStrategicArea::collectAdditionalSquadResources(int, int, ISAI*)
+// 0x34a530 (Ghidra).
+int AIStrategicArea::collectAdditionalSquadResources(int count, int side, ISAI* sai)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::collectAdditionalSquadResources");
+    Vec3 position;
+    position.x = 0.0f;
+    position.y = 0.0f;
+    position.z = 0.0f;
+    vec2ToVec3XZ(getPosition(side), position);
+    position.y = m_f148;
+    validateDistances(side);
+
+    int collected = 0;
+    int strength = 0;
+    for (; collected < count; ++collected)
+    {
+        SquadCoordinator* const squad = SquadManager::m_instance->getClosestAvailableSquad(
+            this, position, side, m_attack[side - 1], strength);
+        if (!squad)
+            return collected;
+        const StatusMap::Status status = m_status[side - 1];
+        if (status == StatusMap::Owned || (m_enemyTakeover[side - 1] && status == StatusMap::Neutral))
+            sai->getCommanderInterface()->giveDefendOrder(position, squad);
+        else
+            sai->getCommanderInterface()->giveAttackOrder(position, squad);
+        m_assignedSquadStrength[side - 1] += strength;
+    }
+    return collected;
+}
+
+// 0x34bd50 (Ghidra). The stale flag is left set, as shipped.
+void AIStrategicArea::validateDistances(int side)
+{
+    if (!m_distancesDirty[side - 1])
+        return;
+    m_distances[side - 1].clear();
+    const int groups =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNumberOfVehicleGroups();
+    if (groups == 0)
+    {
+        validateDistances(side, 0);
+        insertUnitDistances(side, 0);
+        return;
+    }
+    for (int group = 0; group < groups; ++group)
+    {
+        validateDistances(side, group);
+        insertUnitDistances(side, group);
+    }
+}
+
+// 0x34be30 (Ghidra).
+void AIStrategicArea::validateDistances(int side, int group)
+{
+    if (!m_groupsDirty[side - 1][group])
+        return;
+    m_groupsDirty[side - 1][group] = false;
+    m_sortedDistances[side - 1][group].clear();
+    m_routes[side - 1][group].clear();
+    m_groupDistances[side - 1][group].clear();
+    getDistances(side, m_sortedDistances[side - 1][group], m_routes[side - 1][group],
+                 m_groupDistances[side - 1][group], 1 << group);
+}
+
+namespace {
+
+// One search step: reach object from from, at the total distance.
+struct ObjectSearchInfo
+{
+    AIStrategicObject* m_object;
+    AIStrategicObject* m_from;
+    float m_distance;
+};
+
+} // anonymous namespace
+
+// 0x34aac0 (Ghidra). Steps are expanded first in, first out; a step that does not beat the best
+// distance known for its object is dropped.
+void AIStrategicArea::getDistances(int side, std::list<std::pair<float, AIStrategicObject*> >& sorted,
+                                   std::map<AIStrategicObject*, std::list<AIStrategicObject*> >& routes,
+                                   std::map<AIStrategicObject*, float>& distances, int groupMask)
+{
+    if (!allowsSomeVehicleGroups(groupMask))
+        return;
+
+    std::list<ObjectSearchInfo> search;
+    const ObjectSearchInfo start = { this, this, 0.0f };
+    search.push_back(start);
+    routes.insert(std::make_pair(static_cast<AIStrategicObject*>(this),
+                                 std::list<AIStrategicObject*>()));
+
+    while (!search.empty())
+    {
+        const ObjectSearchInfo step = search.front();
+        const std::map<AIStrategicObject*, float>::iterator known = distances.find(step.m_object);
+        if ((known == distances.end() || step.m_distance < known->second) &&
+            step.m_object->allowsSomeVehicleGroups(groupMask))
+        {
+            // Only areas carry neighbours, and only areas reach here.
+            const std::vector<AIStrategicObject*> neighbours =
+                static_cast<AIStrategicArea*>(step.m_object)->m_neighbours;
+            for (std::vector<AIStrategicObject*>::const_iterator it = neighbours.begin();
+                 it != neighbours.end(); ++it)
+            {
+                const Vec2& from = step.m_object->getPosition(side);
+                const Vec2& to = (*it)->getPosition(side);
+                const float dx = to.x - from.x;
+                const float dz = to.y - from.y;
+                float length = std::sqrt(dz * dz + dx * dx);
+                if ((*it)->getStatus(side) == StatusMap::Neutral)
+                    length *= 1.1f;
+                else if ((*it)->getStatus(side) == StatusMap::Hostile)
+                    length *= 5.0f;
+                const ObjectSearchInfo next = { *it, step.m_object, length + step.m_distance };
+                search.push_back(next);
+            }
+
+            if (known == distances.end())
+                distances.insert(std::make_pair(step.m_object, step.m_distance));
+            else
+                known->second = step.m_distance;
+
+            const std::map<AIStrategicObject*, std::list<AIStrategicObject*> >::iterator fromRoute =
+                routes.find(step.m_from);
+            std::map<AIStrategicObject*, std::list<AIStrategicObject*> >::iterator route =
+                routes.find(step.m_object);
+            if (route == routes.end())
+                route = routes.insert(std::make_pair(step.m_object, fromRoute->second)).first;
+            else
+                route->second = fromRoute->second;
+            route->second.push_front(step.m_object);
+        }
+        search.pop_front();
+    }
+
+    for (std::map<AIStrategicObject*, float>::const_iterator it = distances.begin();
+         it != distances.end(); ++it)
+        sorted.push_back(std::make_pair(it->second, it->first));
+    sorted.sort();
+}
+
+// 0x34bf90 (Ghidra). The shipped scan reads the end node's distance before testing for the end;
+// testing the end first gives the same result.
+void AIStrategicArea::insertUnitDistances(int side, int group)
+{
+    const int mask = 1 << group;
+    std::list<AreaDistanceInfo>& merged = m_distances[side - 1];
+    const std::list<std::pair<float, AIStrategicObject*> >& sorted =
+        m_sortedDistances[side - 1][group];
+    std::list<AreaDistanceInfo>::iterator into = merged.begin();
+    std::list<std::pair<float, AIStrategicObject*> >::const_iterator it = sorted.begin();
+    for (; it != sorted.end(); ++it)
+    {
+        while (into != merged.end() && into->m_distance < it->first)
+            ++into;
+        if (into == merged.end())
+            break;
+        if (into->m_distance != it->first)
+        {
+            const AreaDistanceInfo info = { mask, it->second, it->first };
+            merged.insert(into, info);
+        }
+        else
+        {
+            into->m_groupMask |= mask;
+        }
+    }
+    for (; it != sorted.end(); ++it)
+    {
+        const AreaDistanceInfo info = { mask, it->second, it->first };
+        merged.push_back(info);
+    }
 }
 
 int AIStrategicArea::releaseSurplus(int)

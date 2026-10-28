@@ -275,6 +275,9 @@ public:
     void updateDistribution();
     void distributeResources();
     void distributeDefence();
+    // Releases the areas that need little defence, keeps the neediest within twice the
+    // strategy's defences, and fills the least served of them with squads until none are left.
+    void categoryDistributeDefence(const std::vector<AIStrategicObject*>& objects);
     void distributeAttack();
     void distributeWithNoAreas();
     void distributeArtillery();                     // genuinely empty, PE update elides it

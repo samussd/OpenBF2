@@ -207,6 +207,26 @@ bool AIStrategicObject::isExpelledUnit(int equipmentType) const
     return ((m_expelledUnits >> equipmentType) & 1) != 0;
 }
 
+// 0x352ea0 (Ghidra).
+bool AIStrategicObject::allowsSomeVehicleGroups(int groupMask) const
+{
+    return (m_allowedVehicleGroups & groupMask) != 0;
+}
+
+// 0x351fb0 (Ghidra).
+void AIStrategicObject::setAttack(bool attack, int side)
+{
+    m_attack[side - 1] = attack;
+}
+
+// 0x352940 (Ghidra).
+float AIStrategicObject::getAssignedPartOfWantedStrength(int side) const
+{
+    if (m_resourceNeed[side - 1] == 0)
+        return 1.0f;
+    return static_cast<float>(m_assignedSquadStrength[side - 1] / m_resourceNeed[side - 1]);
+}
+
 // The ten accessors. Every one of them is between seven and thirty-three bytes in the image.
 
 // Returns type code 3; AIStrategicArea returns 0.

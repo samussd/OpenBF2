@@ -13,6 +13,7 @@ namespace dice {
 namespace hfe {
 namespace ai {
 
+class AIStrategicArea;
 class SquadCoordinator;   // (`operator new(0xE0)`); held only by pointer here
 class SquadMember;
 class IAIPlayer;
@@ -44,6 +45,10 @@ public:
     SquadMember* getSquadMember(int playerId, int side);
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
     int getSquadStrengths(int side, int areaIndex, StrategicStrengthType type);
+    // The nearest available squad with members and strength, skipping one requested to the
+    // area unless a bot leads it. strength receives twice its attack or defence strength.
+    SquadCoordinator* getClosestAvailableSquad(AIStrategicArea* area, const Vec3& position,
+                                               int side, bool attack, int& strength);
 
     // Round restart: every squad loses its area, the queues empty, and both cursors rewind.
     void reset();

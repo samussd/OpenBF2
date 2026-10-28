@@ -75,7 +75,7 @@ public:
     virtual int  getChangedAttackDefence(int side) = 0;                                   // slot 8
     virtual float getControlPointTakeOverCounter() = 0;                                  // slot 9; ST0 float chain
     virtual bool isEnemyTakingOverBase(int side) = 0;                                     // slot 10
-    virtual int  calculateDefenseNeed(int side) = 0;                                      // slot 11
+    virtual float calculateDefenseNeed(int side) = 0;                                     // slot 11
     virtual int  calculateAttackValue(int side) = 0;                                      // slot 12
     virtual int  calculateAttackCost(int side) = 0;                                       // slot 13
     virtual bool isNeighbour(AIStrategicObject* object) const = 0;                        // slot 14
@@ -91,7 +91,7 @@ public:
     virtual int  getTacticalStatus(int side) const = 0;                                   // slot 21
     virtual bool isAreaTakeable() = 0;                                                    // slot 22
     virtual int  collectSquadResources(int side, ISAI* sai) = 0;                          // slot 23
-    virtual int  collectAdditionalSquadResources(int side, int amount, ISAI* sai) = 0;    // slot 24
+    virtual int  collectAdditionalSquadResources(int count, int side, ISAI* sai) = 0;     // slot 24
     virtual int  releaseSurplus(int side) = 0;                                            // slot 25
 
     virtual float gravity(const Vec3& position, int side);             // slot 26,
@@ -108,6 +108,11 @@ public:
 
     int getNumberOfAssignedUnits(int side) const;
     bool isAttack(int side) const;
+    void setAttack(bool attack, int side);
+    // Assigned squad strength over the resource need, divided as integers; 1 without a need.
+    float getAssignedPartOfWantedStrength(int side) const;
+    // Whether any vehicle group in the mask is allowed here.
+    bool allowsSomeVehicleGroups(int groupMask) const;
     // Borrowed mutable statistics at m_statistics[side - 1]; reference spelling is [INFERRED].
     EnemyStatistics& getBattleStatistics(int side) const;
     int releaseAssignedResources(int side);

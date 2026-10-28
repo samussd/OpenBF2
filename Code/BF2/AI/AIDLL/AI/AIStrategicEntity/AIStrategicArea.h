@@ -39,8 +39,8 @@ public:
         /* +12 */ unsigned int m_island;
     };
 
-    // [UNRESOLVED] Distance record fields remain opaque pending their readers' type contracts.
-    struct AreaDistanceInfo { int m_w0; int m_w1; int m_w2; };
+    // One object at one distance, with a bit per vehicle group that reaches it there.
+    struct AreaDistanceInfo { int m_groupMask; AIStrategicObject* m_object; float m_distance; };
 
     // [UNRESOLVED] List payloads whose original element types have not been identified.
     struct AreaWord   { int m_word; };
@@ -75,7 +75,9 @@ public:
     virtual int  getChangedAttackDefence(int side);                // slot 8,
     virtual float getControlPointTakeOverCounter();               // slot 9
     virtual bool isEnemyTakingOverBase(int side);                  // slot 10,
-    virtual int  calculateDefenseNeed(int side);                   // slot 11,
+    // 0 unless owned; else the temperature plus the enemy strength, scaled down by the need
+    // curve, and by 1.5 next to a hostile area or 1.25 next to a neutral one.
+    virtual float calculateDefenseNeed(int side);                  // slot 11,
     virtual int  calculateAttackValue(int side);                   // slot 12,
     virtual int  calculateAttackCost(int side);                    // slot 13,
     virtual bool isNeighbour(AIStrategicObject* object) const;     // slot 14,
@@ -91,7 +93,9 @@ public:
     virtual int  getTacticalStatus(int side) const;                // slot 21,
     virtual bool isAreaTakeable();                                 // slot 22,
     virtual int  collectSquadResources(int side, ISAI* sai);       // slot 23,
-    virtual int  collectAdditionalSquadResources(int side, int amount, ISAI* sai);
+    // Orders up to count of the closest available squads here: to defend when the area is
+    // owned, or neutral while the enemy is taking it, else to attack. Returns how many came.
+    virtual int  collectAdditionalSquadResources(int count, int side, ISAI* sai);
                                                                    // slot 24,
     virtual int  releaseSurplus(int side);                         // slot 25,
     virtual float gravity(const Vec3& position, int side);         // slot 26,
@@ -108,6 +112,20 @@ public:
 
     std::vector<AILandingZone*>& getLandingZones();
     const std::vector<AILandingZone*>& getLandingZones() const;
+    // Rebuild the side's distances to every reachable object when they are stale: one search
+    // per vehicle group, then the groups merged into m_distances.
+    void validateDistances(int side);
+    void validateDistances(int side, int group);
+    // Uniform-cost search over the neighbour graph from this area, through objects that allow a
+    // group in the mask. Neutral steps cost 1.1 times their length and hostile ones 5 times.
+    // Fills each object's best distance and route (the object first, this area last), and the
+    // (distance, object) pairs sorted.
+    void getDistances(int side, std::list<std::pair<float, AIStrategicObject*> >& sorted,
+                      std::map<AIStrategicObject*, std::list<AIStrategicObject*> >& routes,
+                      std::map<AIStrategicObject*, float>& distances, int groupMask);
+    // Merges the group's sorted distances into m_distances; an equal distance only adds the
+    // group's bit to the entry already there, whatever its object.
+    void insertUnitDistances(int side, int group);
     // Bit test on m_landingZoneUsers. Callers pass an equipment type or a vehicle number.
     // Not virtual.
     bool isLandingZoneUser(int index);
@@ -140,12 +158,10 @@ public:
     /* +356 */ bool m_sideEnabled[2];             // both true; [INFERRED] name, update side gates
     /* +358 */ bool m_b358;                        // false [UNRESOLVED] (the constructor's)
     /* +359 */ char m_pad359[1];
-    /* +360 */ std::list<std::pair<float, AIStrategicObject*> >* m_listsA;   // [group]
-    /* +364 */ std::list<std::pair<float, AIStrategicObject*> >* m_listsB;   // [group]
-    /* +368 */ std::map<AIStrategicObject*, float>* m_mapsA;                 // [group]
-    /* +372 */ std::map<AIStrategicObject*, float>* m_mapsB;                 // [group]
-    /* +376 */ std::map<AIStrategicObject*, float>* m_mapsC;                 // [group]
-    /* +380 */ std::map<AIStrategicObject*, float>* m_mapsD;                 // [group]
+    // getDistances' outputs, [side - 1][group].
+    /* +360 */ std::list<std::pair<float, AIStrategicObject*> >* m_sortedDistances[2];
+    /* +368 */ std::map<AIStrategicObject*, std::list<AIStrategicObject*> >* m_routes[2];
+    /* +376 */ std::map<AIStrategicObject*, float>* m_groupDistances[2];
     // Per-side distance records, indexed by side - 1 like m_distancesDirty.
     /* +384 */ std::list<AreaDistanceInfo> m_distances[2];
     /* +392 */ std::list<AreaRecord> m_list392;    // node

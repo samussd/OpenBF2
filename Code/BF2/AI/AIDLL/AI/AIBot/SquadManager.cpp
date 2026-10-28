@@ -12,6 +12,7 @@
 #include "../Main/AIMain.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../AIStrategic/SAI.h"
+#include "../AIStrategicEntity/AIStrategicArea.h"   // getClosestAvailableSquad
 #include "../../../AIInterface/BFKnowledge/BFGame.h" // IAIGame::getMaxNumberOfSquads
 #include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
@@ -32,6 +33,43 @@ namespace ai {
 
 // Both materialize the full integer sum.
 // Side is one-based. Preserve the fresh vector bound and indexed receiver at every call.
+// 0x1bfd30 (Ghidra). Distances are squared and compared in float.
+SquadCoordinator* SquadManager::getClosestAvailableSquad(AIStrategicArea* area, const Vec3& position,
+                                                         int side, bool attack, int& strength)
+{
+    SquadCoordinator* closest = 0;
+    float best = 3.4028235e+38f;
+    Vec3 squadPosition;
+    squadPosition.x = 0.0f;
+    squadPosition.y = 0.0f;
+    squadPosition.z = 0.0f;
+    strength = 0;
+    std::vector<SquadCoordinator*>& squads = m_coordinators[side - 1];
+    for (std::size_t i = 0; i < squads.size(); ++i)
+    {
+        SquadCoordinator* const squad = squads[i];
+        if (!squad->isSquadAvailable() || squad->getNumberOfSquadMembers() <= 0)
+            continue;
+        if (squad->isSquadRequestedToArea(area->getIndex()) && !squad->getSquadLeader()->isBot())
+            continue;
+        const int squadStrength =
+            squad->getStrategicStrength(static_cast<StrategicStrengthType>(!attack));
+        if (squadStrength * 2 <= 0)
+            continue;
+        squad->getSquadPosition(squadPosition);
+        const float distance = (position.x - squadPosition.x) * (position.x - squadPosition.x) +
+                               (position.y - squadPosition.y) * (position.y - squadPosition.y) +
+                               (position.z - squadPosition.z) * (position.z - squadPosition.z);
+        if (distance < best)
+        {
+            strength = squadStrength * 2;
+            closest = squad;
+            best = distance;
+        }
+    }
+    return closest;
+}
+
 int SquadManager::getSquadStrengths(int side, int areaIndex, StrategicStrengthType type)
 {
     int total = 0;
