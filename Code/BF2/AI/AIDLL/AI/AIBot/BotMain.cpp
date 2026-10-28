@@ -31,6 +31,8 @@
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/Information.h"      // updatePlayerAction: the equipment's mobile plug-in
 #include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/IPIArmament.h"             // rearm
+#include "../AIKnowledge/WeaponInfoManager.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../../IO/Input/PlayerInput.h"
 #include <cfloat>       // DBL_MAX - the two 'never happened' timestamps
@@ -290,7 +292,7 @@ void BotMain::reset()
     m_avoidSide = 0;
     m_moveToStatus = 0;
     m_collidedObject = -1;
-    m_double364 = 0.0;
+    m_rearmTime = 0.0;
     m_unresolvedCollision = -1;
     m_grenadeThrownTime[0] = 0.0;
     m_grenadeThrownTime[1] = 0.0;
@@ -518,19 +520,20 @@ void BotMain::cheatExecution()
 // +0x01C
 void BotMain::see(const double& dt)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::see");
+    m_sensingAgent->getBotSenses()->see(dt);
 }
 
 // +0x020
 void BotMain::updateSensing(const double& dt)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updateSensing");
+    m_sensingAgent->getBotSenses()->updateSensing(dt);
 }
 
 // +0x024
+// [UNRESOLVED] Retail zero-extends AL after the navigation call, so both may return bool.
 void BotMain::updatePathfinding(bool& a, bool* b)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updatePathfinding");
+    m_navigation->update(a, b);
 }
 
 // +0x02C
@@ -1332,10 +1335,28 @@ bool BotMain::getManDown() const
     return m_manDown;
 }
 
-// +0x1B4
+// +0x1B4. A standing bot tops every known weapon of its equipment up by an eighth once 6 s
+// of game time have built up, then starts counting again. Retail walks a copy of the weapon list.
 void BotMain::rearm(Information* i)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::rearm");
+    static const double REARM_PERIOD = 6.0;
+    static const float REARM_PERCENT = 0.125f;
+    if (m_manDown)
+        return;
+    m_rearmTime += static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getTimeIncrease();
+    if (!(REARM_PERIOD < m_rearmTime))
+        return;
+    IPIArmament* const armament = i->getArmament();
+    const std::vector<unsigned int> weapons = armament->getWeapons();
+    for (std::vector<unsigned int>::const_iterator it = weapons.begin(); it != weapons.end(); ++it)
+    {
+        if (*it == 0xFFFFFFFFu)
+            continue;
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(*it);
+        if (weapon)
+            armament->rearm(weapon, REARM_PERCENT, getSide());
+    }
+    m_rearmTime = 0.0;
 }
 
 // +0x1B8

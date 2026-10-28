@@ -29,6 +29,8 @@ public:
     explicit BotSenses(BotMain* owner);
     ~BotSenses();
     void reset();                            // - (two arms frontier)
+    void see(const double& dt);              // [FRONTIER]
+    void updateSensing(const double& dt);    // [FRONTIER]
 
     // attested: an 11-byte body that returns `this + 112`.
     const std::map<unsigned int, SensedObject*>& getSensedObjects() const { return m_sensedObjects; }

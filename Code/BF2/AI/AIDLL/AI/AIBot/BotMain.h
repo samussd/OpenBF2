@@ -525,7 +525,7 @@ private:
     /* 360 */ bool         m_manDown;               // get/setManDown
     /* 361 */ char         m_pad361[3];
     // A double, found by `reset`. The old 12-byte gap swallowed it.
-    /* 364 */ double       m_double364;             // reset: 0.0
+    /* 364 */ double       m_rearmTime;             // reset: 0.0; rearm's accumulated game time
     /* 372 */ bool         m_isFiring;              // isFiring / setIsFiring
     /* 373 */ char         m_pad373[3];
     /* 376 */ SquadMember* m_squadMember;           // = 0

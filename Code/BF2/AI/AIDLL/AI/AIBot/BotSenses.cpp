@@ -75,6 +75,18 @@ BotSenses::~BotSenses()
     delete m_frustum;
 }
 
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+void BotSenses::see(const double&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotSenses::see");
+}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+void BotSenses::updateSensing(const double&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotSenses::updateSensing");
+}
+
 // [FRONTIER] Remaining sight, hearing and communication operations require implementation.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 

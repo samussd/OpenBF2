@@ -183,6 +183,12 @@ void BotNavigation::updateObstacles()
     BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateObstacles");
 }
 
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+void BotNavigation::update(bool&, bool*)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::update");
+}
+
 bool BotNavigation::isActive()
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::isActive");

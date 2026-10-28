@@ -30,6 +30,7 @@
 #include "../AIBot/BotCallBack.h"         // setBotIsDead / setBotIsAlive report
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"   // setBotChangedVehicle
+#include "../../../AIInterface/BFKnowledge/IWeapon.h"           // actionHearing's firing sound
 #include "../../../../IO/Input/PlayerInput.h" // actionExecutePlan presses a climber's inputs
 
 namespace dice {
@@ -478,8 +479,11 @@ void BotManager::actionPathfinding(const double& slice)
     }
 }
 
-// Scans occupied world objects for hearing within the supplied slice.
-// [FRONTIER] The object-query path remains incomplete.
+// Resumes the round of occupied objects where the last slice stopped. A sided object makes noise
+// over its mobile's sound sphere, or its last weapon's if that fired under 3 s ago and reaches
+// further; every live, standing enemy bot inside the sphere hears it. The weapon alone makes no
+// noise: without a mobile the radius stays 0, as shipped. The slice is only checked after an
+// object that made noise.
 void BotManager::actionHearing(const double& slice)
 {
     const double deadline =
@@ -502,13 +506,50 @@ void BotManager::actionHearing(const double& slice)
         if (++next == m_occupiedObjects.end())
             next = m_occupiedObjects.begin();
         ++visited;
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-        // The body's first call is `object->getSide` (IAIObject ELF +0x12C / PE +0x128), and
-        // IAIObject has no declaration in this tree; see the outline above.
-        (void)object;
-        (void)gameTime;
-        (void)deadline;
-        BF2_AI_FRONTIER("dice::hfe::ai::BotManager::actionHearing (IAIObject hearing query)");
+        if (!object->getSide())
+            continue;
+        IAIObjectArmament* const armament = object->getArmament();
+        IAIObjectMobile* const mobile = object->getMobile();
+        if (!armament && !mobile)
+            continue;
+
+        float firingRadius = 0.0f;
+        if (armament)
+        {
+            IWeapon* const weapon = armament->getLastFiredWeapon();
+            if (weapon && 3.0f > gameTime - weapon->getTimeOfFiring())
+                firingRadius = weapon->getSoundSphereRadius();
+        }
+        float radius = 0.0f;
+        if (mobile)
+        {
+            const float moving = mobile->getSoundSphereRadius();
+            // Unordered keeps the mobile's radius (the ELF's FCMOVBE).
+            radius = firingRadius > moving ? firingRadius : moving;
+        }
+        if (0.1f >= radius)       // an unordered radius goes on, as the ELF's JC does
+            continue;
+
+        const float radiusSquared = radius * radius;
+        const int side = object->getSide();
+        const Vec3& position = object->getPosition();
+        for (std::vector<std::pair<int, IAIObject*> >::iterator it = m_occupiedObjects.begin();
+             it != m_occupiedObjects.end(); ++it)
+        {
+            Bot* const bot = getBot(it->second);
+            if (!bot || bot->isDead() || bot->getManDown() || bot->getSide() == side)
+                continue;
+            const Vec3& other = it->second->getPosition();
+            // Summed past float precision, (x + y) + z; an unordered sum still hears.
+            const double x = other.x - position.x;
+            const double y = other.y - position.y;
+            const double z = other.z - position.z;
+            if ((x * x + y * y) + z * z > radiusSquared)
+                continue;
+            bot->event_heardObject(object->forceGetInformation(bot->getSide(), false));
+        }
+        if (static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getUpdateTime() > deadline)
+            break;
     }
     if (count > 0)
         m_hearingResumeId = next->first;
