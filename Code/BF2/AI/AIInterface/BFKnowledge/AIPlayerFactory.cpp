@@ -120,7 +120,7 @@ void AIPlayerFactory::removeIdToPlayerMapping(IAIPlayer* player)
 // - a bare member load, so it hands back the vector itself.
 const std::vector<IAIPlayer*>& AIPlayerFactory::getAllPlayers()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerFactory::getAllPlayers");
+    return m_players;
 }
 
 IAIPlayer* AIPlayerFactory::getPlayerFromLocalHumanPlayer()
