@@ -8,6 +8,7 @@
 #include "AIInformationGrid.h"                             // the grids the constructor builds
 #include "Information.h"                                   // removeAllContacts before a removal
 #include "InformationManager.h"                            // the removals look the handle up
+#include "../AIBot/BotMain.h"                              // the friendly queries' bot
 #include "../AIUtils/checkPointer.h"                       // inlined four times by the constructor
 #include "../../../../Core/ClassManager.h"
 #include "../../../../Core/SmartItf.h"           // the classManager global
@@ -104,14 +105,63 @@ BFInformationEnvironment::~BFInformationEnvironment()
     BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::~BFInformationEnvironment");
 }
 
-void BFInformationEnvironment::getFriendlyUnits(std::vector<unsigned int>&, const Vec3&, Bot*, float) const
+namespace {
+
+// 0x2f7f20 (Ghidra). Units of the side.
+class InfoSideUnitPredicate : public IAIInformationGridPredicate
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::getFriendlyUnits");
+public:
+    explicit InfoSideUnitPredicate(int side) : m_side(side) {}
+    virtual bool includeInformation(Information* information) const
+    {
+        return information->getSide() == m_side && information->getUnit() != 0;
+    }
+
+private:
+    int m_side;
+};
+
+// 0x2f7f70 (Ghidra). Units of the side or of no side.
+class InfoSideAndNeutralUnitPredicate : public IAIInformationGridPredicate
+{
+public:
+    explicit InfoSideAndNeutralUnitPredicate(int side) : m_side(side) {}
+    virtual bool includeInformation(Information* information) const
+    {
+        return information->getUnit() != 0
+               && (information->getSide() == m_side || information->getSide() == 0);
+    }
+
+private:
+    int m_side;
+};
+
+} // namespace
+
+// 0x2f6f40 (Ghidra). Clears the list, then for a bot whose equipment is known adds the units of
+// its side within the radius of the position, from the first grid of side zero and of its side.
+void BFInformationEnvironment::getFriendlyUnits(std::vector<unsigned int>& out, const Vec3& position,
+                                                Bot* bot, float radius) const
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    out.erase(out.begin(), out.end());
+    if (!equipment)
+        return;
+    InfoSideUnitPredicate keep(bot->getSide());
+    getObjectsWithinRadius(out, position, radius, bot->getSide(), true, &keep);
 }
 
-void BFInformationEnvironment::getFriendlyAndNeutralUnits(std::vector<unsigned int>&, const Vec3&, Bot*, float) const
+// 0x2f7030 (Ghidra). The same with the units of no side as well.
+void BFInformationEnvironment::getFriendlyAndNeutralUnits(std::vector<unsigned int>& out,
+                                                          const Vec3& position, Bot* bot,
+                                                          float radius) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::getFriendlyAndNeutralUnits");
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    out.erase(out.begin(), out.end());
+    if (!equipment)
+        return;
+    InfoSideAndNeutralUnitPredicate keep(bot->getSide());
+    getObjectsWithinRadius(out, position, radius, bot->getSide(), true, &keep);
 }
 
 void BFInformationEnvironment::getCover(const Bot&, std::vector<unsigned int>&) const
