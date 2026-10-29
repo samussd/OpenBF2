@@ -60,6 +60,7 @@ BBMedicAssist::~BBMedicAssist()
 namespace {
 
 const int kRepairToolWeaponType = 1;   // the medic bag and the wrench alike
+const int kAmmoBagWeaponType = 2;
 const int kSupportKit = 3;
 const int kEngineerKit = 4;
 const int kMedicKit = 5;
@@ -125,9 +126,234 @@ bool BBMedicAssist::vehicleRequestsEngineer(Information* information, int side,
     return false;
 }
 
-float BBMedicAssist::calculateGiveAmmoUrgency(Bot*, float)
+// 0x228020 (Ghidra). Among the friendly units within 75 m, the one most short of ammunition
+// that the bot's ammo bags (weapon type 2) serve: occupied by a human (or a player the factory
+// does not know), or empty and within 50 m of the bot's squad position; not itself holding a
+// bag; not down; a strength type a bag beats. Its weapons other than tools (types 1 and 2) with
+// ammunition multiply their fill (current over maximum); one holding a magazine and more fewer
+// than its magazine count makes it short. A short unit qualifies below 0.49 fill (0.74 with a
+// human inside), or below 0.9 after asking over the radio (message 10); then the tilt, always-
+// target and range tests of calculateUrgency. Its score is its strength (times the memory's
+// order factor for an ordered target) over the S curve of the fill times the distance, an
+// answered request counting 1.5, 3 from a human. The best: its declining slope times 4 times
+// the urgency handed in, weighed by the squad's answer to the ammunition request (4). Nothing
+// found: 0 and the plan let go.
+float BBMedicAssist::calculateGiveAmmoUrgency(Bot* bot, float value)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBMedicAssist::calculateGiveAmmoUrgency");
+    const int strengths = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNBattleStrengths();
+    int bestOccupant = -1;
+    int bestTool = -1;
+    Vec3 normal;
+    normal.x = 0.0f;
+    normal.y = 0.0f;
+    normal.z = 0.0f;
+    const IAITerrain* const terrain = static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+    // no null guard, as shipped
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    const Vec3& position = equipment->getPosition();
+    for (int i = 0; i < strengths; ++i)
+    {
+        m_toolIndex[i] = -1;
+        m_toolStrength[i] = 0;
+    }
+    IPIArmament* const armament = equipment->getArmament();
+    IPIMobile* const mobile = equipment->getMobile();
+    int vehicleNumber = -2;
+    if (mobile)
+    {
+        vehicleNumber = mobile->getVehicleNumber();
+        equipment->getUnit()->getEquipmentType();   // asked and dropped, no null guard, as shipped
+    }
+    // no null guard, as shipped
+    const std::vector<unsigned int> weapons = armament->getWeapons();
+    for (unsigned int i = 0; i < weapons.size(); ++i)
+    {
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+        if (!weapon || weapon->getWeaponType() != kAmmoBagWeaponType)
+            continue;
+        for (int s = 0; s < strengths; ++s)
+        {
+            if (weapon->getStrength(s) > m_toolStrength[s])
+            {
+                m_toolIndex[s] = static_cast<int>(i);
+                m_toolStrength[s] = weapon->getStrength(s);
+                m_toolRange[s] = weapon->getMaxRange();
+            }
+        }
+    }
+
+    float best = 0.0f;
+    unsigned int orderedCount = 0;
+    m_candidates.resize(0);
+    static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment)
+        ->getFriendlyUnits(m_candidates, position, bot, 75.0f);
+    const float factor = 1.0f;             // [UNRESOLVED] a constant factor on every score
+    unsigned int bestHandle = static_cast<unsigned int>(-1);
+    CommunicationAgent* const agent = bot->getCommunicationAgent();
+    const AIRadioMessageType ammoRequestType = static_cast<AIRadioMessageType>(10);
+    bool listenAmmo = !agent->getReceivedMessages(ammoRequestType).empty();
+    if (listenAmmo && bot->isAirBorn())
+        listenAmmo = false;
+    std::vector<unsigned int> candidateWeapons;
+    Vec3 squadPosition;
+    squadPosition.x = 0.0f;
+    squadPosition.y = 0.0f;
+    squadPosition.z = 0.0f;
+    // The squad's position and goal are asked for and not used, as shipped.
+    SquadMember* const member = bot->getSquadMember();
+    member->getSquad()->getSquadPosition(squadPosition);
+    member->getSquad()->getSquadGotoPos();
+    Vec3 memberPosition;
+    memberPosition.x = 0.0f;
+    memberPosition.y = 0.0f;
+    memberPosition.z = 0.0f;
+
+    for (std::vector<unsigned int>::iterator it = m_candidates.begin(); it != m_candidates.end(); ++it)
+    {
+        float threshold = 0.49f;
+        Information* const candidate = informationManager->getInformation(*it);
+        if (!candidate || !candidate->getPhysical())
+            continue;
+        IPIUnit* const unit = candidate->getUnit();
+        if (unit && unit->isOccupied())
+        {
+            IAIPlayer* const player = static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)
+                                          ->getPlayerFromId(unit->getOccupyingPlayerId(candidate->getSide()));
+            if (player && player->getIsAIPlayer())
+                continue;
+        }
+        else if (member->getPosition(memberPosition))
+        {
+            const Vec3& at = candidate->getPosition();
+            const float dx = at.x - memberPosition.x;
+            const float dy = at.y - memberPosition.y;
+            const float dz = at.z - memberPosition.z;
+            if (dx * dx + dy * dy + dz * dz > 2500.0f)
+                continue;
+        }
+        if (candidate == equipment && bot->getPlayer()->getSpawnKit() == kSupportKit
+            && armament->getActiveWeapon() != -1)
+        {
+            WeaponInfo* const held =
+                WeaponInfoManager::m_instance->getInformation(armament->getWeapon(armament->getActiveWeapon()));
+            if (held && held->getWeaponType() == kAmmoBagWeaponType)
+                continue;
+        }
+        IPIPhysical* const physical = candidate->getPhysical();
+        if (physical->getManDown())
+            continue;
+        const int strengthType = physical->getStrengthType();
+        if (m_toolIndex[strengthType] == -1)
+            continue;
+
+        // no null guard on the armament, as shipped
+        candidateWeapons = candidate->getArmament()->getWeapons();
+        float fill = 1.0f;
+        bool short_ = false;
+        // [PLATFORM] The binary bounds this walk by the bot's own weapon count and reads past the
+        // end of a shorter list; entries past the end count as no weapon here.
+        for (unsigned int i = 0; i < weapons.size(); ++i)
+        {
+            WeaponInfo* const weapon = i < candidateWeapons.size()
+                                           ? WeaponInfoManager::m_instance->getInformation(candidateWeapons[i])
+                                           : 0;
+            if (!weapon || weapon->getWeaponType() == kRepairToolWeaponType
+                || weapon->getWeaponType() == kAmmoBagWeaponType || weapon->getAmmo() == -1
+                || weapon->getMaxAmmo() == 0)
+                continue;
+            const float current = static_cast<float>(weapon->getCurrentAmmo());
+            fill = current / static_cast<float>(weapon->getMaxAmmo()) * fill;
+            const int magazines = weapon->getNumberOfMags();
+            if (static_cast<int>(current / static_cast<float>(weapon->getMaxAmmoInMag())) + 1 < magazines)
+                short_ = true;
+        }
+        if (!short_)
+            continue;
+
+        int occupant = -1;
+        if (candidate->getUnit())
+            occupant = candidate->getUnit()->getOccupyingPlayerId(candidate->getSide());
+        AIRadioMessageInfo request;
+        bool heard = false;
+        if (listenAmmo)
+            heard = agent->getReceivedMessage(request, ammoRequestType, occupant);
+        if (isHumanInTarget(candidate, bot->getSide()))
+            threshold = 0.74f;
+        if (!(threshold > fill && fill > 0.0f) && !(heard && 0.9 > fill))
+            continue;
+
+        const Vec3& at = candidate->getPosition();
+        terrain->getNormal(at.x, at.z, normal);
+        const Mat4& transformation = candidate->getTransformation();
+        if (0.7071f > normal.x * transformation.m[4] + normal.y * transformation.m[5]
+                          + normal.z * transformation.m[6])
+            continue;
+        IPIUnit* const targetUnit = candidate->getUnit();
+        // no null guard, as shipped
+        if (targetUnit->getAlwaysTargetSoldier())
+            continue;
+        if (distanceBetween(at, position) > m_toolRange[strengthType])
+        {
+            if (!mobile)
+                continue;
+            if (!targetUnit->useNoPathfindingToGetToObject() && candidate->getMobile())
+            {
+                const Vec3& valid = mobile->getLastValidPosition(vehicleNumber).position;
+                const float dx = at.x - valid.x;
+                const float dy = at.y - valid.y;
+                const float dz = at.z - valid.z;
+                const float range = m_toolRange[strengthType];
+                if (range * range > dx * dx + dy * dy + dz * dz)
+                    continue;
+            }
+        }
+
+        const float distance = candidate == equipment ? 1.0f : distanceBetween(at, position);
+        float strength = candidate->getStrength();
+        if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders())
+        {
+            std::list<unsigned int>& orders = *bot->getOrderList(m_behaviourId);
+            if (orderedCount < orders.size() && std::find(orders.begin(), orders.end(), *it) != orders.end())
+            {
+                ++orderedCount;
+                strength = candidate->getStrength() * bot->getMemory()->m_float8;
+            }
+        }
+        float score = strength / (SCurve::calculate(fill) * distance);
+        if (heard)
+            score *= IBotManager::instance->getBotFromPlayerId(request.m_senderPlayerId) ? 1.5f : 3.0f;
+        score *= factor;
+        if (score > best)
+        {
+            bestTool = m_toolIndex[strengthType];
+            best = score;
+            bestHandle = *it;
+            bestOccupant = occupant;
+        }
+    }
+
+    const unsigned int id = bot->getBotId();
+    if (bestHandle == static_cast<unsigned int>(-1))
+    {
+        m_urgency[id] = 0.0f;
+        m_changedTarget[id] = m_targets[id] != -1;
+        m_targets[id] = -1;
+        m_generator->unInit(bot);
+        return 0.0f;
+    }
+    if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders()
+        && bot->getOrderList(m_behaviourId)->empty())
+        best *= bot->getMemory()->m_float8;
+    m_urgency[id] = DecleiningSlopeCurve::calculate(best) * 4.0f * value;
+    m_changedTarget[id] = static_cast<unsigned int>(m_targets[id]) != bestHandle;
+    m_targets[id] = static_cast<int>(bestHandle);
+    static_cast<BBPMedicAssist*>(m_generator)->init(static_cast<unsigned int>(m_targets[id]), bestTool,
+                                                    bestOccupant, bot);
+    const int side = bot->getSide();
+    const float response =
+        SquadManager::m_instance->requestResponseModifier(bot->getSquadMember(), bestHandle, 4, side);
+    m_urgency[id] = response * m_urgency[id];
+    return m_urgency[bot->getBotId()];
 }
 
 // 0x226b40 (Ghidra). A support soldier (kit 3) hands out ammunition instead. Otherwise, among

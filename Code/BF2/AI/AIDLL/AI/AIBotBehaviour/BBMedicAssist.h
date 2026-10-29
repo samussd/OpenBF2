@@ -1,5 +1,5 @@
 // Behaviour built by BBCreateFunctionMedicAssist. sizeof == 0x3C.
-// [FRONTIER] Urgency and destruction remain named stops.
+// [FRONTIER] Destruction remains a named stop.
 
 #ifndef AI_AIDLL_AI_AIBOTBEHAVIOUR_BBMEDICASSIST_H
 #define AI_AIDLL_AI_AIBOTBEHAVIOUR_BBMEDICASSIST_H
