@@ -60,6 +60,8 @@ public:
     // attested by a 7-byte body: `return m_receivedMessages.data + type;`
     const std::list<AIRadioMessageInfo>& getReceivedMessages(AIRadioMessageType type) const
     { return m_receivedMessages[type]; }
+    // [INFERRED] accessor; BBAvoid::calculateUrgency inlines the load.
+    double getHonkedAtTime() const { return m_honkedAtTime; }
 
 private:
     typedef std::priority_queue<CAPrioMessage, std::vector<CAPrioMessage>,
@@ -83,8 +85,10 @@ private:
     /*  68 */ std::vector<float> m_receiveTimeToLive;
     /*  80 */ std::vector<float> m_maxSendPeriod;
     /*  92 */ int m_int92;                     // reset: -1, this subsystem's null-index convention
-    /*  96 */ double m_double96;               // reset: 0.0
-    /* 104 */ double m_double104;              // reset: 0.0
+    // honkHorn writes both: the time the bot's own soldier was honked at, and the time it last
+    // honked. [INFERRED] names.
+    /*  96 */ double m_honkedAtTime;           // reset: 0.0
+    /* 104 */ double m_lastHonkTime;           // reset: 0.0
 };
 
 } // namespace ai

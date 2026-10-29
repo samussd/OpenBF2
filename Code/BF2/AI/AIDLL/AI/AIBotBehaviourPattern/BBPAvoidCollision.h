@@ -16,13 +16,17 @@ public:
     BBPAvoidCollision();
     virtual ~BBPAvoidCollision();
 
-    virtual void init(Bot* bot, Vec3& a, unsigned int handle, Vec3& b, float f) = 0;   // +0x18
+    // Marks the bot initiated to keep clear of the obstacle: where it will be against the bot at
+    // contact, its velocity against the bot and the time to contact (BBAvoid's arguments).
+    virtual void init(Bot* bot, Vec3& contact, unsigned int obstacle, Vec3& relativeVelocity,
+                      float time) = 0;                                                     // +0x18
 
 protected:
     /* +0x08 */ int m_behaviourId;                           // the subclasses store it
-    /* +0x0C */ int* m_int0C;                                // [UNRESOLVED] per bot, not initialised
-    /* +0x10 */ Vec3* m_vec10;                               // [UNRESOLVED] per bot, zero
-    /* +0x14 */ int* m_int14;                                // [UNRESOLVED] per bot, not initialised
+    // Per bot, what init was given: [INFERRED] names.
+    /* +0x0C */ unsigned int* m_obstacle;                    // not initialised
+    /* +0x10 */ Vec3* m_relativeVelocity;                    // zero
+    /* +0x14 */ float* m_time;                               // not initialised
     /* +0x18 */ int m_int18;                                 // [UNRESOLVED] not written by the constructor
 };
 

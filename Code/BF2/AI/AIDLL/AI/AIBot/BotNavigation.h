@@ -80,6 +80,8 @@ public:
     void setGrenadeWarning(const Vec3& position, double time, bool flag);
     // [INFERRED] accessor; BBRandom::calculateUrgency inlines the load.
     bool getGrenadeFlag() const { return m_grenadeFlag; }
+    // [INFERRED] accessor; BBAvoid::calculateUrgency inlines the load.
+    const std::vector<unsigned int>& getObstacles() const { return m_obstacles; }
 
     void reset();                          // - (one arm frontier)
     void resetAll();

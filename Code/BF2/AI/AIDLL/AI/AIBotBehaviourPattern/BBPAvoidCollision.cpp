@@ -10,15 +10,15 @@ BBPAvoidCollision::BBPAvoidCollision()
     : BBPPattern()
 {
     const int numberOfBots = getNumberOfBots();
-    m_int0C = new int[numberOfBots];
-    m_vec10 = new Vec3[numberOfBots];
+    m_obstacle = new unsigned int[numberOfBots];
+    m_relativeVelocity = new Vec3[numberOfBots];
     for (int i = 0; i < numberOfBots; ++i)
     {
-        m_vec10[i].x = 0.0f;
-        m_vec10[i].y = 0.0f;
-        m_vec10[i].z = 0.0f;
+        m_relativeVelocity[i].x = 0.0f;
+        m_relativeVelocity[i].y = 0.0f;
+        m_relativeVelocity[i].z = 0.0f;
     }
-    m_int14 = new int[numberOfBots];
+    m_time = new float[numberOfBots];
 }
 
 BBPAvoidCollision::~BBPAvoidCollision()

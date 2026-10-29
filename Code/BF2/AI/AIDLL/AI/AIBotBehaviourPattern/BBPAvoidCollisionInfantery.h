@@ -17,10 +17,11 @@ public:
     virtual ~BBPAvoidCollisionInfantery();
 
     virtual BotScript* createPlan(Bot* bot);                         // +0x08
-    virtual void init(Bot* bot, Vec3& a, unsigned int handle, Vec3& b, float f);     // +0x18
+    virtual void init(Bot* bot, Vec3& contact, unsigned int obstacle, Vec3& relativeVelocity,
+                      float time);                                                         // +0x18
 
 protected:
-    /* +0x1C */ Math::Vec2* m_vec1C;                         // [UNRESOLVED] per bot, zero
+    /* +0x1C */ Math::Vec2* m_contact;                       // per bot, init's contact flattened to XZ; zero
 };
 
 } // namespace ai

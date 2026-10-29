@@ -90,8 +90,8 @@ void CommunicationAgent::reset()
     m_double60 = 0.0;
     m_int92 = -1;
     // This order is the binary's.
-    m_double104 = 0.0;
-    m_double96 = 0.0;
+    m_lastHonkTime = 0.0;
+    m_honkedAtTime = 0.0;
 }
 
 // [FRONTIER] Remaining message operations require implementation.
