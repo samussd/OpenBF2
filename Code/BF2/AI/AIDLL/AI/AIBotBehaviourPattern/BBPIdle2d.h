@@ -18,9 +18,11 @@ public:
 
     virtual BotScript* createPlan(Bot* bot);                         // +0x08
     virtual int getType();                                          // +0x18
+    // Marks the bot initiated, idling at the target.
+    void init(Bot* bot, int target);
 
 protected:
-    /* +0x0C */ int* m_int0C;                                // [UNRESOLVED] per bot, -1 at construction
+    /* +0x0C */ int* m_int0C;                                // per bot, -1 at construction; init's target
 };
 
 } // namespace ai

@@ -18,10 +18,12 @@ public:
 
     virtual BotScript* createPlan(Bot* bot);                         // +0x08
     virtual int getType();                                          // +0x18
+    // Marks the bot initiated, idling at the target with the value (50 from BBIdle).
+    void init(float value, Bot* bot, int target);
 
 protected:
-    /* +0x0C */ float* m_float0C;                            // [UNRESOLVED] per bot, 100 at construction
-    /* +0x10 */ int* m_int10;                                // [UNRESOLVED] per bot, -1 at construction
+    /* +0x0C */ float* m_float0C;                            // [UNRESOLVED] per bot, 100 at construction; init's value
+    /* +0x10 */ int* m_int10;                                // per bot, -1 at construction; init's target
 };
 
 } // namespace ai

@@ -1,5 +1,6 @@
 #include "BBPIdle2d.h"
 
+#include "../AIBot/BotMain.h"
 #include "../Main/AIDllFrontier.h"
 
 namespace dice {
@@ -18,6 +19,13 @@ BBPIdle2d::BBPIdle2d(int behaviourId)
 BBPIdle2d::~BBPIdle2d()
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BBPIdle2d::~BBPIdle2d");
+}
+
+// 0x29cb10 (Ghidra).
+void BBPIdle2d::init(Bot* bot, int target)
+{
+    m_initiated[bot->getBotId()] = true;
+    m_int0C[bot->getBotId()] = target;
 }
 
 BotScript* BBPIdle2d::createPlan(Bot*)
