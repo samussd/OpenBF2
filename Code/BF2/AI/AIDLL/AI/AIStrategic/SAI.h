@@ -171,6 +171,16 @@ public:
         // the available attackers or else defenders, and advances the cursor past it.
         void occupy(std::set<int>::iterator& it, AIStrategicObject* from, AIStrategicObject* to,
                     SAI* sai);
+        // The same, finding the bot among the present units of from.
+        void occupy(AIStrategicObject* from, AIStrategicObject* to, SAI* sai);
+        // Takes the bot out of the object's assigned units, at the cursor, which advances. With
+        // release it also leaves the busy bots; otherwise it becomes an available attacker or
+        // defender (as the object is attacked or defended) of the object it occupies. The bot is
+        // left with no assigned object and no order time.
+        void removeAssigned(AIStrategicObject* object, std::set<int>::iterator& it, bool release,
+                            SAI* sai);
+        // The same, finding the bot among the object's assigned units.
+        void removeAssigned(AIStrategicObject* object, bool release, SAI* sai);
         // Places the bot in the object and keeps it among the side's free bots.
         void respawn(AIStrategicObject* object, SAI* sai);
         // Makes the bot an available attacker or defender of the object it occupies, which must
@@ -262,6 +272,9 @@ public:
     void prepareUpdate();
     void clearSpawnsToPoints();                      // PE inlined in prepareUpdate
     void handleTeleportingBot(int botId);            // named frontier
+    // A bot in new equipment drops its assignment and settles in the strategic object closest
+    // to it for that equipment.
+    void handleChangingBot(int botId);
     bool updateStrategicObjects();
     // Keeps the active strategy while every prerequisite stays within its band of the heat the
     // last draw used and the time limit has not run out; otherwise draws one weighted by

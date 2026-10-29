@@ -22,6 +22,7 @@
 #include "../AIBot/BotMain.h"
 #include "../AIBot/BotSquad.h"
 #include "../AIBot/SquadManager.h"
+#include "../AIBot/SquadMember.h"                        // setBotHasChangedEquipment: setHavePath
 #include "../AIStrategicEntity/AIStrategicObject.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../AIStrategicMap/BotSpawner.h"
@@ -663,9 +664,14 @@ int* SAI::getFriendlyTypes(int) const
     BF2_AI_FRONTIER("dice::hfe::ai::SAI::getFriendlyTypes");
 }
 
-void SAI::setBotHasChangedEquipment(int)
+// 0x33d5f0 (Ghidra). The bot's squad member has no path any more.
+void SAI::setBotHasChangedEquipment(int botId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::setBotHasChangedEquipment");
+    const int playerId = IBotManager::instance->getBot(botId)->getPlayerId();
+    SquadMember* const member = SquadManager::m_instance->getSquadMember(playerId, m_side);
+    if (member)
+        member->setHavePath(false);
+    handleChangingBot(botId);
 }
 
 // find, update the second member of the existing pair, or do nothing.
@@ -1290,6 +1296,46 @@ void SAI::BotInfo::occupy(std::set<int>::iterator& it, AIStrategicObject* from,
     m_occupiedObject = to->getIndex();
 }
 
+// 0x33f1f0 (Ghidra).
+void SAI::BotInfo::occupy(AIStrategicObject* from, AIStrategicObject* to, SAI* sai)
+{
+    std::set<int>& present = from->getPresentUnits(sai->m_side);
+    std::set<int>::iterator it = present.find(m_bot->getBotId());
+    occupy(it, from, to, sai);
+}
+
+// 0x33f660 (Ghidra). The same erase choice as free below: the shipped code erases m_setFC at
+// the lookup's result.
+void SAI::BotInfo::removeAssigned(AIStrategicObject* object, std::set<int>::iterator& it,
+                                  bool release, SAI* sai)
+{
+    std::set<int>& assigned = object->getAssignedUnits(sai->m_side);
+    assigned.erase(it++);
+    if (release)
+    {
+        sai->m_setFC.erase(m_bot->getBotId());
+    }
+    else
+    {
+        AIStrategicObject* const occupied =
+            AIStrategicObjectManager::getInstance()->getStrategicObject(m_occupiedObject);
+        if (object->isAttack(sai->m_side))
+            occupied->registerAvailableAttacker(m_bot->getBotId(), sai->m_side);
+        else
+            occupied->registerAvailableDefender(m_bot->getBotId(), sai->m_side);
+    }
+    m_assignedObject = -1;
+    m_lastOrderTime = 0.0;
+}
+
+// 0x33f5b0 (Ghidra).
+void SAI::BotInfo::removeAssigned(AIStrategicObject* object, bool release, SAI* sai)
+{
+    std::set<int>& assigned = object->getAssignedUnits(sai->m_side);
+    std::set<int>::iterator it = assigned.find(m_bot->getBotId());
+    removeAssigned(object, it, release, sai);
+}
+
 // 0x33f0e0 (Ghidra). The shipped body also looks the bot up in m_setFC and drops the result.
 void SAI::BotInfo::respawn(AIStrategicObject* object, SAI* sai)
 {
@@ -1347,6 +1393,45 @@ void SAI::BotInfo::free(bool unregister, SAI* sai)
         sai->m_setFC.erase(botId);
     }
     sai->m_set44.insert(m_bot->getBotId());
+}
+
+// 0x338fe0 (Ghidra). A bot that is not free gives up its assigned object (and its busy place),
+// or else the object it occupies; either way its last order is forgotten. Then it occupies the
+// closest strategic object for its equipment, unless that is where it is.
+void SAI::handleChangingBot(int botId)
+{
+    BotInfo* const info = m_botInfo[botId];
+    if (!info)
+        return;
+    if (m_set44.find(botId) == m_set44.end())
+    {
+        if (info->m_assignedObject != -1)
+        {
+            AIStrategicObject* const assigned =
+                AIStrategicObjectManager::getInstance()->getStrategicObject(info->m_assignedObject);
+            info->removeAssigned(assigned, true, this);
+            info->free(false, this);
+        }
+        else if (info->m_occupiedObject != -1)
+        {
+            info->free(true, this);
+        }
+    }
+    info->setLastOrderedSquare(-1);
+
+    Information* const equipment = informationManager->getInformation(info->m_bot->getCurrentEquipment());
+    if (!equipment || !equipment->getUnit())
+        return;
+    IPIMobile* const mobile = equipment->getMobile();
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    const int vehicleNumber = mobile ? mobile->getVehicleNumber() : -1;
+    const int type = equipment->getUnit()->getEquipmentType();
+    // no null guard on the closest object, as shipped
+    AIStrategicObject* const closest =
+        manager->getClosestObject(equipment->getPosition(), type, vehicleNumber, m_side);
+    if (closest->getIndex() == info->m_occupiedObject)
+        return;
+    info->occupy(manager->getStrategicObject(info->m_occupiedObject), closest, this);
 }
 
 // Void is inferred from complete
