@@ -5,6 +5,7 @@
 #define AI_AIDLL_AI_AIBOT_BOTMAIN_H
 
 #include "../../../../Math/Vec3.h"
+#include "../../../AIInterface/BFKnowledge/SoldierPose.h"
 
 #include <list>
 #include <map>
@@ -385,7 +386,9 @@ public:
     // every name here is absent from all 171 slots.
     void  prePlanExecution();
     void  resetChangeTarget();
-    void  pollRequestedSoldierPose();          // [FRONTIER]
+    void  pollRequestedSoldierPose();
+    bool  checkPoseOk(bool& detail, SoldierPose pose);
+    void  clearTestResults();
     void  postPlanExecution();
     void  addBehaviour(BotBehaviour* b, int i);
     void  removeBehaviour(BotBehaviour* b);
@@ -511,13 +514,15 @@ private:
     /* 268 */ double       m_firingTargetTime;      // getFiringTargetTime
     /* 276 */ double       m_time276;               // = -DBL_MAX - "never happened"
     /* 284 */ bool         m_botStuck;              // = false
-    /* 285 */ bool         m_flag285;               // = false
+    /* 285 */ bool         m_poseChanging;          // = false; a pose key press is under way
     /* 286 */ char         m_pad286[2];
     // Construction uses -DBL_MAX as the timestamp sentinel; reset uses -9999.0.
-    /* 288 */ double       m_time288;               // ctor: -DBL_MAX, reset: -9999.0
+    /* 288 */ double       m_poseChangeTime;        // ctor: -DBL_MAX, reset: -9999.0; last lie toggle
     /* 296 */ int          m_requestedSoldierPose;  // = 1 dice spells the getter "Solder"
-    /* 300 */ bool         m_flag300[4];            // +300..+303, all false
-    /* 304 */ int          m_int304;                // = -1
+    // Line-of-sight tests of the lower poses against m_poseTestTarget: crouch result and its
+    // detail, lie result and its detail. [UNRESOLVED] what the detail flags say.
+    /* 300 */ bool         m_poseTestResults[4];    // +300..+303, all false
+    /* 304 */ unsigned int m_poseTestTarget;        // = -1; the firing target the tests are for
     /* 308 */ unsigned int m_unresolvedCollision;   // = -1
     /* 312 */ bool         m_airBorn;               // = false isAirBorn
     /* 313 */ bool         m_wasDead;               // isJustSpawned: set while the player is dead
@@ -559,7 +564,7 @@ private:
     /* 492 */ double       m_timeOfLastFailedStaticSkyAttack;  // = 0.0
     /* 500 */ bool         m_wantsToSimulateArtillery;   // = false
     /* 501 */ bool         m_isSimulatingArtillery;      // = false
-    /* 502 */ bool         m_flag502;                    // = false [UNRESOLVED]
+    /* 502 */ bool         m_poseForced;            // = false; a forced pose request, one poll long
     /* 503 */ char         m_pad503;
     /* 504 */ int          m_moveToStatus;          // = 0
     /* 508 */ int          m_avoidSide;             // = 0

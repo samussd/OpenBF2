@@ -122,17 +122,17 @@ BotMain::BotMain(IAIPlayer* player,
     m_ptr260 = 0;
     m_firingTarget = -1;
     m_requestedSoldierPose = 1;
-    m_int304 = -1;
+    m_poseTestTarget = -1;
     m_unresolvedCollision = -1;
     m_ptr252 = 0;
 
     // Use -DBL_MAX for uninitialized timestamps; magnitude sentinels use separate values.
     m_time276 = -DBL_MAX;
-    m_time288 = -DBL_MAX;
+    m_poseChangeTime = -DBL_MAX;
     m_botStuck = false;
-    m_flag285 = false;
+    m_poseChanging = false;
     for (int k = 0; k < 4; ++k)
-        m_flag300[k] = false;           // +300..+303
+        m_poseTestResults[k] = false;           // +300..+303
     m_airBorn = false;                  // +312
     for (int k = 0; k < 3; ++k)
         m_spawnCoord[k] = 0.0f;         // +316..+324
@@ -291,7 +291,7 @@ void BotMain::reset()
 
     m_stalledPlanTicks = 0;
     m_int200 = -1;
-    m_int304 = -1;
+    m_poseTestTarget = -1;
     m_avoidSide = 0;
     m_moveToStatus = 0;
     m_collidedObject = -1;
@@ -305,7 +305,7 @@ void BotMain::reset()
     m_double516 = 0.0;
     m_wantsToSimulateArtillery = false;
     m_isSimulatingArtillery = false;
-    m_flag502 = false;
+    m_poseForced = false;
     m_avoidSideSwitched = false;
     m_collidedObjectPosition[0] = 0;
     m_collidedObjectPosition[1] = 0;
@@ -325,7 +325,7 @@ void BotMain::reset()
     m_isGoingForFlag = false;
     m_useStaticAttack = false;
     // 9999.0, not the ctor's -DBL_MAX. See the block above.
-    m_time288 = -9999.0;
+    m_poseChangeTime = -9999.0;
     m_timeOfLastFailedSplashDamageAttack = -9999.0;
     m_takeOffPosition[0] = 0.0f;
     m_takeOffPosition[1] = 0.0f;
@@ -522,10 +522,165 @@ void BotMain::resetChangeTarget()
     m_changeTarget = 0xFFFFFFFFu;
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// Toggles the lie key: pressed when it is not held, released when it is. An unmapped key reads 0.
+static void toggleLie(io::PlayerInput* input)
+{
+    const float held = (input->mappingFlags >> io::PILie) & 1 ? input->inputs[io::PILie] : 0.0f;
+    input->setInput(io::PILie, held == 1.0f ? 0.0f : 1.0f);
+}
+
+// Presses the crouch and lie keys that take the soldier from its current pose to the requested
+// one. Lower poses are only taken while the line-of-sight tests allow them, or when forced. A pose
+// change in progress keeps the fire key released. A soldier with no pose is asked to stand.
+// Retail returns early, skipping the fire release, for an unknown request while standing and after
+// the unknown-pose error.
 void BotMain::pollRequestedSoldierPose()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::pollRequestedSoldierPose");
+    const double time = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    Information* const equipment = informationManager->getInformation(m_currentEquipment);
+    if (!equipment)
+        return;
+    bool detail;
+    switch (equipment->getSoldierPose())
+    {
+    case SPStanding:
+        switch (m_requestedSoldierPose)
+        {
+        case SPStanding:
+            m_playerInput->setInput(io::PICrouch, 0.0f);
+            m_playerInput->setInput(io::PILie, 0.0f);
+            m_poseChanging = false;
+            break;
+        case SPCrouching:
+            if (!checkPoseOk(detail, SPCrouching) && !m_poseForced)
+                break;
+            m_playerInput->setInput(io::PICrouch, 1.0f);
+            m_playerInput->setInput(io::PILie, 0.0f);
+            m_poseChanging = true;
+            break;
+        case SPLying:
+            if (!checkPoseOk(detail, SPLying) && !m_poseForced)
+                break;
+            m_playerInput->setInput(io::PICrouch, 0.0f);
+            toggleLie(m_playerInput);
+            m_poseChangeTime = time;
+            m_poseChanging = true;
+            break;
+        case SPSwimming:
+            m_playerInput->setInput(io::PICrouch, 0.0f);
+            m_playerInput->setInput(io::PILie, 0.0f);
+            m_poseChanging = false;
+            break;
+        default:
+            return;
+        }
+        break;
+    case SPCrouching:
+        switch (m_requestedSoldierPose)
+        {
+        case SPStanding:
+            m_playerInput->setInput(io::PILie, 0.0f);
+            m_playerInput->setInput(io::PICrouch, 0.0f);
+            clearTestResults();
+            m_poseChanging = true;
+            break;
+        case SPCrouching:
+            m_playerInput->setInput(io::PICrouch, 1.0f);
+            m_playerInput->setInput(io::PILie, 0.0f);
+            m_poseChanging = false;
+            break;
+        case SPLying:
+            if (!checkPoseOk(detail, SPLying) && !m_poseForced)
+                break;
+            m_playerInput->setInput(io::PICrouch, 0.0f);
+            toggleLie(m_playerInput);
+            m_poseChangeTime = time;
+            m_poseChanging = true;
+            break;
+        case SPSwimming:
+            m_playerInput->setInput(io::PICrouch, 0.0f);
+            m_playerInput->setInput(io::PILie, 0.0f);
+            m_poseChanging = false;
+            break;
+        default:
+            Debug(DebugTypeError, "AI/AIDLL/AI/AIBot/BotMain.cpp", 2723, "")
+                << "Internal error, unknown pose.";
+            return;
+        }
+        break;
+    case SPLying:
+        switch (m_requestedSoldierPose)
+        {
+        case SPStanding:
+            m_playerInput->setInput(io::PICrouch, 0.0f);
+            toggleLie(m_playerInput);
+            clearTestResults();
+            m_poseChangeTime = time;
+            m_poseChanging = true;
+            break;
+        case SPCrouching:
+            if (!checkPoseOk(detail, SPCrouching) && !m_poseForced)
+                break;
+            m_playerInput->setInput(io::PICrouch, 1.0f);
+            m_playerInput->setInput(io::PILie, 0.0f);
+            m_poseChangeTime = time;
+            m_poseChanging = true;
+            break;
+        case SPLying:
+        case SPSwimming:
+            m_playerInput->setInput(io::PICrouch, 0.0f);
+            m_playerInput->setInput(io::PILie, 0.0f);
+            m_poseChanging = false;
+            break;
+        default:
+            Debug(DebugTypeError, "AI/AIDLL/AI/AIBot/BotMain.cpp", 2760, "")
+                << "Internal error, unknown pose.";
+            return;
+        }
+        break;
+    case SPSwimming:
+        m_playerInput->setInput(io::PICrouch, 0.0f);
+        m_playerInput->setInput(io::PILie, 0.0f);
+        m_poseChanging = false;
+        break;
+    default:
+        m_requestedSoldierPose = SPStanding;
+        m_poseChanging = false;
+        break;
+    }
+    m_poseForced = false;
+    if (m_poseChanging && (equipment->getObjectTypeFlags() & 0x200000u))
+        m_playerInput->setInput(io::PIFire, 0.0f);
+}
+
+// Whether the soldier may take the lower pose against its firing target. Any pose is fine with no
+// target or a friendly one. Against an enemy only the tests made for that target count; detail
+// receives the pose's second test flag.
+bool BotMain::checkPoseOk(bool& detail, SoldierPose pose)
+{
+    // [PLATFORM] ELF captures the manager before the target callback.
+    InformationManager* const manager = informationManager;
+    Information* const target = manager->getInformation(getFiringTarget());
+    if (!target || target->getSide() == getSide())
+        return true;
+    if (m_poseTestTarget != getFiringTarget())
+        return false;
+    if (pose == SPCrouching)
+    {
+        detail = m_poseTestResults[1];
+        return m_poseTestResults[0];
+    }
+    detail = m_poseTestResults[3];
+    return m_poseTestResults[2];
+}
+
+void BotMain::clearTestResults()
+{
+    m_poseTestTarget = 0xFFFFFFFFu;
+    m_poseTestResults[0] = false;
+    m_poseTestResults[1] = false;
+    m_poseTestResults[2] = false;
+    m_poseTestResults[3] = false;
 }
 
 // Bot interface implementations, in virtual declaration order.
@@ -1424,15 +1579,15 @@ float BotMain::getFireInclination()
     return m_fireInclination;
 }
 
-// +0x194. A new pose is taken when forced, or when no change is under way (+285) and the last
-// one (+288) is over a second old. A forced request marks itself (+502).
+// +0x194. A new pose is taken when forced, or when no key press is under way and the last lie
+// toggle is over a second old. A forced request marks itself for the next poll.
 void BotMain::requestSoldierPose(int pose, bool force)
 {
     const double time = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
-    if (pose != m_requestedSoldierPose && ((!m_flag285 && time > 1.0 + m_time288) || force))
+    if (pose != m_requestedSoldierPose && ((!m_poseChanging && time > 1.0 + m_poseChangeTime) || force))
         m_requestedSoldierPose = pose;
     if (force)
-        m_flag502 = true;
+        m_poseForced = true;
 }
 
 // +0x198
