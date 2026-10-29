@@ -814,10 +814,9 @@ void BotMain::updateSensing(const double& dt)
 }
 
 // +0x024
-// [UNRESOLVED] Retail zero-extends AL after the navigation call, so both may return bool.
-void BotMain::updatePathfinding(bool& a, bool* b)
+bool BotMain::updatePathfinding(bool& a, bool* b)
 {
-    m_navigation->update(a, b);
+    return m_navigation->update(a, b);
 }
 
 // +0x02C

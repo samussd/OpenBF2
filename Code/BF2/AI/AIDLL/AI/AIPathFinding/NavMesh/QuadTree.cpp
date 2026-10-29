@@ -261,6 +261,11 @@ unsigned char QuadTree::getMaterialOfPolygon(unsigned int polygon) const
 }
 
 // Tracks polygons affected by destroyable map parts and restores their original materials.
+const Polygon* QuadTree::getPolygon(unsigned int polygon) const
+{
+    return polygon < m_numberOfPolygons ? &m_polygons[polygon] : 0;
+}
+
 void QuadTree::getPolygonsWithinBoundary(const Vec3& minimum, const Vec3& maximum,
                                          const Mat4& transformation,
                                          std::vector<unsigned int>& polygons) const

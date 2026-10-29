@@ -6,7 +6,13 @@
 #include "BotMain.h"                       // getBotId / getCurrentEquipment - vtable +0xE8, +0xD8
 #include "../Main/CommonSingletonServer.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"   // IBFTimer::getGameTime
+#include "../AIKnowledge/AIInformationGrid.h"       // the obstacle predicate's base
+#include "../AIKnowledge/BFInformationEnvironment.h"
+#include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../AIPathFinding/NavMesh/QuadTree.h"
+#include "../Main/IAIPathfinding.h"
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
 
@@ -25,10 +31,10 @@ BotNavigation::BotNavigation(BotMain* owner)
     , m_flag40(false)
     // the two paths, in the order the binary builds them: the fine one first.
     , m_polygonPath(checkPointer(new QTPath()))
-    , m_int76(-1)
+    , m_polygonResource(0xFFFFFFFFu)
     , m_int116(0)
     , m_clusterPath(checkPointer(new ClusterNodePath()))
-    , m_int128(-1)
+    , m_clusterResource(0xFFFFFFFFu)
     , m_double144(0.0)
     , m_double152(0.0)
     , m_double160(0.0)
@@ -52,13 +58,12 @@ BotNavigation::BotNavigation(BotMain* owner)
     {
         m_zero24[i]  = 0;
         m_zero44[i]  = 0;
-        m_zero88[i]  = 0;
         m_zero176[i] = 0;
         m_zero216[i] = 0;
         m_zero256[i] = 0;
     }
     m_pathOwner = 0;                   // +60 - a pointer, see BotNavigation.h
-    m_zero64 = 0;
+    m_quadTree = 0;
     m_zero308[0] = 0;
     m_zero308[1] = 0;
     for (int i = 0; i < 3; ++i)
@@ -85,7 +90,7 @@ void BotNavigation::resetAll()
 {
     reset();
 
-    m_int252 = 0;
+    m_obstacleCount = 0;
     m_flag276 = false;
     // Not the constructor's 0.0 - see the block above.
     m_double268 = -9999.0;
@@ -103,20 +108,16 @@ void BotNavigation::reset()
 {
     m_flag316 = false;
 
-    // giving the polygon path back. See the block above.
-    if (m_int76 != -1)
+    // giving the pathfinding resources back.
+    if (m_polygonResource != 0xFFFFFFFFu)
     {
-        // Retail: `m_pathOwner->release(&m_int76, m_bot->getBotId)`. The bot half is typed now;
-        // the object at +60 still has no class, so the slot cannot be.
-        BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::reset (a polygon path is reserved)");
-        m_int76 = -1;
+        m_pathOwner->releaseResource(m_polygonResource, m_bot->getBotId());
+        m_polygonResource = 0xFFFFFFFFu;
     }
-
-    // and the cluster path, through a different slot on the same object.
-    if (m_int128 != -1)
+    if (m_clusterResource != 0xFFFFFFFFu)
     {
-        BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::reset (a cluster path is reserved)");
-        m_int128 = -1;
+        m_pathOwner->releaseClusterResource(m_clusterResource, m_bot->getBotId());
+        m_clusterResource = 0xFFFFFFFFu;
     }
 
     // Reaching through both path objects - see the block above.
@@ -137,18 +138,22 @@ void BotNavigation::reset()
     m_flag195 = false;
     m_flag193 = false;
     m_flag194 = false;
-    m_double244 = 0.0;
+    m_lastActiveTime = 0.0;
 
     // Resolves the bot's current equipment handle; skips equipment work when it has no object.
     const unsigned int equipment = m_bot->getCurrentEquipment();
     Information* const info = informationManager->getPool()->get(equipment);
-    if (info)
+    // where the equipment last stood on the mesh: for its vehicle, then as infantry
+    if (info && info->getMobile())
     {
-        // Retail: `IPIMobile* m = info->m_mobile56; if (m) { m_int80 = m->getVehicleNumber;
-        // const Vec* p = m->getLastValidPosition(m_int80); m_int200 = p[0]; ... }`
-        // `Information` and `IPIMobile` are both unrecovered - `Information` is a forward
-        // declaration behind the handle pool and `IPIMobile` is not in this tree at all.
-        BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::reset (the bot has equipment)");
+        IPIMobile* const mobile = info->getMobile();
+        m_vehicleNumber = mobile->getVehicleNumber();
+        const IPIMobile::ValidPos& position = mobile->getLastValidPosition(m_vehicleNumber);
+        m_int200 = position.polygon;
+        m_int204 = position.quadTree;
+        const IPIMobile::ValidPos& infantry = mobile->getLastValidInfantryPos();
+        m_int208 = infantry.polygon;
+        m_int212 = infantry.quadTree;
     }
 
     // The sentinel is the interesting one - see the block above.
@@ -177,28 +182,128 @@ void BotNavigation::clearProgress()
     m_zero280[2] = 0;                      // +288
 }
 
-// [FRONTIER] Obstacle updates for living, standing bots are not implemented.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace the stop when the corresponding navigation behavior is recovered.
+namespace {
+
+// Moving primary objects (vehicles, soldiers) and anything flagged 0x2000000.
+class MobileOrObstaclePredicate : public IAIInformationGridPredicate
+{
+public:
+    bool includeInformation(Information* information) const override
+    {
+        return (information->isPrimary() && information->hasMobile())
+            || (information->getObjectTypeFlags() & 0x2000000u);
+    }
+};
+
+} // namespace
+
+// Everything movable within 50 m of the bot, both the 1 and the 0 query of the environment.
 void BotNavigation::updateObstacles()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateObstacles");
+    m_obstacles.resize(0);
+    // no null guard, as shipped
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const Vec3& position = equipment->getPosition();
+    MobileOrObstaclePredicate predicate;
+    IAIInformationEnvironment* const environment =
+        static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment);
+    environment->getObjectsWithinRadius(m_obstacles, position, 50.0f, m_bot->getSide(), true,
+                                        &predicate);
+    environment->getObjectsWithinRadius(m_obstacles, position, 50.0f, m_bot->getSide(), false,
+                                        &predicate);
+    m_obstacleCount = static_cast<int>(m_obstacles.size());
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-void BotNavigation::update(bool&, bool*)
+// Runs the pending search. False without a pathfinder or in state 4.
+bool BotNavigation::update(bool& a, bool* b)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::update");
+    if (!m_pathOwner)
+        return false;
+    m_flag316 = false;
+    if (m_int56 == 4)
+        return false;
+
+    a = false;
+    if (b)
+        *b = false;
+
+    if (m_flag195)
+    {
+        m_points.resize(0);
+        m_int116 = 0;
+        m_flag68 = true;
+        m_flag195 = false;
+    }
+    if (m_flag120)
+        return doClusterSearch(a, b);
+    if (m_flag68)
+        return doPolygonSearch(a, b);
+    return true;
 }
 
 bool BotNavigation::isActive()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::isActive");
+    return 3.0 > static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime()
+                     - m_lastActiveTime;
 }
 
 void BotNavigation::updateOccationally()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateOccationally");
+    updateNavPoints();
+    updateClosestDistance();
+    if (m_int56 == 2)
+    {
+        if (hasIllegalPath())
+            reset();
+        else if (!checkProgress())
+            m_flag192 = true;
+    }
+    if (m_flag236)
+        updateSpaceLeftAndRight();
+}
+
+// A path point on a missing polygon, or on one whose material is 0.
+bool BotNavigation::hasIllegalPath()
+{
+    for (unsigned int i = 0; i < m_points.size(); ++i)
+    {
+        const Polygon* const polygon = m_quadTree->getPolygon(m_points[i].m_index36);
+        if (!polygon || !polygon->m_material)
+            return true;
+    }
+    return false;
+}
+
+// [FRONTIER] [TEMP] [RETIRE-WHEN: aidll-02-skeleton] The search and path-following half of the
+// navigation; next in the tick order once the bots get a move order.
+void BotNavigation::updateNavPoints()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateNavPoints");
+}
+
+void BotNavigation::updateClosestDistance()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateClosestDistance");
+}
+
+bool BotNavigation::checkProgress()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::checkProgress");
+}
+
+void BotNavigation::updateSpaceLeftAndRight()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateSpaceLeftAndRight");
+}
+
+bool BotNavigation::doPolygonSearch(bool&, bool*)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::doPolygonSearch");
+}
+
+bool BotNavigation::doClusterSearch(bool&, bool*)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::doClusterSearch");
 }
 
 // Always returns true, leaving BotManager's final pathfinding sweep gated by isSearchActive.

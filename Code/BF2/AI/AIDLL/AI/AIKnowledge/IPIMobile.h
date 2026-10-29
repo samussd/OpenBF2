@@ -59,6 +59,8 @@ public:
 
     const ValidPos& getLastValidPosition() const;
     const ValidPos& getLastValidPosition(int vehicleNumber) const;
+    // [INFERRED] name; BotNavigation::reset inlines the +8 loads.
+    const ValidPos& getLastValidInfantryPos() const { return m_lastValidInfantryPos; }
     void setLastValidInfantryPosInternal(const ValidPos& position);
     void setLastValidVehiclePosInternal(const ValidPos& position);
     void setLastValidVehiclePosInternal(const ValidPos& first, const ValidPos& second,

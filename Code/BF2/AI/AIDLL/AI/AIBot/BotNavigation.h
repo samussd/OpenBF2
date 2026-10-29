@@ -15,7 +15,9 @@ namespace hfe {
 namespace ai {
 
 class BotMain;
+class IAIPathfinding;
 class Information;
+class QuadTree;
 
 class BotNavigation
 {
@@ -24,7 +26,7 @@ public:
     ~BotNavigation();                           // [FRONTIER]
 
     // [FRONTIER] Navigation methods below remain incomplete unless implemented explicitly.
-    void update(bool& a, bool* b);
+    bool update(bool& a, bool* b);
     void updateOccationally();                  // dice's spelling - "Occationally"
     void updatePath(Vec2& a, bool& b, bool& c, float d);
     void updateNavPoints();
@@ -35,8 +37,8 @@ public:
 
     void initPathfinding(const Vec3& to, float a, float b);
     void initPathfinding(unsigned int a, unsigned int b, const Vec3& to, float c, float d);
-    void doPolygonSearch(bool& a, bool* b);
-    void doClusterSearch(bool& a, bool* b);
+    bool doPolygonSearch(bool& a, bool* b);
+    bool doClusterSearch(bool& a, bool* b);
     void calculatePoints();
     void optimizePoints();
     bool testDirectPath();
@@ -60,7 +62,7 @@ public:
     bool isRunning();
     // [INFERRED] accessor; BotMain::postPlanExecution inlines the loads.
     float getSideSpace(int side) const { return m_sideSpace[side]; }
-    void checkProgress();
+    bool checkProgress();
     void clearProgress();
     bool checkArrivedAtPoint(float distance);
     void setIsStuck(bool stuck);
@@ -93,7 +95,7 @@ public:
         }
 
         char m_bytes[36];       // [UNRESOLVED]
-        int  m_index36;         // = -1
+        int  m_index36;         // = -1; the polygon (hasIllegalPath)
     };
 
 private:
@@ -111,20 +113,26 @@ private:
     /*  56 */ int   m_int56;               // not a gap - `reset` zeroes it
     // Owns polygon and cluster path reservations, released through virtual slots +156 and
     // +164 during reset. [UNRESOLVED] The interface type is not yet known.
-    /*  60 */ void* m_pathOwner;            // = 0
-    /*  64 */ int   m_zero64;               // = 0
-    /*  68 */ char  m_gap68[4];            // [UNRESOLVED] - never written
+    /*  60 */ IAIPathfinding* m_pathOwner;  // = 0
+    /*  64 */ QuadTree* m_quadTree;         // = 0; hasIllegalPath's polygons
+    // update: run the polygon search (set when the points are dropped), or the cluster one
+    /*  68 */ bool  m_flag68;
+    /*  69 */ char  m_pad69[3];
     /*  72 */ QTPath* m_polygonPath;       // new(0x18) - the fine path
-    /*  76 */ int   m_int76;               // = -1
-    /*  80 */ char  m_gap80[8];            // [UNRESOLVED] - never written
-    /*  88 */ int   m_zero88[3];           // +88, +92, +96
+    // the pathfinding resource held for the polygon search, -1 for none (released in reset)
+    /*  76 */ unsigned int m_polygonResource;   // = -1
+    /*  80 */ int   m_vehicleNumber;       // reset: the equipment's IPIMobile::getVehicleNumber
+    /*  84 */ char  m_gap84[4];            // [UNRESOLVED] - never written
+    // objects within 50 m to steer around (updateObstacles)
+    /*  88 */ std::vector<unsigned int> m_obstacles;
     // the walkable result - see the header note. The constructor's dead resize targets this.
     /* 100 */ std::vector<NavigationPoint> m_points;
     /* 112 */ char  m_gap112[4];           // [UNRESOLVED] - never written
     /* 116 */ int   m_int116;              // = 0
-    /* 120 */ char  m_gap120[4];           // [UNRESOLVED] - never written
+    /* 120 */ bool  m_flag120;
+    /* 121 */ char  m_pad121[3];
     /* 124 */ ClusterNodePath* m_clusterPath;   // new(0x1C) - the coarse path
-    /* 128 */ int   m_int128;              // = -1
+    /* 128 */ unsigned int m_clusterResource;   // = -1, as m_polygonResource
     // `allocate(20)` with 0 / 0 / self / self is an `_Rb_tree` header at 16 + sizeof(value_type)
     // so the value type is four bytes - a set of pointers or handles. Which is [UNRESOLVED];
     // `void*` holds the width and claims nothing.
@@ -147,11 +155,14 @@ private:
     /* 208 */ int   m_int208;              // = -1
     /* 212 */ int   m_int212;              // = -1
     /* 216 */ int   m_zero216[3];          // +216, +220, +224
-    /* 228 */ char  m_gap228[12];          // [UNRESOLVED] - never written
+    /* 228 */ char  m_gap228[8];           // [UNRESOLVED] - never written by the constructor
+    /* 236 */ bool  m_flag236;             // updateOccationally: measure the room beside the bot
+    /* 237 */ char  m_pad237[3];
     /* 240 */ int   m_int240;              // = 0
-    /* 244 */ double m_double244;          // not a gap - `reset` zeroes it
+    // [INFERRED] name: isActive holds for three seconds after it.
+    /* 244 */ double m_lastActiveTime;     // not a gap - `reset` zeroes it
     // resetAll clears this field.
-    /* 252 */ int   m_int252;              // resetAll: 0
+    /* 252 */ int   m_obstacleCount;       // resetAll: 0; updateObstacles
     /* 256 */ int   m_zero256[3];          // +256, +260, +264
     /* 268 */ double m_double268;          // = 0.0
     /* 276 */ bool  m_flag276;             // = false

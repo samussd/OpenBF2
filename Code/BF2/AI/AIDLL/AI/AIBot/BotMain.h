@@ -63,7 +63,7 @@ public:
     virtual void cheatExecution() = 0;                                                            // +0x018
     virtual void see(const double& dt) = 0;                                                       // +0x01C [FRONTIER]
     virtual void updateSensing(const double& dt) = 0;                                             // +0x020 [FRONTIER]
-    virtual void updatePathfinding(bool& a, bool* b) = 0;                                         // +0x024 [FRONTIER]
+    virtual bool updatePathfinding(bool& a, bool* b) = 0;                                         // +0x024
     virtual void reset() = 0;                                                                     // +0x028
     virtual void updateBotVehicle(bool* out) = 0;                                                 // +0x02C [FRONTIER]
     virtual void updateBot() = 0;                                                                 // +0x030 [FRONTIER]
@@ -219,7 +219,7 @@ public:
     virtual void cheatExecution();                                                                // +0x018
     virtual void see(const double& dt);                                                           // +0x01C [FRONTIER]
     virtual void updateSensing(const double& dt);                                                 // +0x020 [FRONTIER]
-    virtual void updatePathfinding(bool& a, bool* b);                                             // +0x024 [FRONTIER]
+    virtual bool updatePathfinding(bool& a, bool* b);                                             // +0x024
     virtual void reset();                                                                         // +0x028
     virtual void updateBotVehicle(bool* out);                                                     // +0x02C
     virtual void updateBot();                                                                     // +0x030

@@ -76,6 +76,8 @@ public:
     bool isPointInPolygon(const Vec3&, unsigned int, float, MaterialManager*) const;
     void getVerticiesOfPolygon(std::vector<const Vec3*>&, unsigned int) const;
     unsigned char getMaterialOfPolygon(unsigned int polygon) const;
+    // 0 past the end.
+    const Polygon* getPolygon(unsigned int polygon) const;
 
     void initializeDestroyableMapPart(int, bool, const Vec3&, const Vec3&, const Mat4&,
                                       ClusterGraph*, bool);
