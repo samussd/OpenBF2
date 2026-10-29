@@ -18,11 +18,16 @@ public:
 
     virtual BotScript* createPlan(Bot* bot);                         // +0x08
 
+    // Marks the bot initiated, to treat the object behind the handle with the weapon at the
+    // index in its armament; the player occupying it, -1 for none.
+    void init(unsigned int target, int toolIndex, int occupant, Bot* bot);
+
 protected:
     /* +0x08 */ int m_behaviourId;
-    /* +0x0C */ int* m_int0C;                                // [UNRESOLVED] per bot, -1
-    /* +0x10 */ int* m_int10;                                // [UNRESOLVED] per bot, -1
-    /* +0x14 */ int* m_int14;                                // [UNRESOLVED] per bot, -1
+    // Per bot, -1 at construction: [INFERRED] names.
+    /* +0x0C */ unsigned int* m_target;
+    /* +0x10 */ int* m_toolIndex;
+    /* +0x14 */ int* m_occupant;
 };
 
 } // namespace ai

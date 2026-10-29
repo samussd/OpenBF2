@@ -26,9 +26,19 @@ enum AIRadioMessageType : int;
 // Radio-message record. [UNRESOLVED] Some fields are not yet identified.
 struct AIRadioMessageInfo
 {
-    /*  0 */ unsigned char m_opaque0[4];   // [UNRESOLVED]
-    /*  4 */ int m_senderPlayerId;
-    /*  8 */ unsigned char m_opaque8[16];  // [UNRESOLVED]
+    // 0x1d3260 (Ghidra). The copy constructor (0x1d32e0) copies field by field.
+    AIRadioMessageInfo()
+        : m_float0(1.0f), m_senderPlayerId(-1), m_double8(0.0), m_bool16(false), m_bool17(false),
+          m_type(18)
+    {
+    }
+
+    /*  0 */ float  m_float0;              // [UNRESOLVED] = 1.0f
+    /*  4 */ int    m_senderPlayerId;      // = -1
+    /*  8 */ double m_double8;             // [UNRESOLVED] = 0.0
+    /* 16 */ bool   m_bool16;              // [UNRESOLVED] = false
+    /* 17 */ bool   m_bool17;              // [UNRESOLVED] = false
+    /* 20 */ int    m_type;                // [INFERRED] = 18, one past the last message type
 };
 
 class CommunicationAgent
@@ -62,6 +72,10 @@ public:
     { return m_receivedMessages[type]; }
     // [INFERRED] accessor; BBAvoid::calculateUrgency inlines the load.
     double getHonkedAtTime() const { return m_honkedAtTime; }
+    // The first received message of the type from the player, copied out; false for none.
+    bool getReceivedMessage(AIRadioMessageInfo& out, AIRadioMessageType type, int playerId) const;
+    // Whether a message of the type was received from the player (from anyone for -1).
+    bool receivedMessageExists(AIRadioMessageType type, int playerId);
 
 private:
     typedef std::priority_queue<CAPrioMessage, std::vector<CAPrioMessage>,

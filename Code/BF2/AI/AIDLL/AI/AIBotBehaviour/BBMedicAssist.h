@@ -6,10 +6,13 @@
 
 #include "BotBehaviour.h"
 
+#include <vector>
+
 namespace dice {
 namespace hfe {
 namespace ai {
 
+class CommunicationAgent;
 class PlanGenerator;
 
 class BBMedicAssist : public BotBehaviour
@@ -22,11 +25,21 @@ public:
     // A bot that is not down and carries a weapon of type 1 or 2.
     virtual bool isAplicable(Information* information, Bot* bot);   // +0x30
 
+    // Whether a human occupies the primary object of the information, for the side, or one of
+    // its secondary objects.
+    bool isHumanInTarget(Information* information, int side);
+    // Whether an engineer request (radio message 4) came from the player behind the information
+    // or behind one of its secondary objects.
+    bool vehicleRequestsEngineer(Information* information, int side, CommunicationAgent* agent) const;
+    // The support soldier's urgency to hand out ammunition.
+    float calculateGiveAmmoUrgency(Bot* bot, float value);
+
 protected:
-    /* +0x24 */ int m_words24[3];                        // [UNRESOLVED] three zero words
-    /* +0x30 */ int* m_int30;                            // [UNRESOLVED] one per battle strength
-    /* +0x34 */ int* m_int34;                            // [UNRESOLVED] one per battle strength
-    /* +0x38 */ int* m_int38;                            // [UNRESOLVED] one per battle strength
+    /* +0x24 */ std::vector<unsigned int> m_candidates;  // the units of the last evaluation
+    // Per battle strength, the bot's best tool against it: [INFERRED] names.
+    /* +0x30 */ int* m_toolIndex;                        // index in the armament, -1 for none
+    /* +0x34 */ float* m_toolRange;                      // its maximum range
+    /* +0x38 */ int* m_toolStrength;                     // its strength
 };
 
 } // namespace ai

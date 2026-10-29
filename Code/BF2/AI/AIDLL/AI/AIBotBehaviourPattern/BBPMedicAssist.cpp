@@ -1,5 +1,6 @@
 #include "BBPMedicAssist.h"
 
+#include "../AIBot/BotMain.h"
 #include "../Main/AIDllFrontier.h"
 
 namespace dice {
@@ -10,15 +11,24 @@ BBPMedicAssist::BBPMedicAssist(int behaviourId)
     : BBPPattern()
 {
     m_behaviourId = behaviourId;
-    m_int0C = new int[getNumberOfBots()];
-    m_int10 = new int[getNumberOfBots()];
-    m_int14 = new int[getNumberOfBots()];
+    m_target = new unsigned int[getNumberOfBots()];
+    m_toolIndex = new int[getNumberOfBots()];
+    m_occupant = new int[getNumberOfBots()];
     for (int i = 0; i < getNumberOfBots(); ++i)
     {
-        m_int0C[i] = -1;
-        m_int10[i] = -1;
-        m_int14[i] = -1;
+        m_target[i] = static_cast<unsigned int>(-1);
+        m_toolIndex[i] = -1;
+        m_occupant[i] = -1;
     }
+}
+
+// 0x2a1320 (Ghidra).
+void BBPMedicAssist::init(unsigned int target, int toolIndex, int occupant, Bot* bot)
+{
+    m_initiated[bot->getBotId()] = true;
+    m_target[bot->getBotId()] = target;
+    m_toolIndex[bot->getBotId()] = toolIndex;
+    m_occupant[bot->getBotId()] = occupant;
 }
 
 BBPMedicAssist::~BBPMedicAssist()

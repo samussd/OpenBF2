@@ -94,6 +94,34 @@ void CommunicationAgent::reset()
     m_honkedAtTime = 0.0;
 }
 
+// 0x1d47f0 (Ghidra).
+bool CommunicationAgent::getReceivedMessage(AIRadioMessageInfo& out, AIRadioMessageType type,
+                                            int playerId) const
+{
+    const std::list<AIRadioMessageInfo>& messages = m_receivedMessages[type];
+    for (std::list<AIRadioMessageInfo>::const_iterator it = messages.begin(); it != messages.end(); ++it)
+    {
+        if (it->m_senderPlayerId == playerId)
+        {
+            out = *it;
+            return true;
+        }
+    }
+    return false;
+}
+
+// 0x1d4a00 (Ghidra).
+bool CommunicationAgent::receivedMessageExists(AIRadioMessageType type, int playerId)
+{
+    const std::list<AIRadioMessageInfo>& messages = m_receivedMessages[type];
+    for (std::list<AIRadioMessageInfo>::const_iterator it = messages.begin(); it != messages.end(); ++it)
+    {
+        if (playerId == -1 || it->m_senderPlayerId == playerId)
+            return true;
+    }
+    return false;
+}
+
 // [FRONTIER] Remaining message operations require implementation.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 
