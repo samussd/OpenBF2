@@ -152,8 +152,9 @@ BotMain::BotMain(IAIPlayer* player,
     m_ptr408 = 0;
     m_int412 = -1;
     m_stalledPlanTicks = 0;
-    for (int k = 0; k < 3; ++k)
-        m_ptr428[k] = 0;                // +428..+436
+    m_c4.position.x = 0.0f;              // +428..+436
+    m_c4.position.y = 0.0f;
+    m_c4.position.z = 0.0f;
     m_moveToStatus = 0;
     m_timeOfLastFailedStaticAttack = 0.0;
     m_timeOfLastFailedStaticSkyAttack = 0.0;
@@ -227,7 +228,7 @@ BotMain::BotMain(IAIPlayer* player,
     // sense every player, and the storage for that is committed at construction.
     m_sensedObjects.reserve(256);
 
-    m_c4Placed = false;                  // the constructor's last field store
+    m_c4.placed = false;                 // the constructor's last field store
     reset();
 }
 
@@ -1675,34 +1676,48 @@ void BotMain::setBotStuck(bool b)
     m_botStuck = b;
 }
 
-// +0x14C
+// +0x14C. A placed charge counts for 240 s.
 void BotMain::placeC4(int placementType, Vec3 v, AIStrategicObject* o)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::placeC4");
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_c4.placed = true;
+    m_c4.placementType = placementType;
+    m_c4.target = o;
+    m_c4.position = v;
+    m_c4.placeTime = now;
+    m_c4.lifetime = 240.0f;
 }
 
 // +0x150
 bool BotMain::isC4Placed()
 {
-    return m_c4Placed;
+    return m_c4.placed;
 }
 
 // +0x154
+// The placement type and the position stay.
 void BotMain::removeC4()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::removeC4");
+    m_c4.placed = false;
+    m_c4.target = 0;
+    m_c4.placeTime = 0.0f;
+    m_c4.lifetime = 0.0f;
 }
 
 // +0x158
-void* BotMain::getC4()
+Bot::C4Info BotMain::getC4()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getC4");
+    return m_c4;
 }
 
-// +0x15C
+// +0x15C. A charge past its lifetime is forgotten.
 void BotMain::updateC4()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updateC4");
+    if (!m_c4.placed)
+        return;
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (now > m_c4.placeTime + m_c4.lifetime)
+        removeC4();
 }
 
 // +0x160

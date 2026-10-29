@@ -1,5 +1,6 @@
 #include "BBPC4.h"
 
+#include "../AIBot/BotMain.h"
 #include "../Main/AIDllFrontier.h"
 
 namespace dice {
@@ -11,6 +12,14 @@ BBPC4::BBPC4(int behaviourId)
 {
     m_behaviourId = behaviourId;
     m_int0C = new int[getNumberOfBots()];
+}
+
+// 0x2425e0 (Ghidra).
+void BBPC4::init(Bot* bot, bool detonate, AIStrategicObject* target)
+{
+    m_initiated[bot->getBotId()] = true;
+    m_detonate = detonate;
+    m_target = target;
 }
 
 BBPC4::~BBPC4()
