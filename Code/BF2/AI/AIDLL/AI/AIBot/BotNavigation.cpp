@@ -11,6 +11,7 @@
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/IPIPhysical.h"
 #include "../AIPathFinding/NavMesh/QuadTree.h"
 #include "../Main/IAIPathfinding.h"
 #include "../AIUtils/checkPointer.h"
@@ -323,6 +324,29 @@ bool BotNavigation::doPolygonSearch(bool&, bool*)
 bool BotNavigation::doClusterSearch(bool&, bool*)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::doClusterSearch");
+}
+
+// 0x1a4cf0 (Ghidra). Whether the point lies within the smallest radius of an obstacle that is
+// not a soldier.
+bool BotNavigation::pointWithinObstacleRadius(const Vec3& point)
+{
+    for (unsigned int i = 0; i < m_obstacles.size(); ++i)
+    {
+        Information* const obstacle = informationManager->getInformation(m_obstacles[i]);
+        if (!obstacle || (obstacle->getObjectTypeFlags() & 0x200000) != 0)
+            continue;
+        IPIPhysical* const physical = obstacle->getPhysical();
+        if (!physical)
+            continue;
+        const Vec3& at = obstacle->getPosition();
+        const float dx = at.x - point.x;
+        const float dy = at.y - point.y;
+        const float dz = at.z - point.z;
+        const float radius = physical->getSmallestRadius();
+        if (radius * radius > dx * dx + dy * dy + dz * dz)
+            return true;
+    }
+    return false;
 }
 
 // Always returns true, leaving BotManager's final pathfinding sweep gated by isSearchActive.

@@ -35,6 +35,8 @@ public:
     // attested: an 11-byte body that returns `this + 112`.
     const std::map<unsigned int, SensedObject*>& getSensedObjects() const { return m_sensedObjects; }
     SensedObject* getSensedObjectFromHandle(unsigned int handle) const;
+    // Whether a shot from the object is on record, with its time (-1000 when there is none).
+    bool isAttacking(unsigned int handle, double& time) const;
     // [INFERRED] name; SensingAgent::evaluateFireObjects inlines the +84 load.
     const std::list<std::pair<FireObject*, unsigned int> >& getFireObjects() const { return m_list84; }
 

@@ -99,7 +99,7 @@ public:
     virtual bool isTakingOrders() = 0;                                                            // +0x070
     virtual bool isOrderedBehaviour(unsigned char behaviour) = 0;                                 // +0x074
     virtual bool isOrderedObject(unsigned int handle, BotBehaviour* b) = 0;                       // +0x078 [FRONTIER]
-    virtual void setFiringTarget(unsigned int handle) = 0;                                        // +0x07C [FRONTIER]
+    virtual void setFiringTarget(unsigned int handle) = 0;                                        // +0x07C
     virtual unsigned int getFiringTarget() const = 0;                                             // +0x080
     virtual double getFiringTargetTime() const = 0;                                               // +0x084
     virtual SensingAgent* getSensingAgent() = 0;                                                  // +0x088
@@ -133,7 +133,7 @@ public:
     virtual double getTimeOfGrenadeThrown(int i) const = 0;                                       // +0x0F8
     virtual BotNavigation* getBotNavigation() = 0;                                                // +0x0FC
     virtual int getSpawnPoint() const = 0;                                                        // ELF +0x100 / PE +0xFC
-    virtual int getSpawnKit() const = 0;                                                          // +0x104 [FRONTIER]
+    virtual int getSpawnKit() const = 0;                                                          // +0x104
     virtual void getSpawnTarget(int& a, int& b) const = 0;                                        // +0x108 [FRONTIER]
     virtual void setSpawnTarget(int spawnGroup, int kit) = 0;                                    // ELF +0x10C / PE +0x10C (overload order)
     virtual void setSpawnTarget(int strategicArea, int spawnGroup, int kit) = 0;                 // +0x110
@@ -255,7 +255,7 @@ public:
     virtual bool isTakingOrders();                                                                // +0x070
     virtual bool isOrderedBehaviour(unsigned char behaviour);                                     // +0x074
     virtual bool isOrderedObject(unsigned int handle, BotBehaviour* b);                           // +0x078 [FRONTIER]
-    virtual void setFiringTarget(unsigned int handle);                                            // +0x07C [FRONTIER]
+    virtual void setFiringTarget(unsigned int handle);                                            // +0x07C
     virtual unsigned int getFiringTarget() const;                                                 // +0x080
     virtual double getFiringTargetTime() const;                                                   // +0x084
     virtual SensingAgent* getSensingAgent();                                                      // +0x088
@@ -289,7 +289,7 @@ public:
     virtual double getTimeOfGrenadeThrown(int i) const;                                           // +0x0F8
     virtual BotNavigation* getBotNavigation();                                                    // +0x0FC
     virtual int getSpawnPoint() const;
-    virtual int getSpawnKit() const;                                                              // +0x104 [FRONTIER]
+    virtual int getSpawnKit() const;                                                              // +0x104
     virtual void getSpawnTarget(int& a, int& b) const;                                            // +0x108 [FRONTIER]
     virtual void setSpawnTarget(int spawnGroup, int kit);
     virtual void setSpawnTarget(int strategicArea, int spawnGroup, int kit);                     // +0x110
@@ -392,7 +392,7 @@ public:
     virtual void setTakeOffPosition(const Vec3& v);                                               // +0x294 [FRONTIER]
     virtual const Vec3& getTakeOffPosition() const;                                               // +0x298
     virtual void setQuadSeen();                                                                   // +0x29C [FRONTIER]
-    virtual bool isAttacking(unsigned int handle, double& out) const;                             // +0x2A0 [FRONTIER]
+    virtual bool isAttacking(unsigned int handle, double& out) const;                             // +0x2A0
     virtual void event_shotTimeOut(int i);                                                        // +0x2A4 [FRONTIER]
     virtual void event_firing(bool& b, int i, const Vec3& v);                                     // +0x2A8 [FRONTIER]
 
@@ -434,7 +434,8 @@ public:
     float getInvAttention();
     void  setInvAttention(float f);
     float getMarksmanship();                                // no setter
-    float getHarmlessThrsh();                               // no setter, dice's spelling
+    int   getHarmlessThrsh();                               // no setter, dice's spelling; an int
+    void  setHadPrecisionTimeStamp(double t);
     void  setPlayer(IAIPlayer* p);
     void  setPlayerInput();
     void  resetAllControls(bool movement, bool look, bool actions);
@@ -455,7 +456,7 @@ private:
     /*  28 */ float*       m_basicWeights;          // ctor arg `weights`
     /*  32 */ float        m_float32;               // ctor arg `f` [UNRESOLVED]
     /*  36 */ float        m_obedience;             // = 1.0f getObedience
-    /*  40 */ int          m_int40;                 // ctor arg `i` [UNRESOLVED]
+    /*  40 */ int          m_harmlessThreshold;     // ctor arg `i`; getHarmlessThrsh
     /*  44 */ int          m_side;                  // ctor arg `n` getSide
     /*  48 */ float        m_float48;               // = 0.01f [UNRESOLVED] a small threshold
     /*  52 */ void*        m_ptr52;                 // = 0
@@ -532,7 +533,7 @@ private:
     /* 260 */ void*        m_ptr260;                // = 0
     /* 264 */ unsigned int m_firingTarget;          // = -1
     /* 268 */ double       m_firingTargetTime;      // getFiringTargetTime
-    /* 276 */ double       m_time276;               // = -DBL_MAX - "never happened"
+    /* 276 */ double       m_hadPrecisionTime;      // = -DBL_MAX - "never happened"; setHadPrecisionTimeStamp
     /* 284 */ bool         m_botStuck;              // = false
     /* 285 */ bool         m_poseChanging;          // = false; a pose key press is under way
     /* 286 */ char         m_pad286[2];

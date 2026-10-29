@@ -1,6 +1,7 @@
 #include "BBPFireInfantery.h"
 
 #include "../Main/AIDllFrontier.h"
+#include "../AIBot/BotMain.h"   // Bot::getBotId
 
 namespace dice {
 namespace hfe {
@@ -56,14 +57,39 @@ BotScript* BBPFireInfantery::createPlan(Bot*)
     BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::createPlan");
 }
 
-void BBPFireInfantery::init(Bot*, unsigned int, int, bool, bool)
+// 0x26c480 (Ghidra). The two flags are not read. A plan not yet initiated starts its fire
+// decisions over.
+void BBPFireInfantery::init(Bot* bot, unsigned int target, int weapon, bool, bool)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::init");
+    const unsigned int id = bot->getBotId();
+    m_changedTarget[id] = static_cast<unsigned int>(m_targets[id]) != target;
+    m_targets[id] = static_cast<int>(target);
+    m_weapons[id] = weapon;
+    if (!m_initiated[id])
+    {
+        m_data[id].m_int08 = 0;
+        m_data[id].m_int10 = 0;
+        m_data[id].m_double14 = 0.0;
+        m_data[id].m_double1C = 10.0;
+        m_firingStates[id].m_int00 = -1;
+    }
+    m_initiated[id] = true;
 }
 
-void BBPFireInfantery::init(Bot*, unsigned int, const Vec3&, int)
+// 0x26c530 (Ghidra). Always starts the fire decisions over.
+void BBPFireInfantery::init(Bot* bot, unsigned int target, const Vec3& position, int weapon)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::init");
+    const unsigned int id = bot->getBotId();
+    m_initiated[id] = true;
+    m_targets[id] = -1;
+    m_weapons[id] = weapon;
+    m_positionTargets[id] = static_cast<int>(target);
+    m_positions[id] = position;
+    m_data[id].m_int08 = 0;
+    m_data[id].m_int10 = 0;
+    m_data[id].m_double14 = 0.0;
+    m_data[id].m_double1C = 10.0;
+    m_firingStates[id].m_int00 = -1;
 }
 
 int BBPFireInfantery::getImplementationType()

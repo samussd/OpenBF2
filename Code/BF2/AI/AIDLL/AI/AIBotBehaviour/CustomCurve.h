@@ -54,6 +54,10 @@ public:
     // A soft step rising from about 1 to about 2 around x = 0.5; the fire behaviour samples it.
     static float modifiedSoftStepFunc(float x);
 
+    // The sample at x, or the straight line between the two around it. An x outside [min, max],
+    // or one that lands on the last sample when interpolating, is fatal.
+    float calculate(float x, bool interpolate) const;
+
 private:
     CustomCurve(const CustomCurve&);
     CustomCurve& operator=(const CustomCurve&);

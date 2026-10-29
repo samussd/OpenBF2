@@ -4,6 +4,8 @@
 
 #include "AIPlayer.h"
 
+#include <cstdlib>   // getSoldier: abort
+
 #include "AIFrontier.h"
 
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
@@ -213,9 +215,13 @@ unsigned int AIPlayer::getPlayerControlObjectId()
     BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::getPlayerControlObjectId");
 }
 
+// bf2 0x083fc7c0. The soldier is the player's default vehicle (IPlayer +0xA4); the binary asks
+// twice and aborts when there is none.
 IAIObject* AIPlayer::getSoldier()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::getSoldier");
+    if (!m_player->getDefaultVehicle())
+        abort();
+    return static_cast<IAIObject*>(m_player->getDefaultVehicle()->getAIComponent());
 }
 
 IAIObject* AIPlayer::getDefaultVehicle()

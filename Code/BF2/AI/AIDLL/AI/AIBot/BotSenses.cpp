@@ -2,6 +2,7 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining BotSenses operations.
 
 #include "BotSenses.h"
+#include "../AIKnowledge/FireObject.h"   // isAttacking
 
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
@@ -73,6 +74,19 @@ BotSenses::~BotSenses()
 {
     reset();
     delete m_frustum;
+}
+
+// 0x1ac930 (Ghidra).
+bool BotSenses::isAttacking(unsigned int handle, double& time) const
+{
+    std::map<unsigned int, FireObject*>::const_iterator it = m_map100.find(handle);
+    if (it == m_map100.end())
+    {
+        time = -1000.0;
+        return false;
+    }
+    time = it->second->m_time;
+    return true;
 }
 
 SensedObject* BotSenses::getSensedObjectFromHandle(unsigned int handle) const

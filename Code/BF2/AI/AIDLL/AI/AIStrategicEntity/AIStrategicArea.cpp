@@ -76,6 +76,22 @@ int AIStrategicArea::getObjectTypeFlags() const
     return m_objectTypeFlags;
 }
 
+// 0x34f180 (Ghidra).
+bool AIStrategicArea::isInside(const Vec2& point) const
+{
+    return insideCentreBox(point, m_centre, m_position[0]);
+}
+
+// 0x34f130 (Ghidra).
+bool AIStrategicArea::isInside(const Vec3& point) const
+{
+    Vec2 flat;
+    flat.x = 0.0f;
+    flat.y = 0.0f;
+    vec3ToVec2XZ(point, flat);
+    return isInside(flat);
+}
+
 // Returns twice the center-to-side-corner distance along X or Z.
 // Side indices are one-based and must be valid.
 float AIStrategicArea::getXExtent(int side) const

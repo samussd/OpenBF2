@@ -115,6 +115,11 @@ public:
     virtual int  orderBot(int side, const std::list<AIStrategicObject*>& objects,
                           int a, ISAI* sai);                       // slot 32,
 
+    // Whether the point lies in the area's box: m_centre is its minimum corner and the side-one
+    // position its centre. The Vec3 form drops y.
+    bool isInside(const Vec2& point) const;
+    bool isInside(const Vec3& point) const;
+
     // Additional virtual overload declared after the inherited slots.
     virtual float gravity(float distance, int side);               // slot 33,
 

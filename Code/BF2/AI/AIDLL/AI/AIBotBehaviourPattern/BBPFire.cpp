@@ -14,17 +14,17 @@ void BBPFire::setUrgencyGenerator(BotBehaviour* behaviour)
 BBPFire::BBPFire()
     : BBPPattern()
 {
-    m_int0C = new int[getNumberOfBots()];
-    m_bool10 = new bool[getNumberOfBots()];
-    m_int14 = new int[getNumberOfBots()];
-    m_int18 = new int[getNumberOfBots()];
+    m_targets = new int[getNumberOfBots()];
+    m_changedTarget = new bool[getNumberOfBots()];
+    m_weapons = new int[getNumberOfBots()];
+    m_positionTargets = new int[getNumberOfBots()];
     const int numberOfBots = getNumberOfBots();
-    m_vec1C = new Vec3[numberOfBots];
+    m_positions = new Vec3[numberOfBots];
     for (int i = 0; i < numberOfBots; ++i)
     {
-        m_vec1C[i].x = 0.0f;
-        m_vec1C[i].y = 0.0f;
-        m_vec1C[i].z = 0.0f;
+        m_positions[i].x = 0.0f;
+        m_positions[i].y = 0.0f;
+        m_positions[i].z = 0.0f;
     }
 }
 

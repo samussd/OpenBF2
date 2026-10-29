@@ -69,6 +69,8 @@ public:
     bool hasTargetLocked() const;
     IAIObject* getLockedTarget() const;
     const std::string& getName() const;
+    // [INFERRED] accessor: BBFire::chooseWeapon reads +0x04 straight through to the engine weapon.
+    IWeapon* getWeapon() const { return m_weapon; }
 
 protected:
     friend class IPIArmament;                 // retail IPIArmament::rearm reads both fields directly

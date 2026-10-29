@@ -189,5 +189,17 @@ Vec2& getBoxMaxCorner(const Vec2& minimum, const Vec2& centre, Vec2& output)
     return output;
 }
 
+// libaidll 0x366ca0 (ELF). The minimum corner first, then the corner getBoxMaxCorner mirrors.
+bool insideCentreBox(const Vec2& point, const Vec2& minimum, const Vec2& centre)
+{
+    if (minimum.x > point.x || minimum.y > point.y)
+        return false;
+    Vec2 maximum;
+    maximum.x = 0.0f;
+    maximum.y = 0.0f;
+    getBoxMaxCorner(minimum, centre, maximum);
+    return !(point.x > maximum.x) && !(point.y > maximum.y);
+}
+
 } // namespace hfe
 } // namespace dice

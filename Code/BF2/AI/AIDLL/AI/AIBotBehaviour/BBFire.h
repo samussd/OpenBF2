@@ -1,5 +1,5 @@
 // Behaviour built by BBCreateFunctionFire; BBFireInfantery extends it. sizeof == 0x40.
-// [FRONTIER] Urgency, generator set-up and destruction remain named stops.
+// [FRONTIER] Destruction remains a named stop.
 
 #ifndef AI_AIDLL_AI_AIBOTBEHAVIOUR_BBFIRE_H
 #define AI_AIDLL_AI_AIBOTBEHAVIOUR_BBFIRE_H
@@ -19,20 +19,32 @@ class CustomCurve;
 class BBFire : public BotBehaviour
 {
 public:
+    // [UNRESOLVED] When the bot last fired at the target to some effect; the urgency checks it
+    // against 20 s. Eight bytes, a double.
+    struct BBPFeedback
+    {
+        BBPFeedback() : m_time(-10000.0) {}
+        double m_time;
+    };
+
     BBFire(unsigned char behaviourId, unsigned char mode, BBPFire* generator, UrgeCurve* urgeCurve,
            float* weights);
     virtual ~BBFire();
 
     virtual float calculateUrgency(Bot* bot, bool flag, float value);   // +0x28
-    virtual void initializeGenerator(BotMain* bot, int a, bool b, bool c);   // +0x34
+    virtual void initializeGenerator(BotMain* bot, int weapon, bool b, bool c);   // +0x34
     virtual void initializeGenerator(unsigned int target, const Vec3& position, BotMain* bot,
-                                     int a);                         // +0x38
+                                     int weapon);                    // +0x38
+
+    // The target's record, made on first use.
+    BBPFeedback* getBBPFeedback(unsigned int handle);
+    // The index of the bot's best weapon on the target at that distance, or -1.
+    int chooseWeapon(Bot* bot, unsigned int target, float distance);
 
 protected:
-    /* +0x24 */ int* m_int24;                         // [UNRESOLVED] per bot, -1
-    /* +0x28 */ double m_double28;                    // [UNRESOLVED] zero
-    // [UNRESOLVED] key and value types: the ELF's nodes carry eight bytes of value.
-    /* +0x30 */ std::map<int, int> m_map30;
+    /* +0x24 */ int* m_weapons;                       // per bot, the chosen weapon index or -1
+    /* +0x28 */ double m_lastPurge;                   // when m_feedback was last purged
+    /* +0x30 */ std::map<unsigned int, BBPFeedback*> m_feedback;
     /* +0x3C */ CustomCurve* m_curve;                 // a soft step sampled every 0.03 on [0, 1]
 };
 

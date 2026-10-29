@@ -45,6 +45,8 @@ public:
     const Mat4& getCameraTransformation() const;
     void getCameraBaseTransformation(Mat4& out) const;
     bool validateCameraDirection(const Vec3& direction) const;
+    void getCameraBasePos(Vec3& out) const;
+    bool validateCameraDirectionByPos(const Vec3& position) const;
 };
 
 } } }

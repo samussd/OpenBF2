@@ -962,19 +962,25 @@ int SAI::getSpawnsToPoint(int) const
     BF2_AI_FRONTIER("dice::hfe::ai::SAI::getSpawnsToPoint");
 }
 
-Vec3 SAI::getBotCurrentPos(int) const
+// 0x33e240 (Ghidra). No bound check on the id.
+int SAI::getBotCurrentPos(int botId) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getBotCurrentPos");
+    const BotInfo* const info = m_botInfo[botId];
+    return info ? info->m_occupiedObject : -22;
 }
 
-Vec3 SAI::getBotOrderedPos(int) const
+// 0x33e270 (Ghidra).
+int SAI::getBotOrderedPos(int botId) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getBotOrderedPos");
+    const BotInfo* const info = m_botInfo[botId];
+    return info ? info->m_assignedObject : -44;
 }
 
-Vec3 SAI::getBotLastOrderedPos(int) const
+// 0x33e2a0 (Ghidra).
+int SAI::getBotLastOrderedPos(int botId) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getBotLastOrderedPos");
+    const BotInfo* const info = m_botInfo[botId];
+    return info ? info->m_lastOrderedSquare : -1;
 }
 
 // Accumulate into the previous totals, then decay; no initial clear.

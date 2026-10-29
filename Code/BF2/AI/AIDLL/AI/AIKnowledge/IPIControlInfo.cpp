@@ -75,6 +75,16 @@ bool IPIControlInfo::validateCameraDirection(const Vec3& direction) const
     return m_information->getAIObject()->getControlInfo()->validateCameraDirection(direction);
 }
 
+void IPIControlInfo::getCameraBasePos(Vec3& out) const
+{
+    m_information->getAIObject()->getControlInfo()->getCameraBasePos(out);
+}
+
+bool IPIControlInfo::validateCameraDirectionByPos(const Vec3& position) const
+{
+    return m_information->getAIObject()->getControlInfo()->validateCameraDirectionByPos(position);
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

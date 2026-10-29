@@ -1,5 +1,5 @@
 // Behaviour built by BBCreateFunctionFireInfantery. sizeof == 0x44.
-// [FRONTIER] Generator set-up and destruction remain named stops.
+// [FRONTIER] Destruction remains a named stop.
 
 #ifndef AI_AIDLL_AI_AIBOTBEHAVIOUR_BBFIREINFANTERY_H
 #define AI_AIDLL_AI_AIBOTBEHAVIOUR_BBFIREINFANTERY_H
@@ -19,7 +19,7 @@ public:
                     UrgeCurve* urgeCurve, float* weights);
     virtual ~BBFireInfantery();
 
-    virtual void initializeGenerator(BotMain* bot, int a, bool b, bool c);   // +0x34
+    virtual void initializeGenerator(BotMain* bot, int weapon, bool b, bool c);   // +0x34
     using BBFire::initializeGenerator;
 
 protected:

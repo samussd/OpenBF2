@@ -140,9 +140,11 @@ public:
     virtual int  getActiveStrategy() = 0;                                     // +42
     virtual void addSpawnToPoint(int point) = 0;                              // +43
     virtual int  getSpawnsToPoint(int point) const = 0;                       // +44
-    virtual Vec3 getBotCurrentPos(int botId) const = 0;                       // +45
-    virtual Vec3 getBotOrderedPos(int botId) const = 0;                       // +46
-    virtual Vec3 getBotLastOrderedPos(int botId) const = 0;                   // +47
+    // The bot's occupied object (-22 without a record), assigned object (-44) and last ordered
+    // square (-1): ids, not positions, whatever the names say.
+    virtual int  getBotCurrentPos(int botId) const = 0;                       // +45
+    virtual int  getBotOrderedPos(int botId) const = 0;                       // +46
+    virtual int  getBotLastOrderedPos(int botId) const = 0;                   // +47
     virtual CommanderInterface* getCommanderInterface() const = 0;            // +48
 
     // the factory is static and it is the only way in. : `operator new(0x1FC)` then the
@@ -257,9 +259,9 @@ public:
     virtual int  getActiveStrategy();
     virtual void addSpawnToPoint(int point);
     virtual int  getSpawnsToPoint(int point) const;
-    virtual Vec3 getBotCurrentPos(int botId) const;
-    virtual Vec3 getBotOrderedPos(int botId) const;
-    virtual Vec3 getBotLastOrderedPos(int botId) const;
+    virtual int  getBotCurrentPos(int botId) const;
+    virtual int  getBotOrderedPos(int botId) const;
+    virtual int  getBotLastOrderedPos(int botId) const;
     virtual CommanderInterface* getCommanderInterface() const;
 
     // non-virtual. The vtable does not carry these.

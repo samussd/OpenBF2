@@ -83,7 +83,7 @@ BotMain::BotMain(IAIPlayer* player,
     m_basicWeights = weights;
     m_float32      = f;
     m_obedience      = 1.0f;
-    m_int40        = i;
+    m_harmlessThreshold = i;
     m_ptr52        = 0;
     m_spawnToStrategicAreaId        = -1;
     m_side        = n;
@@ -128,7 +128,7 @@ BotMain::BotMain(IAIPlayer* player,
     m_ptr252 = 0;
 
     // Use -DBL_MAX for uninitialized timestamps; magnitude sentinels use separate values.
-    m_time276 = -DBL_MAX;
+    m_hadPrecisionTime = -DBL_MAX;
     m_poseChangeTime = -DBL_MAX;
     m_botStuck = false;
     m_poseChanging = false;
@@ -1235,10 +1235,18 @@ bool BotMain::isOrderedObject(unsigned int handle, BotBehaviour* b)
     BF2_AI_FRONTIER("dice::hfe::ai::BotMain::isOrderedObject");
 }
 
-// +0x07C
+// +0x07C. 0x19c5e0 (Ghidra). A new target restarts the aim correction on it and drops the
+// record of the bot's last projectile.
 void BotMain::setFiringTarget(unsigned int handle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setFiringTarget");
+    if (m_firingTarget == handle)
+        return;
+    m_firingTarget = handle;
+    m_firingTargetTime = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_fireCorrection->newTarget(handle);
+    m_fireCorrection->setProjectilePassed(false);
+    checkPointer(static_cast<IBFCollisionHandler*>(CommonSingletonServer::m_iBFCollisionHandler))
+        ->removeBotProjectile(m_botId);
 }
 
 // +0x080
@@ -1545,10 +1553,10 @@ int BotMain::getSpawnPoint() const
     return m_player->getSpawnGroup();
 }
 
-// +0x104
+// +0x104. 0x19b9e0 (Ghidra).
 int BotMain::getSpawnKit() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getSpawnKit");
+    return m_player->getSpawnKit();
 }
 
 // +0x108
@@ -2257,10 +2265,22 @@ void BotMain::setQuadSeen()
     BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setQuadSeen");
 }
 
-// +0x2A0
+// +0x2A0. 0x19b140 (Ghidra): whether the object has shot at the bot, and when.
 bool BotMain::isAttacking(unsigned int handle, double& out) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::isAttacking");
+    return m_sensingAgent->getBotSenses()->isAttacking(handle, out);
+}
+
+// 0x19aba0 (Ghidra).
+int BotMain::getHarmlessThrsh()
+{
+    return m_harmlessThreshold;
+}
+
+// 0x19c7d0 (Ghidra).
+void BotMain::setHadPrecisionTimeStamp(double t)
+{
+    m_hadPrecisionTime = t;
 }
 
 // +0x2A4

@@ -478,6 +478,28 @@ float CustomCurve::modifiedSoftStepFunc(float x)
     return static_cast<float>(static_cast<double>(raised) * 1.012f + 1.0f);
 }
 
+// 0x37d800 (Ghidra).
+float CustomCurve::calculate(float x, bool interpolate) const
+{
+    if (m_min > x || x > m_max)
+    {
+        Debug(DebugTypeError, "AI/AIDLL/AI/AIUtils/CustomCurve.cpp", 0x73, "") << "assert(0)";
+        return 0.0f;
+    }
+    const float step = (m_max - m_min) / static_cast<float>(m_count);
+    const float offset = x - m_min;
+    const int index = static_cast<int>(offset / step);
+    if (!interpolate)
+        return m_values[index];
+    if (index >= m_count)
+    {
+        Debug(DebugTypeError, "AI/AIDLL/AI/AIUtils/CustomCurve.cpp", 0x69, "") << "assert(0)";
+        return 0.0f;
+    }
+    const float t = (offset - static_cast<float>(index) * step) / step;
+    return m_values[index] + (m_values[index + 1] - m_values[index]) * t;
+}
+
 // Every sample is taken, then the two ends are taken again from min and max exactly.
 void CustomCurve::init()
 {

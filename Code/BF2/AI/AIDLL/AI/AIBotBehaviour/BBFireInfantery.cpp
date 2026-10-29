@@ -19,9 +19,10 @@ BBFireInfantery::~BBFireInfantery()
     BF2_AI_FRONTIER("dice::hfe::ai::BBFireInfantery::~BBFireInfantery");
 }
 
-void BBFireInfantery::initializeGenerator(BotMain*, int, bool, bool)
+// 0x21f2c0 (Ghidra).
+void BBFireInfantery::initializeGenerator(BotMain* bot, int weapon, bool b, bool c)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBFireInfantery::initializeGenerator");
+    BBFire::initializeGenerator(bot, weapon, b, c);
 }
 
 } // namespace ai

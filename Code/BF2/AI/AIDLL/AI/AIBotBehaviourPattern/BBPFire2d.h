@@ -17,8 +17,8 @@ public:
     virtual ~BBPFire2d();
 
     virtual BotScript* createPlan(Bot* bot);                         // +0x08
-    virtual void init(Bot* bot, unsigned int target, int a, bool b, bool c);                 // +0x18
-    virtual void init(Bot* bot, unsigned int target, const Vec3& position, int a);       // +0x1C
+    virtual void init(Bot* bot, unsigned int target, int weapon, bool b, bool c);                 // +0x18
+    virtual void init(Bot* bot, unsigned int target, const Vec3& position, int weapon);       // +0x1C
     virtual int getImplementationType();                            // +0x20
 
 protected:

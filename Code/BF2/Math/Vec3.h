@@ -79,6 +79,8 @@ float distXZSqr(const Vec3& a, const Vec3& b);
 // Computes (centre - minimum) + centre, storing x before reading y.
 // Output may alias either input. [INFERRED] Reference return.
 Vec2& getBoxMaxCorner(const Vec2& minimum, const Vec2& centre, Vec2& output);
+// Whether the point lies in the box with the given minimum corner and centre, edges included.
+bool insideCentreBox(const Vec2& point, const Vec2& minimum, const Vec2& centre);
 
 } // namespace hfe
 } // namespace dice
