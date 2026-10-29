@@ -16,10 +16,11 @@ public:
     explicit BAPAMergeSoldierInputs(int planId);
     virtual ~BAPAMergeSoldierInputs();
 
-    virtual bool execute(Bot* bot, bool& ok, bool& done);    // [FRONTIER]
+    virtual bool execute(Bot* bot, bool& ok, bool& done);
     virtual BAPStatementType getId() const;
     virtual bool hasDefault();
 
+    // the mouse controller's yaw and pitch errors from the last tick (radians)
     /* +0x14 */ float m_float20;          // ctor: 0
     /* +0x18 */ float m_float24;          // ctor: 0
 };

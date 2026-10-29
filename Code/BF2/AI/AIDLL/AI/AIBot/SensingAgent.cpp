@@ -141,10 +141,11 @@ SensingAgent::SensingAgent(BotMain* owner, unsigned char /*behaviourCount*/)
     m_planDirection.x = 0.0f;              // +64, +68, +72
     m_planDirection.y = 0.0f;
     m_planDirection.z = 0.0f;
-    m_lookDirection.x = 0.0f;              // +80, +84
-    m_lookDirection.y = 0.0f;
-    for (int i = 0; i < 3; ++i)
-        m_zero88[i] = 0;                   // +88..+96
+    m_moveDirection.x = 0.0f;              // +80, +84
+    m_moveDirection.y = 0.0f;
+    m_moveTargetPosition.x = 0.0f;         // +88..+96
+    m_moveTargetPosition.y = 0.0f;
+    m_moveTargetPosition.z = 0.0f;
 
     // the mechanism this agent steers. It takes the bot rather than the agent, so `BotSenses`
     // answers to the bot directly and this object is a policy layer over it.
@@ -214,8 +215,8 @@ void SensingAgent::reset()
     m_currentQuadWeight = 0.0f;
     m_currentQuadSeen = false;
     m_lookingIntoQuadrant = true;
-    m_lookDirection.x = 0.0f;              // +80
-    m_lookDirection.y = 0.0f;              // +84
+    m_moveDirection.x = 0.0f;              // +80
+    m_moveDirection.y = 0.0f;              // +84
 
     // through the buffer; the size is not touched.
     for (unsigned q = 0; q <= 7; ++q)
@@ -247,7 +248,7 @@ void SensingAgent::setOverride(bool value)
 // The tick. Without an override request: once the reaction time has run out (or a replan is
 // forced, or the plan is gone) the urgencies age, the focus objects are weighed, a quadrant is
 // chosen and the plan is rebuilt. A prone or swimming soldier, or one not allowed to fire,
-// just looks along m_lookDirection.
+// just looks along m_moveDirection.
 void SensingAgent::update()
 {
     Information* const soldier = informationManager->getInformation(m_bot->getCurrentEquipment());
@@ -283,7 +284,7 @@ void SensingAgent::update()
     Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
     bool behind = false;
     if ((equipment->getObjectTypeFlags() & 0x200000u) && m_lookingForward
-        && !isForward(m_currentQuad, m_lookDirection))
+        && !isForward(m_currentQuad, m_moveDirection))
     {
         behind = true;
     }
@@ -305,9 +306,9 @@ void SensingAgent::update()
     if (!m_bot->isFireAllowed() || proneOrSwimming)
     {
         Vec3 direction;
-        direction.x = m_lookDirection.x;
+        direction.x = m_moveDirection.x;
         direction.y = equipment->getTransformation().m[9];
-        direction.z = m_lookDirection.y;
+        direction.z = m_moveDirection.y;
         createDirPlan(direction, pattern);
         return;
     }
@@ -559,7 +560,7 @@ void SensingAgent::createNullPlan()
 // Every quadrant ages: by 0.0125 when it is not ahead of the direction, by 0.05 when it is
 // (0.25 while the bot has turned its back on its quadrant). In a vehicle with a mobile primary
 // object, the quadrants behind are cleared instead. The direction is minus the vehicle's
-// forward, or minus m_lookDirection on foot.
+// forward, or minus m_moveDirection on foot.
 void SensingAgent::updateQuadTimeUrgencies(Vec2& direction, bool behind)
 {
     Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
@@ -573,10 +574,10 @@ void SensingAgent::updateQuadTimeUrgencies(Vec2& direction, bool behind)
     }
     else
     {
-        if (m_lookDirection.x * m_lookDirection.x + m_lookDirection.y * m_lookDirection.y < 0.01f)
+        if (m_moveDirection.x * m_moveDirection.x + m_moveDirection.y * m_moveDirection.y < 0.01f)
             return;
-        direction.x = -m_lookDirection.x;
-        direction.y = -m_lookDirection.y;
+        direction.x = -m_moveDirection.x;
+        direction.y = -m_moveDirection.y;
     }
 
     bool clearBehind = false;
@@ -868,7 +869,7 @@ void SensingAgent::checkForPlanInvalidation(QuadrantInformation* quadrant, bool 
 }
 
 // Vehicles look along the vehicle camera (pitched down for 0x10 and 0x20 equipment); on foot the
-// plan looks into the chosen quadrant, or at the plan target/direction when m_lookDirection is
+// plan looks into the chosen quadrant, or at the plan target/direction when m_moveDirection is
 // empty and the plan direction outweighs the quadrant.
 void SensingAgent::createPlan(ISensingAgentPattern* pattern, QuadrantInformation* quadrant)
 {
@@ -894,7 +895,7 @@ void SensingAgent::createPlan(ISensingAgentPattern* pattern, QuadrantInformation
         return;
     }
 
-    if (m_lookDirection.x * m_lookDirection.x + m_lookDirection.y * m_lookDirection.y < 0.01f
+    if (m_moveDirection.x * m_moveDirection.x + m_moveDirection.y * m_moveDirection.y < 0.01f
         && m_planDirectionWeight > quadrant->weight)
     {
         if (m_planTarget != m_bot->getCurrentEquipment())
@@ -950,7 +951,7 @@ void SensingAgent::createPlan(ISensingAgentPattern* pattern, QuadrantInformation
         m_currentQuad = quadrant->quad;
         m_currentQuadWeight = quadrant->weight;
         m_currentQuadPosition = quadrant->position;
-        m_lookingForward = isForward(m_currentQuad, m_lookDirection);
+        m_lookingForward = isForward(m_currentQuad, m_moveDirection);
     }
 
     if (m_plan)

@@ -47,6 +47,10 @@ public:
     BAPStatement* getPlan() const { return m_plan; }
     void setPlan(BAPStatement* plan) { m_plan = plan; }
     BAPContext* getBAPContext() const { return m_bapContext; }
+    // [INFERRED] names; BAPAMergeSoldierInputs inlines the loads.
+    const Vec2& getMoveDirection() const { return m_moveDirection; }
+    const Vec3& getMoveTargetPosition() const { return m_moveTargetPosition; }
+    unsigned int getMoveTarget() const { return m_moveTarget; }
     // Recompute the sensing plan on the next update (a behaviour switched the bot's plan).
     void forceUpdate() { m_forceUpdate = true; }
     // The plan statements' override of where to look: a weight, a direction and whether to
@@ -117,11 +121,13 @@ private:
     /*  60 */ unsigned int m_planTarget;   // clearPlanTargetInformation: 0
     /*  64 */ Vec3  m_planDirection;       // insertPlanDirectionInformation
     /*  76 */ float m_planDirectionWeight; // clearPlanTargetInformation: 0
-    // [UNRESOLVED] writer: nothing in this class writes it, BAPAMergeSoldierInputs reads it. The
-    // update looks along it when it does not look around.
-    /*  80 */ Vec2  m_lookDirection;       // reset: 0
-    /*  88 */ int   m_zero88[3];           // +88..+96
-    /* 100 */ char  m_gap100[4];           // [UNRESOLVED] - never written
+    // Where the bot wants to go, for BAPAMergeSoldierInputs to turn into inputs: an XZ direction
+    // and a target (handle, -1 for none, else the position). [UNRESOLVED] writer: nothing in this
+    // class writes them - presumably the movement entries. The update looks along the direction
+    // when it does not look around.
+    /*  80 */ Vec2  m_moveDirection;       // reset: 0
+    /*  88 */ Vec3  m_moveTargetPosition;  // ctor: 0
+    /* 100 */ unsigned int m_moveTarget;   // not written by the constructor or reset
     /* 104 */ BotSenses* m_senses;         // new(0x94) - the mechanism this agent steers
     /* 108 */ BotMain*   m_bot;            // the ctor argument
     /* 112 */ double m_lastUpdateTime;     // reset: the game time; update: the last replan
