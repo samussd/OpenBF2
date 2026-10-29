@@ -12,6 +12,7 @@ namespace hfe {
 namespace ai {
 
 class BAPALook;
+class BAPStatement;
 class Bot;
 class BotScript;
 class IPIControlInfo;
@@ -25,8 +26,8 @@ public:
 
     // Preserve virtual order: reset precedes the other pattern operations.
     virtual void reset(int) = 0;                                        // +0x08
-    virtual void createPlan(SensingAgent *, Bot *, const Vec3&) = 0;    // +0x0C
-    virtual void createPlan(SensingAgent *, Bot *, unsigned int) = 0;   // +0x10
+    virtual BAPStatement* createPlan(SensingAgent *, Bot *, const Vec3&) = 0;    // +0x0C
+    virtual BAPStatement* createPlan(SensingAgent *, Bot *, unsigned int) = 0;   // +0x10
     virtual int getId() const = 0;                                      // +0x14
 
     // Uninitialised by construction - see the block above.
@@ -42,8 +43,8 @@ public:
 
     // Preserve virtual order: reset occupies the first slot.
     virtual void reset(int);
-    virtual void createPlan(SensingAgent *, Bot *, const Vec3&);
-    virtual void createPlan(SensingAgent *, Bot *, unsigned int);
+    virtual BAPStatement* createPlan(SensingAgent *, Bot *, const Vec3&);
+    virtual BAPStatement* createPlan(SensingAgent *, Bot *, unsigned int);
     virtual int getId() const;
 };
 
@@ -56,8 +57,8 @@ public:
 
     // Preserve virtual order: reset occupies the first slot.
     virtual void reset(int);
-    virtual void createPlan(SensingAgent *, Bot *, const Vec3&);
-    virtual void createPlan(SensingAgent *, Bot *, unsigned int);
+    virtual BAPStatement* createPlan(SensingAgent *, Bot *, const Vec3&);
+    virtual BAPStatement* createPlan(SensingAgent *, Bot *, unsigned int);
     virtual int getId() const;
 };
 
@@ -70,13 +71,15 @@ public:
 
     // Preserve virtual order: reset occupies the first slot.
     virtual void reset(int);
-    virtual void createPlan(SensingAgent *, Bot *, const Vec3&);
-    virtual void createPlan(SensingAgent *, Bot *, unsigned int);
+    virtual BAPStatement* createPlan(SensingAgent *, Bot *, const Vec3&);
+    virtual BAPStatement* createPlan(SensingAgent *, Bot *, unsigned int);
     virtual int getId() const;
 
-    // Non-virtual, and unique to this pattern: it brackets the plan it builds.
-    void initPlan(SensingAgent *, Bot *, IPIControlInfo *&, BotScript *&);
-    void endPlan(BAPALook *, Bot *);
+    // Two slots of its own (+0x18, +0x1C) that bracket the plan it builds: initPlan keeps a plan
+    // this pattern built (false) or deletes it, and fetches the equipment's control info (false
+    // without one); endPlan runs the look in parallel with BAPAMergeSoldierInputs.
+    virtual bool initPlan(SensingAgent *, Bot *, IPIControlInfo *&, BotScript *&);
+    virtual BAPStatement* endPlan(BAPALook *, Bot *);
 };
 
 // The null object. Both createPlan overloads are and do nothing useful.
@@ -88,8 +91,8 @@ public:
 
     // Preserve virtual order: reset occupies the first slot.
     virtual void reset(int);
-    virtual void createPlan(SensingAgent *, Bot *, const Vec3&);
-    virtual void createPlan(SensingAgent *, Bot *, unsigned int);
+    virtual BAPStatement* createPlan(SensingAgent *, Bot *, const Vec3&);
+    virtual BAPStatement* createPlan(SensingAgent *, Bot *, unsigned int);
     virtual int getId() const;
 };
 

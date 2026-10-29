@@ -10,6 +10,7 @@
 #include "../../AIDLL/AI/AIUtils/checkPointer.h"
 #include "../../../Core/Ids.h"                        // CID_LadderContainerTemplate, CID_Parachute*
 #include "../../../Game/GameLogic/Player.h"           // world::IPlayer - every forward's target
+#include "../../../Game/Objects/ICameraObject.h"      // getCameraTransformation
 #include "../../../Game/Objects/IObject.h"            // getTemplate
 #include "../../../Game/Objects/IObjectTemplate.h"    // getClassID
 #include "../../../Math/Mat4.h"                       // the lazily built identity matrix
@@ -312,10 +313,16 @@ bool AIPlayer::getIsAIPlayer()
     return m_player->getIsAIPlayer();
 }
 
+// The camera's world transform (ELF IObject slot 33), or the shared identity when the player has
+// no camera.
 const void* AIPlayer::getCameraTransformation() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::getCameraTransformation"
-                    " - read in outline; the camera object's transform slot is not confirmed");
+    world::ICameraObject* const camera = m_player->getCamera();
+    if (!camera)
+        return identityMatrix;
+    world::IObject* const object =
+        static_cast<world::IObject*>(camera->queryInterface(world::IID_IObject));
+    return &object->getAbsoluteTransformation();
 }
 
 } // namespace ai

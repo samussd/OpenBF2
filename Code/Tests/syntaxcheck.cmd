@@ -1169,6 +1169,19 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategicEntity\AIStrategicObject.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategicEntity\AIStrategicArea.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategicEntity\SAWayPoint.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategic\SAI.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBot\SensedObject.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\FireObject.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPALook.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPALookInDir.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPALookAtObject.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPAMergeSoldierInputs.cpp"
+if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPStatement.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPCondition.cpp"
@@ -1201,6 +1214,7 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPAResetControls.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIPlanInterpreter\InfanteryControl.cpp"
 if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\IPIControlInfo.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategic\SCArea.cpp"
 if errorlevel 1 set /a RC+=1

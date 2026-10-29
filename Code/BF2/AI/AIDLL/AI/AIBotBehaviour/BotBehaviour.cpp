@@ -116,7 +116,7 @@ BotScript* BotBehaviour::generatePlan(Bot* bot)
         if (bot->getPlan() && bot->getPlan() != plan)
         {
             bot->getPlan()->m_owner = this;
-            bot->getSensingAgent()->setPlanReplaced();
+            bot->getSensingAgent()->forceUpdate();
         }
     }
     return plan;

@@ -116,6 +116,8 @@ public:
     // [INFERRED] source-level inline accessor. Both retail images read the same +0x2C member in
     // InformationFactory::updateInformationPlugin before the virtual updateWeapons call.
     IPIArmament* getArmament() const { return m_armament; }
+    // [INFERRED] name; SensingAgent and the soldier sensing pattern inline the +0x30 load.
+    IPIControlInfo* getControlInfo() const { return m_controlInfo; }
 
 protected:
     /* +0x00 */ // vptr

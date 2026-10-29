@@ -2,6 +2,18 @@
 
 #include "SensingAgentPatterns.h"
 
+#include "BotMain.h"                       // Bot
+#include "SensingAgent.h"
+#include "../AIBotActionPlan/BAPALookAtObject.h"
+#include "../AIBotActionPlan/BAPALookInDir.h"
+#include "../AIBotActionPlan/BAPAMergeSoldierInputs.h"
+#include "../AIBotActionPlan/BAPCombinerParallel.h"
+#include "../AIBotActionPlan/BAPCondition.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIControlInfo.h"
+#include "../AIPlanInterpreter/BAPContext.h"
+#include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
 
 namespace dice {
@@ -88,53 +100,98 @@ void SensingAgentNullPattern::reset(int id)
 
 // [FRONTIER] Pattern plan creation and soldier helpers require the look/aim plan runtime.
 // [RETIRE-WHEN: aidll-02-skeleton] Replace each stop when its plan behavior is recovered.
-void SensingAgentTurretPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+BAPStatement* SensingAgentTurretPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentTurretPattern::createPlan");
 }
 
-void SensingAgentTurretPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+BAPStatement* SensingAgentTurretPattern::createPlan(SensingAgent *, Bot *, unsigned int)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentTurretPattern::createPlan");
 }
 
-void SensingAgentMouseFreeLookPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+BAPStatement* SensingAgentMouseFreeLookPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentMouseFreeLookPattern::createPlan");
 }
 
-void SensingAgentMouseFreeLookPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+BAPStatement* SensingAgentMouseFreeLookPattern::createPlan(SensingAgent *, Bot *, unsigned int)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentMouseFreeLookPattern::createPlan");
 }
 
-void SensingAgentSoldierPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+// Look along the direction until told otherwise (BAPConFalse never holds).
+BAPStatement* SensingAgentSoldierPattern::createPlan(SensingAgent* agent, Bot* bot,
+                                                     const Vec3& direction)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentSoldierPattern::createPlan");
+    IPIControlInfo* control = 0;
+    BotScript* plan = 0;
+    if (!initPlan(agent, bot, control, plan))
+        return static_cast<BAPStatement*>(plan);
+    BAPALookInDir* const look = checkPointer(new BAPALookInDir(
+        direction, 0.0f, checkPointer(new BAPConFalse()), control->getLookControls(), getId()));
+    return endPlan(look, bot);
 }
 
-void SensingAgentSoldierPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+BAPStatement* SensingAgentSoldierPattern::createPlan(SensingAgent* agent, Bot* bot,
+                                                     unsigned int target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentSoldierPattern::createPlan");
+    IPIControlInfo* control = 0;
+    BotScript* plan = 0;
+    if (!initPlan(agent, bot, control, plan))
+        return static_cast<BAPStatement*>(plan);
+    BAPALookAtObject* const look = checkPointer(new BAPALookAtObject(
+        bot, target, 0.0f, checkPointer(new BAPConFalse()), control->getLookControls(), getId(),
+        0, 0.0f));
+    return endPlan(look, bot);
 }
 
-void SensingAgentSoldierPattern::initPlan(SensingAgent *, Bot *, IPIControlInfo *&, BotScript *&)
+// Both createPlan overloads pass a null plan, so the reuse arm is not reached from them.
+bool SensingAgentSoldierPattern::initPlan(SensingAgent* agent, Bot* bot, IPIControlInfo*& control,
+                                          BotScript*& plan)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentSoldierPattern::initPlan");
+    if (plan)
+    {
+        if (agent->getPlan()->m_planId == getId())
+            return false;
+        if (plan)
+            delete plan;
+        agent->setPlan(0);
+    }
+    agent->getBAPContext()->clear();
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+    {
+        plan = 0;
+        return false;
+    }
+    control = equipment->getControlInfo();
+    if (!control)
+    {
+        plan = 0;
+        return false;
+    }
+    return true;
 }
 
-void SensingAgentSoldierPattern::endPlan(BAPALook *, Bot *)
+BAPStatement* SensingAgentSoldierPattern::endPlan(BAPALook* look, Bot*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentSoldierPattern::endPlan");
+    BAPCombinerParallel* const plan = checkPointer(new BAPCombinerParallel(getId(), -1, false));
+    BAPAMergeSoldierInputs* const merge = checkPointer(new BAPAMergeSoldierInputs(getId()));
+    plan->addStatement(look);
+    plan->addStatement(merge);
+    plan->m_owner = this;
+    return plan;
 }
 
 // Null-pattern planning still requires an implementation; these overloads stop visibly.
-void SensingAgentNullPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+BAPStatement* SensingAgentNullPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentNullPattern::createPlan");
 }
 
-void SensingAgentNullPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+BAPStatement* SensingAgentNullPattern::createPlan(SensingAgent *, Bot *, unsigned int)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentNullPattern::createPlan");
 }

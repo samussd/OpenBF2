@@ -16,9 +16,9 @@ namespace hfe {
 namespace ai {
 
 class BotMain;
-// The two things a bot's perception owns and deletes. Both are [FRONTIER] classes - `reset` and
-// the destructor delete them through an inlined, non-virtual destructor, so neither can be written
-// until the class itself is recovered. See the reset block in the .cpp.
+// The two things a bot's perception owns and deletes (SensedObject.h, FireObject.h). `reset`
+// still stops where it would delete them: the Information release around each delete is not
+// read yet. See the reset block in the .cpp.
 class FireObject;
 class SensedObject;
 
@@ -34,6 +34,9 @@ public:
 
     // attested: an 11-byte body that returns `this + 112`.
     const std::map<unsigned int, SensedObject*>& getSensedObjects() const { return m_sensedObjects; }
+    SensedObject* getSensedObjectFromHandle(unsigned int handle) const;
+    // [INFERRED] name; SensingAgent::evaluateFireObjects inlines the +84 load.
+    const std::list<std::pair<FireObject*, unsigned int> >& getFireObjects() const { return m_list84; }
 
 private:
     typedef std::pair<double, SensedObject*>      TimedObject;   // a time and a thing

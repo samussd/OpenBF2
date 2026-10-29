@@ -91,7 +91,7 @@ public:
     virtual SensingAgent* getSensingAgent() = 0;                                                  // +0x088
     virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c) = 0;         // +0x08C [FRONTIER]
     virtual const std::map<unsigned int, SensedObject*>& getSensedObjects() const = 0;            // +0x090
-    virtual void* getSensedObjectFromHandle(unsigned int handle) const = 0;                       // +0x094 [FRONTIER]
+    virtual SensedObject* getSensedObjectFromHandle(unsigned int handle) const = 0;               // +0x094
     virtual void setUnresolvedCollisionObject(unsigned int handle) = 0;                           // +0x098
     virtual unsigned int getUnresolvedCollisionHandle() = 0;                                      // +0x09C
     virtual void* getIncommingFire() = 0;                                                         // +0x0A0 [FRONTIER]
@@ -247,7 +247,7 @@ public:
     virtual SensingAgent* getSensingAgent();                                                      // +0x088
     virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c);             // +0x08C [FRONTIER]
     virtual const std::map<unsigned int, SensedObject*>& getSensedObjects() const;                // +0x090
-    virtual void* getSensedObjectFromHandle(unsigned int handle) const;                           // +0x094 [FRONTIER]
+    virtual SensedObject* getSensedObjectFromHandle(unsigned int handle) const;                   // +0x094
     virtual void setUnresolvedCollisionObject(unsigned int handle);                               // +0x098
     virtual unsigned int getUnresolvedCollisionHandle();                                          // +0x09C
     virtual void* getIncommingFire();                                                             // +0x0A0 [FRONTIER]

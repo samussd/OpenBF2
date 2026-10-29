@@ -242,6 +242,13 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\AIStrategicArea.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\SAWayPoint.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategic\SAI.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBot\SensedObject.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIKnowledge\FireObject.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPALook.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPALookInDir.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPALookAtObject.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPAMergeSoldierInputs.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIControlInfo.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPStatement.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPCondition.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPBoleanOp.cpp" ^

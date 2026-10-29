@@ -75,6 +75,14 @@ BotSenses::~BotSenses()
     delete m_frustum;
 }
 
+SensedObject* BotSenses::getSensedObjectFromHandle(unsigned int handle) const
+{
+    SensedObjectMap::const_iterator it = m_sensedObjects.find(handle);
+    if (it == m_sensedObjects.end())
+        return 0;
+    return it->second;
+}
+
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
 void BotSenses::see(const double&)
 {
