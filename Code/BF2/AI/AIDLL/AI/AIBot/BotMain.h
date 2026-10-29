@@ -59,14 +59,14 @@ public:
     virtual void setLodLevel(BotLodLevel level) = 0;                                              // +0x008
     virtual BotLodLevel getLodLevel() const = 0;                                                  // +0x00C
     virtual bool planExecution(const double& slice) = 0;                                          // +0x010
-    virtual int decisionMaking(const double& slice) = 0;                                          // +0x014 [FRONTIER]
+    virtual int decisionMaking(const double& slice) = 0;                                          // +0x014
     virtual void cheatExecution() = 0;                                                            // +0x018
     virtual void see(const double& dt) = 0;                                                       // +0x01C [FRONTIER]
     virtual void updateSensing(const double& dt) = 0;                                             // +0x020 [FRONTIER]
     virtual bool updatePathfinding(bool& a, bool* b) = 0;                                         // +0x024
     virtual void reset() = 0;                                                                     // +0x028
-    virtual void updateBotVehicle(bool* out) = 0;                                                 // +0x02C [FRONTIER]
-    virtual void updateBot() = 0;                                                                 // +0x030 [FRONTIER]
+    virtual bool updateBotVehicle(bool* out) = 0;                                                 // +0x02C
+    virtual void updateBot() = 0;                                                                 // +0x030
     virtual BotSquad* getBotSquad() const = 0;                                                    // +0x034
     virtual float getObedience() = 0;                                                             // +0x038
     virtual float* getCurrentOrders() = 0;                                                       // +0x03C order weights
@@ -221,7 +221,7 @@ public:
     virtual void updateSensing(const double& dt);                                                 // +0x020 [FRONTIER]
     virtual bool updatePathfinding(bool& a, bool* b);                                             // +0x024
     virtual void reset();                                                                         // +0x028
-    virtual void updateBotVehicle(bool* out);                                                     // +0x02C
+    virtual bool updateBotVehicle(bool* out);                                                     // +0x02C
     virtual void updateBot();                                                                     // +0x030
     virtual BotSquad* getBotSquad() const;                                                        // +0x034
     virtual float getObedience();                                                                 // +0x038
@@ -408,7 +408,8 @@ public:
     PlanInterpreter* getPlanInterpreter();
     void  setPlanInterpreter(PlanInterpreter* p);
     double getTimeOfLastFire() const;
-    void   stepFireInclination();                           // thunk
+    void   stepMoveInclination();
+    void   stepFireInclination();
     void*  getAttackers() const;
     // ELF +316: the soldier's position when the bot last came alive.
     const Vec3& getSpawnCoord() const;
@@ -453,7 +454,12 @@ private:
     /*  80 */ bool         m_takingOrders;          // isTakingOrders
     /*  81 */ char         m_pad81[3];
     /*  84 */ void*        m_ptr84;                 // = 0
-    /*  88 */ char         m_gap88[3];              // +89, +90 zeroed [UNRESOLVED]
+    // [INFERRED] names. decisionMaking re-reads the vehicle while m_checkVehicle holds; a vehicle
+    // it could not set the bot up for leaves m_inBadVehicle set; updateBotVehicle raises
+    // m_vehicleChanged and decisionMaking turns it into a fresh plan.
+    /*  88 */ bool         m_checkVehicle;          // not written by the constructor, as shipped
+    /*  89 */ bool         m_inBadVehicle;          // = false
+    /*  90 */ bool         m_vehicleChanged;        // = false
     /*  91 */ bool         m_inTransitionPhase;     // isInTransitionPhase
     /*  92 */ char         m_pad92;
     /*  93 */ bool         m_deactivated;           // isDeactivated

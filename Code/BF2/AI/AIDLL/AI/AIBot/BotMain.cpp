@@ -38,6 +38,7 @@
 #include "../AIKnowledge/WeaponInfoManager.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../../IO/Input/PlayerInput.h"
+#include "../../../../Core/Debug.h"
 #include <cfloat>       // DBL_MAX - the two 'never happened' timestamps
 
 namespace dice {
@@ -88,9 +89,9 @@ BotMain::BotMain(IAIPlayer* player,
     m_side        = n;
     m_vehicleMods  = 0;
     m_float48      = 0.01f;
-    m_gap88[1]     = 0;                 // +89
+    m_inBadVehicle = false;             // +89
     m_memory       = memory;
-    m_gap88[2]     = 0;                 // +90
+    m_vehicleChanged = false;           // +90
     m_inTransitionPhase = false;        // +91
     m_pad92        = 0;                 // +92
     m_deactivated  = false;             // +93
@@ -202,8 +203,8 @@ BotMain::BotMain(IAIPlayer* player,
         m_behaviours[k] = 0;
 
     // finishing someone else'S object - see the block above.
-    *reinterpret_cast<int*>(m_memory) = -1;
-    *reinterpret_cast<double*>(reinterpret_cast<char*>(m_memory) + 16) = 0.0;
+    m_memory->m_currentBehaviour = -1;
+    m_memory->m_behaviourTime = 0.0;
 
     if (order)
         recieveOrder(order);            // dice's spelling
@@ -789,10 +790,211 @@ bool BotMain::planExecution(const double&)
     return !m_planInvalid;
 }
 
-// +0x014. Returns the count BotManager::actionDecisionMaking banks in BotInfo +32 (see BotMain.h).
+// +0x014. The bot chooses what to do. A deactivated bot only drops its plan. The inclinations
+// step first. A change of vehicle sets the bot up for its new equipment and tells the side's SAI;
+// a vehicle the bot knows nothing about is an error ("Bot in bad vehicle!") and ends the call.
+// Then the behaviours refresh their urgencies, the front of the highest priority list first, each
+// moving out of its list as it is evaluated, until the slice of update time is spent. When the
+// time runs out, the behaviours left in the lower lists (from list 1 down) refresh without the
+// full evaluation and move up one list, so a behaviour that waits climbs. The urgency merger
+// picks the behaviour, which writes the bot's plan; a new plan releases every control. The
+// evaluated behaviours go back to the end of their own list. Returns the count of full
+// evaluations, which BotManager::actionDecisionMaking banks in BotInfo +32 (see BotMain.h).
 int BotMain::decisionMaking(const double& slice)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::decisionMaking");
+    std::list<int> evaluated;
+    int count = 0;
+    if (m_deactivated)
+    {
+        if (m_activePlan)
+        {
+            delete m_activePlan;
+            m_activePlan = 0;
+            m_planInvalid = true;
+            m_sensingAgent->setOverride(false);
+        }
+        return 0;
+    }
+
+    const int previousBehaviour = m_memory->m_currentBehaviour;
+    stepMoveInclination();
+    stepFireInclination();
+    if (!m_checkVehicle)
+    {
+        IAIObject* const vehicle = m_player->getCurrentVehicle();
+        if (!vehicle)
+        {
+            m_currentEquipment = static_cast<unsigned int>(-1);
+            m_checkVehicle = true;
+        }
+        else
+        {
+            m_checkVehicle = vehicle->getInformation(m_side) != m_currentEquipment;
+        }
+    }
+    if (m_checkVehicle)
+    {
+        bool inVehicle;
+        if (updateBotVehicle(&inVehicle))
+        {
+            if (m_activePlan)
+            {
+                delete m_activePlan;
+                m_activePlan = 0;
+                m_planInvalid = true;
+                m_sensingAgent->setOverride(false);
+            }
+            if (!inVehicle || !informationManager->getInformation(m_currentEquipment))
+            {
+                Debug(DebugTypeError, "AI/AIDLL/AI/AIBot/BotMain.cpp", 749, "")
+                    << "Bot in bad vehicle!";
+                m_inBadVehicle = true;
+                m_currentEquipment = static_cast<unsigned int>(-1);
+                return 0;
+            }
+            updateBot();
+            IAIMain::m_instance->getSAI(m_side)->setBotHasChangedEquipment(m_botId);
+        }
+        else if (m_inBadVehicle)
+        {
+            updateBot();
+            m_navigation->reset();
+            m_inBadVehicle = false;
+            IAIMain::m_instance->getSAI(m_side)->setBotHasChangedEquipment(m_botId);
+        }
+        m_checkVehicle = false;
+    }
+
+    const IBFTimer* const timer = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+    const double start = timer->getUpdateTime();
+    if (m_vehicleChanged)
+    {
+        m_planInvalid = true;
+        m_vehicleChanged = false;
+    }
+    if (m_planInvalid)
+    {
+        m_memory->m_currentBehaviour = -1;
+        m_memory->m_behaviourTime = timer->getGameTime();
+    }
+
+    // The full pass: a behaviour's urgency, scaled while a plan runs by how long the current
+    // behaviour has been chosen and by the current behaviour's weight for it.
+    unsigned int mode = 0;
+    bool timeOut = false;
+    while (!timeOut && mode < m_behaviourIdsByMode.size())
+    {
+        std::list<unsigned short>& ids = m_behaviourIdsByMode[mode];
+        if (ids.empty())
+        {
+            ++mode;
+            continue;
+        }
+        const unsigned short id = ids.front();
+        if (!m_behaviours[id])
+        {
+            ids.erase(ids.begin());     // a behaviour the equipment does not have
+        }
+        else
+        {
+            float urgency = m_behaviourUrgencies[id];
+            if (!m_planInvalid && previousBehaviour != -1)
+                urgency = urgency * (m_memory->modifyBehaviourUrgency(m_behaviours[id], timer->getGameTime())
+                                     * m_behaviours[previousBehaviour]->getWeights()[id]);
+            if (urgency > 0.0f)
+            {
+                ++count;
+                m_behaviours[id]->calculateUrgency(this, true, urgency);
+            }
+            ids.erase(ids.begin());
+            evaluated.push_back(id);
+        }
+        if (timer->getUpdateTime() >= start + slice)
+            timeOut = true;
+    }
+
+    // Out of time: the lists below move up one, the highest list stays where it is.
+    if (timeOut)
+    {
+        if (mode == 0)
+            mode = 1;
+        for (; mode < m_behaviourIdsByMode.size(); ++mode)
+        {
+            std::list<unsigned short>& ids = m_behaviourIdsByMode[mode];
+            for (std::list<unsigned short>::iterator it = ids.begin(); it != ids.end();)
+            {
+                const unsigned short id = *it;
+                if (!m_behaviours[id])
+                {
+                    it = ids.erase(it);
+                    continue;
+                }
+                float urgency;
+                if (!m_planInvalid && previousBehaviour != -1)
+                    urgency = m_memory->modifyBehaviourUrgency(m_behaviours[id], timer->getGameTime())
+                              * m_behaviourUrgencies[id]
+                              * m_behaviours[previousBehaviour]->getWeights()[id];
+                else
+                    urgency = m_behaviourUrgencies[id];
+                if (urgency > 0.0f)
+                    m_behaviours[id]->calculateUrgency(this, false, urgency);
+                ++it;
+            }
+            std::list<unsigned short>& higher = m_behaviourIdsByMode[mode - 1];
+            higher.insert(higher.end(), ids.begin(), ids.end());
+            ids.erase(ids.begin(), ids.end());
+        }
+    }
+
+    if (m_planInvalid || m_urgencyMerger->hasChanged(this, 0.87f, 1.15f))
+        m_urgencyMerger->updateActiveUrgency(this);
+    // no null guard, as shipped
+    BotBehaviour* const chosen = static_cast<BotBehaviour*>(m_urgencyMerger->getChosenGenerator());
+    m_memory->m_currentBehaviour = chosen->getBehaviourId();
+    m_memory->m_behaviourTime = timer->getGameTime();
+    if (m_activePlan)
+    {
+        if (!m_planInvalid)
+        {
+            m_activePlan->m_owner = chosen;
+        }
+        else
+        {
+            delete m_activePlan;
+            m_activePlan = 0;
+            m_sensingAgent->setOverride(false);
+        }
+    }
+    if (previousBehaviour != chosen->getBehaviourId())
+        m_sensingAgent->clearPlanTargetInformation();
+
+    BotScript* const plan = chosen->generatePlan(this);
+    if (m_activePlan != plan)
+    {
+        if (m_activePlan)
+        {
+            m_activePlan->m_owner = this;
+            delete m_activePlan;
+            m_activePlan = 0;
+            m_sensingAgent->setOverride(false);
+        }
+        resetAllControls(true, true, true);
+    }
+    m_activePlan = plan;
+    if (!plan)
+    {
+        m_planInvalid = true;
+    }
+    else
+    {
+        m_planInvalid = false;
+        m_hasDefaultPlan = false;
+        plan->m_owner = this;
+    }
+
+    for (std::list<int>::iterator it = evaluated.begin(); it != evaluated.end(); ++it)
+        m_behaviourIdsByMode[m_behaviours[*it]->getMode()].push_back(static_cast<unsigned short>(*it));
+    return count;
 }
 
 // +0x018
@@ -823,12 +1025,12 @@ bool BotMain::updatePathfinding(bool& a, bool* b)
 // Re-reads the vehicle the player is in. A new one becomes the current equipment: the old
 // equipment's strength drops by a quarter, the new one's grows by a third, and the bot's plan,
 // navigation and controls start over. Staying in the same vehicle changes nothing.
-// *out says whether the player is in anything at all.
-void BotMain::updateBotVehicle(bool* out)
+// *out says whether the player is in anything at all. Returns false only when nothing changed.
+bool BotMain::updateBotVehicle(bool* out)
 {
     IAIObject* const vehicle = m_player->getCurrentVehicle();
     getPlan();                          // the result is discarded
-    m_gap88[2] = true;                 // [UNRESOLVED] byte 90
+    m_vehicleChanged = true;
     m_planInvalid = true;
     m_hasDefaultPlan = false;
     if (!vehicle)
@@ -837,14 +1039,14 @@ void BotMain::updateBotVehicle(bool* out)
         setCurrentEquipment(static_cast<unsigned int>(-1));
         if (out)
             *out = false;
-        return;
+        return true;
     }
 
     if (out)
         *out = true;
     const unsigned int sameHandle = vehicle->getInformation(m_side);
     if (sameHandle != static_cast<unsigned int>(-1) && getCurrentEquipment() == sameHandle && !m_manDown)
-        return;
+        return false;
 
     IBotManager::instance->updateBotVehicle(this, vehicle);
     m_airBorn = false;
@@ -857,7 +1059,7 @@ void BotMain::updateBotVehicle(bool* out)
     if (!current)
     {
         setCurrentEquipment(static_cast<unsigned int>(-1));
-        return;
+        return true;
     }
 
     m_sensingAgent->deletePlan();
@@ -869,6 +1071,7 @@ void BotMain::updateBotVehicle(bool* out)
     m_takeOffPosition[1] = 0.0f;
     m_takeOffPosition[2] = 0.0f;
     resetAllControls(true, true, true);
+    return true;
 }
 
 // +0x030
@@ -1564,6 +1767,29 @@ void BotMain::addToMoveInclination(float f)
 void BotMain::addToFireInclination(float f)
 {
     m_fireInclinationDelta += f;
+}
+
+// Once per decision: the inclination fades by a fifth, to zero once at or below 0.01, and takes a
+// fifth of what was added since.
+void BotMain::stepMoveInclination()
+{
+    if (m_moveInclination > 0.01f)
+        m_moveInclination *= 0.8f;
+    else
+        m_moveInclination = 0.0f;
+    m_moveInclination = 0.2f * m_moveInclinationDelta + m_moveInclination;
+    m_moveInclinationDelta = 0.0f;
+}
+
+// The same for the fire inclination.
+void BotMain::stepFireInclination()
+{
+    if (m_fireInclination > 0.01f)
+        m_fireInclination *= 0.8f;
+    else
+        m_fireInclination = 0.0f;
+    m_fireInclination = 0.2f * m_fireInclinationDelta + m_fireInclination;
+    m_fireInclinationDelta = 0.0f;
 }
 
 // +0x18C

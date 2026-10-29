@@ -39,6 +39,10 @@ public:
     PlanGenerator* getGenerator() const { return m_generator; }
     unsigned char getBehaviourId() const { return m_behaviourId; }
     unsigned char getMode() const { return m_mode; }
+    // [INFERRED] accessors; BotMain::decisionMaking and BotMemory::modifyBehaviourUrgency inline
+    // the loads.
+    const float* getWeights() const { return m_weights; }
+    UrgeCurve* getUrgeCurve() const { return m_urgeCurve; }
 
 protected:
     // [CHOSEN] helper: every behaviour constructor asks the AI settings for the bot count.
