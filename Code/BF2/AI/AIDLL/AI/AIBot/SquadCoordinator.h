@@ -80,6 +80,11 @@ public:
     SquadMember* getSquadMember(int index);
     SquadMember* getSquadMember(int playerId, int& index);
     bool hasMemberWithKit(KitType type);
+    bool isRepairRequested();                    // returns m_b172
+    const Vec3& getRepairRequestPos();           // returns m_v176
+    // Whether the member's vehicle (else its soldier, on the quadtree it last stood on) can
+    // stand at the position on the navigation map.
+    bool isValidPosition(SquadMember* member, const Vec3& position);
     // Whether a member of this squad already answers the request.
     bool isAnySquadMemberRespondingToRequest(unsigned int handle, int action);
     // The factor on a member's urgency to answer a request (action) about a handle. The

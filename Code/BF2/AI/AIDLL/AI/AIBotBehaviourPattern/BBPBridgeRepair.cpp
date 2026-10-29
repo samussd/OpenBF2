@@ -1,5 +1,6 @@
 #include "BBPBridgeRepair.h"
 
+#include "../AIBot/BotMain.h"
 #include "../Main/AIDllFrontier.h"
 
 namespace dice {
@@ -46,6 +47,19 @@ BBPBridgeRepair::BBPBridgeRepair(int behaviourId)
 BBPBridgeRepair::~BBPBridgeRepair()
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BBPBridgeRepair::~BBPBridgeRepair");
+}
+
+// 0x23f5e0 (Ghidra).
+void BBPBridgeRepair::init(unsigned int target, int toolIndex, Vec3 direction, Bot* bot,
+                           bool nearRequest, Vec3 stand, Vec3 look)
+{
+    m_initiated[bot->getBotId()] = true;
+    m_int0C[bot->getBotId()] = static_cast<int>(target);
+    m_int10[bot->getBotId()] = toolIndex;
+    m_vec14[bot->getBotId()] = direction;
+    m_bool18[bot->getBotId()] = nearRequest;
+    m_vec1C[bot->getBotId()] = stand;
+    m_vec20[bot->getBotId()] = look;
 }
 
 BotScript* BBPBridgeRepair::createPlan(Bot*)

@@ -16,6 +16,10 @@
 #include "../Main/AIDllFrontier.h"
 #include "../Main/AISettingsInterfaces.h"                  // getClosestObject's vehicle group
 #include "../Main/CommonSingletonServer.h"
+#include "../AIBot/SquadManager.h"                        // getClosestDestroyedBridgeSegment
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
+#include <cfloat>
 #include "../../../../Core/ConsoleObjectMacro.h"      // the aiStrategicArea.* binding at the foot
 
 namespace dice {
@@ -253,6 +257,49 @@ void AIStrategicObjectManager::removeBridgeSegment(IAIObject* object)
     }
 }
 
+// 0x359ed0 (Ghidra). No null guard on a segment's information, as shipped.
+IAIObject* AIStrategicObjectManager::getClosestDestroyedBridgeSegment(Vec3 position, bool includeOwn,
+                                                                      int side, Vec3& direction,
+                                                                      float& distanceSquared)
+{
+    IAIObject* closest = 0;
+    float best = FLT_MAX;
+    IAIPlayerFactory* const players =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory);
+    for (std::list<BridgeSegment*>::iterator i = m_bridgeSegments.begin();
+         i != m_bridgeSegments.end(); ++i)
+    {
+        BridgeSegment* const segment = *i;
+        const Vec3 at = informationManager->getInformation(segment->m_object->getInformation(1))->getPosition();
+        if (!segment->m_destroyed)
+            continue;
+        IAIPlayer* const destroyer = players->getPlayerFromId(segment->m_destroyerId);
+        bool byOwnHuman = false;
+        if (!destroyer)
+        {
+            if (SquadManager::m_instance->haveHumanPlayerOnOwnSide(side))
+                byOwnHuman = true;
+        }
+        else if (destroyer->getSide() == side)
+        {
+            byOwnHuman = !destroyer->getIsAIPlayer();
+        }
+        if (!includeOwn && byOwnHuman)
+            continue;
+        const float d = (at.x - position.x) * (at.x - position.x)
+                      + (at.y - position.y) * (at.y - position.y)
+                      + (at.z - position.z) * (at.z - position.z);
+        if (d < best)
+        {
+            closest = segment->m_object;
+            distanceSquared = d;
+            direction = segment->m_direction;
+            best = d;
+        }
+    }
+    return closest;
+}
+
 void AIStrategicObjectManager::bridgeSegmentDestroyed(IAIObject* object, int value)
 {
     for (std::list<BridgeSegment*>::iterator i = m_bridgeSegments.begin();
@@ -261,7 +308,7 @@ void AIStrategicObjectManager::bridgeSegmentDestroyed(IAIObject* object, int val
         if ((*i)->m_object == object)
         {
             (*i)->m_destroyed = true;
-            (*i)->m_i4 = value;
+            (*i)->m_destroyerId = value;
             return;
         }
     }

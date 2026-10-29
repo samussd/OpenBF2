@@ -50,7 +50,8 @@ public:
         }
 
         /*  +0 */ bool m_destroyed;       // 0 at creation; `bridgeSegmentDestroyed` sets it to 1
-        /*  +4 */ int m_i4;              // [UNRESOLVED] - written only by `bridgeSegmentDestroyed`
+        // [INFERRED] name: getClosestDestroyedBridgeSegment looks the player up by it.
+        /*  +4 */ int m_destroyerId;     // written only by `bridgeSegmentDestroyed`
         /*  +8 */ IAIObject* m_object;   // the search key for all three of the methods above
         /* +12 */ Vec3 m_direction;      // [INFERRED] name - resetBridges points it along the bridge
     };
@@ -143,7 +144,11 @@ public:
     void resetBridges();
     void bridgeSegmentDestroyed(IAIObject*, int);
     void bridgeSegmentRepaired(IAIObject*);
-    bool getClosestDestroyedBridgeSegment(Vec3, bool, int, Vec3&, float&);
+    // The closest destroyed bridge segment to the position: its object, the squared distance
+    // and the segment's direction. A segment a human of the side destroyed (with no known
+    // destroyer, any while the side has a human) counts only with includeOwn.
+    IAIObject* getClosestDestroyedBridgeSegment(Vec3 position, bool includeOwn, int side,
+                                                Vec3& direction, float& distanceSquared);
 
     static AIStrategicObjectManager* m_instance;
 

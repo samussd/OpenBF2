@@ -17,15 +17,20 @@ public:
     virtual ~BBPBridgeRepair();
 
     virtual BotScript* createPlan(Bot* bot);                         // +0x08
+    // Marks the bot initiated on the segment: the tool's weapon index, the bridge direction,
+    // whether a squad request is near it, where to stand and where to look.
+    void init(unsigned int target, int toolIndex, Vec3 direction, Bot* bot, bool nearRequest,
+              Vec3 stand, Vec3 look);
 
 protected:
     /* +0x08 */ int m_behaviourId;
-    /* +0x0C */ int* m_int0C;                                // [UNRESOLVED] per bot, -1
-    /* +0x10 */ int* m_int10;                                // [UNRESOLVED] per bot, -1
-    /* +0x14 */ Vec3* m_vec14;                               // [UNRESOLVED] per bot, zero
-    /* +0x18 */ bool* m_bool18;                              // [UNRESOLVED] per bot, false
-    /* +0x1C */ Vec3* m_vec1C;                               // [UNRESOLVED] per bot, zero
-    /* +0x20 */ Vec3* m_vec20;                               // [UNRESOLVED] per bot, zero
+    // per bot, as init stores them
+    /* +0x0C */ int* m_int0C;                                // -1; the segment's handle
+    /* +0x10 */ int* m_int10;                                // -1; the tool's weapon index
+    /* +0x14 */ Vec3* m_vec14;                               // zero; the bridge direction
+    /* +0x18 */ bool* m_bool18;                              // false; a squad request near it
+    /* +0x1C */ Vec3* m_vec1C;                               // zero; where to stand
+    /* +0x20 */ Vec3* m_vec20;                               // zero; where to look
 };
 
 } // namespace ai

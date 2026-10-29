@@ -9,7 +9,10 @@
 #include "CommunicationAgent.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIMobile.h"
 #include "../AIKnowledge/IPIPhysical.h"
+#include "../Main/IAIPathfinding.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../AIKnowledge/IPIUnit.h"
 #include "../Main/IBotManager.h"
 #include "SquadManager.h"
@@ -873,6 +876,52 @@ bool SquadCoordinator::hasMemberWithKit(KitType type)
             return true;
     }
     return false;
+}
+
+// 0x1b49f0 (Ghidra).
+bool SquadCoordinator::isRepairRequested()
+{
+    return m_b172;
+}
+
+// 0x1b4a00 (Ghidra).
+const Vec3& SquadCoordinator::getRepairRequestPos()
+{
+    return m_v176;
+}
+
+// 0x1b6b60 (Ghidra). No null guards on the vehicle, the soldier or their information, as shipped.
+bool SquadCoordinator::isValidPosition(SquadMember* member, const Vec3& position)
+{
+    IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+    Information* information = informationManager->getInformation(
+        member->getPlayer()->getCurrentVehicle()->getInformation(m_side + 1));
+    IPIMobile* mobile = information->getMobile();
+    unsigned int polygon;
+    unsigned int quadTree;
+    if (!mobile)
+    {
+        information = informationManager->getInformation(
+            member->getPlayer()->getSoldier()->getInformation(m_side + 1));
+        mobile = information->getMobile();
+        const IPIMobile::ValidPos last = mobile->getLastValidPosition();
+        if (!pathfinding->getPolygon(position, mobile->getVehicleNumber(), polygon, quadTree,
+                                     information->getUnit()->getEquipmentType()))
+            return false;
+        if (last.quadTree == static_cast<unsigned int>(-1) || quadTree != last.quadTree)
+            return false;
+        quadTree = last.quadTree;
+    }
+    else
+    {
+        mobile->getLastValidPosition();         // copied and not read
+        if (!pathfinding->getPolygon(position, mobile->getVehicleNumber(), polygon, quadTree,
+                                     information->getUnit()->getEquipmentType()))
+            return false;
+    }
+    return pathfinding->isValidPosition(mobile->getVehicleNumber(),
+                                        information->getUnit()->getEquipmentType(), position,
+                                        quadTree, true);
 }
 
 // 0x1b86d0 (Ghidra).

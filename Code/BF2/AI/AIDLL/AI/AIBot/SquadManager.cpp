@@ -443,6 +443,19 @@ SquadCoordinator* SquadManager::getSquadFromPlayer(unsigned int handle, int side
     return getSquadFromPlayer(playerId, side);
 }
 
+// 0x1be5b0 (Ghidra). The player list is copied first.
+bool SquadManager::haveHumanPlayerOnOwnSide(int side)
+{
+    const std::vector<IAIPlayer*> players =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getAllPlayers();
+    for (std::vector<IAIPlayer*>::const_iterator it = players.begin(); it != players.end(); ++it)
+    {
+        if (*it && !(*it)->getIsAIPlayer() && (*it)->getSide() == side)
+            return true;
+    }
+    return false;
+}
+
 // 0x1c0440 (Ghidra).
 bool SquadManager::isAnySquadMemberRespondingToRequest(unsigned int handle, int action, int side)
 {

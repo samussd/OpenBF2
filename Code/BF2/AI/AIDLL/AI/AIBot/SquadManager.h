@@ -66,6 +66,8 @@ public:
     // Artillery. Sides are one-based and unchecked.
     float getArtillerySafeDistance();
     bool friendliesCloseTo(Vec3 position, float distance, int side);
+    // Whether a human player is on the side.
+    bool haveHumanPlayerOnOwnSide(int side);
     bool haveCampingHumans(int side, Vec2& position);
     void incomingArtillery(Vec3 position, int side);
     // Whether the position is within the artillery safe distance of a strike: the side's own
