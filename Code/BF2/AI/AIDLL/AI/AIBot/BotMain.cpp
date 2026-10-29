@@ -1765,7 +1765,7 @@ void BotMain::event_shotMissed(int i, const Vec3& v)
 // +0x178
 void BotMain::event_heardObject(unsigned int h)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::event_heardObject");
+    m_sensingAgent->getBotSenses()->event_heardObject(h);
 }
 
 // +0x17C

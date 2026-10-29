@@ -20,6 +20,7 @@ class BotMain;
 // still stops where it would delete them: the Information release around each delete is not
 // read yet. See the reset block in the .cpp.
 class FireObject;
+class Information;
 class SensedObject;
 
 class BotSenses
@@ -31,6 +32,8 @@ public:
     void reset();                            // - (two arms frontier)
     void see(const double& dt);              // [FRONTIER]
     void updateSensing(const double& dt);    // [FRONTIER]
+    // A sound from the object reached the bot (BotManager::actionHearing, through BotMain).
+    void event_heardObject(unsigned int handle);
 
     // attested: an 11-byte body that returns `this + 112`.
     const std::map<unsigned int, SensedObject*>& getSensedObjects() const { return m_sensedObjects; }
@@ -41,6 +44,11 @@ public:
     const std::list<std::pair<FireObject*, unsigned int> >& getFireObjects() const { return m_list84; }
 
 private:
+    // How loud the object is to the bot, 0 when it is not heard.
+    float hear(unsigned int handle, Information* information);
+    // Goes over the heard objects, oldest first, for as long as the budget allows.
+    void updateHearing(const double& budget);
+
     typedef std::pair<double, SensedObject*>      TimedObject;   // a time and a thing
     typedef std::list<TimedObject>                TimedList;
     typedef std::pair<FireObject*, unsigned int>  FireEntry;
@@ -61,8 +69,9 @@ private:
     /*  56 */ TimedList m_list56;
     // A cursor into the list above, seeded to end by the constructor's last statement.
     /*  60 */ TimedList::iterator m_cursor60;
-    /*  64 */ std::set<unsigned int> m_set64;
-    /*  76 */ TimedList m_list76;
+    // The objects the bot hears, and the same in the order updateHearing goes over them.
+    /*  64 */ std::set<unsigned int> m_heardHandles;
+    /*  76 */ TimedList m_heard;
     // A cursor into the list above - and unlike +60 the constructor leaves it default-constructed.
     // Only `reset` makes it valid. See the header block.
     /*  80 */ TimedList::iterator m_cursor80;
