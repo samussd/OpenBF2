@@ -21,7 +21,7 @@ public:
                      float f2);
     virtual ~BAPALookAtObject();
 
-    virtual Vec3 getLookDirection(bool& valid);           // [FRONTIER]
+    virtual Vec3 getLookDirection(bool& valid);
 
     /* +0x30 */ Bot*             m_bot;
     /* +0x34 */ unsigned int     m_target;

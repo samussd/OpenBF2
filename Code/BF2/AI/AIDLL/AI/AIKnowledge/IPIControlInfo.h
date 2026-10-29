@@ -8,6 +8,7 @@
 #include "InformationPlugIn.h"
 
 #include "../../../../Math/Vec3.h"
+#include "../../../../IO/Input/Input.h"            // io::PlayerInputMap
 
 namespace dice { namespace hfe {
 
@@ -30,6 +31,12 @@ public:
     virtual void setTime(double /*time*/) {}
 
     unsigned long long getLookControls() const;
+    io::PlayerInputMap getLookVerticalControl() const;
+    io::PlayerInputMap getLookHorizontalControl() const;
+    // the mouse-look controller's gains (mouseControlLookAtDirection).
+    float getProportionalConstant() const;
+    float getDerivativeConstant() const;
+    float getAngleSpeedConstant() const;
     // the camera block (IAIObjectControlInfo +0x94..+0xBC), one forward each.
     float getCameraRelativeDofRotationOffset() const;
     const Vec3& getCameraRelativeMinRotation() const;

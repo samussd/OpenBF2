@@ -15,6 +15,31 @@ unsigned long long IPIControlInfo::getLookControls() const
     return m_information->getAIObject()->getControlInfo()->getLookControls();
 }
 
+io::PlayerInputMap IPIControlInfo::getLookVerticalControl() const
+{
+    return m_information->getAIObject()->getControlInfo()->getLookVerticalControl();
+}
+
+io::PlayerInputMap IPIControlInfo::getLookHorizontalControl() const
+{
+    return m_information->getAIObject()->getControlInfo()->getLookHorizontalControl();
+}
+
+float IPIControlInfo::getProportionalConstant() const
+{
+    return m_information->getAIObject()->getControlInfo()->getProportionalConstant();
+}
+
+float IPIControlInfo::getDerivativeConstant() const
+{
+    return m_information->getAIObject()->getControlInfo()->getDerivativeConstant();
+}
+
+float IPIControlInfo::getAngleSpeedConstant() const
+{
+    return m_information->getAIObject()->getControlInfo()->getAngleSpeedConstant();
+}
+
 float IPIControlInfo::getCameraRelativeDofRotationOffset() const
 {
     return m_information->getAIObject()->getControlInfo()->getCameraRelativeDofRotationOffset();

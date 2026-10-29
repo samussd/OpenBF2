@@ -259,6 +259,7 @@ set(bf2_aidll_only_sources
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategicEntity/AIStrategicArea.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategicEntity/SAWayPoint.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/SAI.cpp"   # libaidll only - chunk 02
+    "${BF2_ROOT}/AI/AIDLL/AI/AIPlanInterpreter/MouseControl.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/SensedObject.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIKnowledge/FireObject.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotActionPlan/BAPALook.cpp"
@@ -1310,6 +1311,7 @@ add_library(bf2_aidll SHARED EXCLUDE_FROM_ALL
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategicEntity/AIStrategicArea.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategicEntity/SAWayPoint.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategic/SAI.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIPlanInterpreter/MouseControl.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/SensedObject.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIKnowledge/FireObject.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotActionPlan/BAPALook.cpp"

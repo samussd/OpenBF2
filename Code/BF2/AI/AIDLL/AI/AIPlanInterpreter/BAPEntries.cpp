@@ -3,13 +3,22 @@
 #include "BAPEntries.h"
 
 #include "InfanteryControl.h"
+#include "MouseControl.h"
 #include "PlanInterpreter.h"
 #include "../AIBot/BotMain.h"
+#include "../AIBot/SensingAgent.h"
+#include "../AIBotActionPlan/BAPALook.h"
 #include "../AIBotActionPlan/BAPAResetControls.h"
 #include "../AIBotActionPlan/BAPASoldierPose.h"
 #include "../AIBotActionPlan/BAPInfoWrapper.h"
+#include "../AIBotActionPlan/BAPCondition.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIControlInfo.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../../Math/Mat4.h"
+#include <cfloat>
+#include <cmath>
 #include "../Main/AIDllFrontier.h"
 #include "../../../../IO/Input/PlayerInput.h"
 
@@ -553,9 +562,79 @@ int EntryMouseTurretLookAt::getTargetId()
     return 23;
 }
 
-bool EntryMouseTurretLookAt::execute(BotScript *, Bot *, bool&, bool&)
+// Holds the sensing override while it looks. The look's yaw error is reset to pi whenever it ends
+// or cannot run; otherwise the mouse controller turns the view and the look keeps the errors and
+// the camera's forward for the next tick. Never done by itself: the condition ends it.
+bool EntryMouseTurretLookAt::execute(BotScript* script, Bot* bot, bool& ok, bool& done)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryMouseTurretLookAt::execute");
+    BAPALook* const look = static_cast<BAPALook*>(script);
+    BotMain* const botMain = static_cast<BotMain*>(bot);
+    botMain->getSensingAgent()->setOverride(true);
+
+    if (look->m_until->evaluate(bot))
+    {
+        done = true;
+        ok = true;
+        look->m_float28 = 3.1415927f;
+        return true;
+    }
+    done = false;
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+    {
+        done = true;
+        ok = false;
+        look->m_float28 = 3.1415927f;
+        return true;
+    }
+
+    Vec3 direction = look->getLookDirection(ok);
+    const float lengthSquared =
+        direction.x * direction.x + direction.y * direction.y + direction.z * direction.z;
+    if (!(std::fabs(lengthSquared - 1.0f) < FLT_EPSILON))
+    {
+        if (std::fabs(lengthSquared) < FLT_EPSILON)
+        {
+            direction.x = 0.0f;
+            direction.y = 0.0f;
+            direction.z = 0.0f;
+        }
+        else
+        {
+            const float scale = 1.0f / std::sqrt(lengthSquared);
+            direction.x *= scale;
+            direction.y *= scale;
+            direction.z *= scale;
+        }
+    }
+    if (!ok)
+    {
+        done = false;
+        look->m_float28 = 3.1415927f;
+        return true;
+    }
+
+    IPIControlInfo* const control = equipment->getControlInfo();
+    ok = true;
+    io::PlayerInput* const input = botMain->getPlayerInput();
+    const float allowedDeviation = look->m_float24;
+    const float previousYawError = look->m_float28;
+    const float previousPitchError = look->m_float32;
+    float pitchError;
+    float yawError;
+    mouseControlLookAtDirection(bot, direction,
+        *static_cast<const Mat4*>(bot->getPlayer()->getCameraTransformation()),
+        pitchError, previousPitchError, yawError, previousYawError, allowedDeviation, control,
+        input, 0.0f, 0.0f, 0.0f);
+    look->m_float28 = yawError;
+    look->m_float32 = pitchError;
+
+    const Mat4& camera = *static_cast<const Mat4*>(bot->getPlayer()->getCameraTransformation());
+    look->m_vec36.x = camera.m[8];
+    look->m_vec36.y = camera.m[9];
+    look->m_vec36.z = camera.m[10];
+    return true;
 }
 
 

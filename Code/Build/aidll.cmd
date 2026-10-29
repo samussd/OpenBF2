@@ -242,6 +242,7 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\AIStrategicArea.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\SAWayPoint.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategic\SAI.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIPlanInterpreter\MouseControl.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBot\SensedObject.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\FireObject.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPALook.cpp" ^
