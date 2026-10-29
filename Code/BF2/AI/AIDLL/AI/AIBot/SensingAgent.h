@@ -34,6 +34,14 @@ public:
     void setOverride(bool);
     void deletePlan();                          // - (one arm frontier)
     void clearPlanTargetInformation();
+    void update();                              // [FRONTIER]
+    // Runs the agent's own plan once; a failed or finished plan clears the plan target.
+    void executePlan();
+    void disallowOverride(bool disallow);
+    // [INFERRED] accessor; BotMain::planExecution inlines the load.
+    bool hasPlan() const { return m_plan != 0; }
+    // BotBehaviour::generatePlan marks a plan the bot's behaviour replaced.
+    void setPlanReplaced() { m_planReplaced = true; }
     // [INFERRED] name; BotMain::getSensedObjects inlines the load.
     BotSenses* getBotSenses() const { return m_senses; }
     // attested as a nested type by `std::vector<SensingAgent::FocusInformation>`; its members are
@@ -62,12 +70,12 @@ private:
     /* 108 */ BotMain*   m_bot;            // the ctor argument
     // the whole tail is `reset`'s, not the constructor's - see the note at +24.
     /* 112 */ double m_double112;          // reset: the game time at reset
-    /* 120 */ bool m_flag120;              // reset: false
+    /* 120 */ bool m_planReplaced;         // reset: false; set by setPlanReplaced
     /* 121 */ bool m_flag121;              // reset: false
     /* 122 */ bool m_flag122;              // reset: false
     /* 123 */ char m_pad123;
     /* 124 */ double m_double124;          // reset: 0.0
-    /* 132 */ bool m_flag132;              // reset: false
+    /* 132 */ bool m_overrideDisallowed;   // reset: false; disallowOverride's argument
     /* 133 */ bool m_flag133;              // reset: false
     /* 134 */ bool m_flag134;              // ctor: false
     /* 135 */ char m_pad135;
@@ -75,7 +83,7 @@ private:
     /* 136 */ BAPStatement* m_plan;        // ctor: 0
     // Set true by `reset` and again by `deletePlan`, and nothing recovered so far reads it.
     // Meaning [UNRESOLVED]; the name stays neutral rather than guess at `m_planInvalid`.
-    /* 140 */ bool m_flag140;              // reset: true, deletePlan: true
+    /* 140 */ bool m_planInvalid;          // reset: true, deletePlan: true, executePlan
     /* 141 */ char m_pad141[3];
     /* 144 */ BAPContext* m_bapContext;    // new(4) - shared vocabulary with BotMain's own
     /* 148 */ bool m_flag148;              // reset: true

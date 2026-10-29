@@ -130,7 +130,7 @@ SquadMember::SquadMember(SquadCoordinator* squad, IAIPlayer* player,
     m_int38 = 0;
     m_position = {0.0f, 0.0f, 0.0f};
     m_positionValid = false;
-    m_flag49 = false;
+    m_isIdle = false;
     m_flag4A = false;
     m_flag4B = false;
     m_formationDistanceSq = 900.0f;
@@ -188,13 +188,29 @@ bool SquadMember::isCloseToNonOwnedTarget() const
 void SquadMember::reset()
 {
     m_positionValid = false;
-    m_flag49 = true;
+    m_isIdle = true;
     m_flag4A = true;
     m_flag4B = false;
     m_time24 = 0.0;
     const Vec3 zero = { 0.0f, 0.0f, 0.0f };
     m_vector54 = zero;
     m_vector60 = zero;
+}
+
+void SquadMember::setIsIdle(bool idle)
+{
+    m_isIdle = idle;
+}
+
+bool SquadMember::getIsIdle()
+{
+    return m_isIdle;
+}
+
+void SquadMember::clearRequestAction()
+{
+    m_request->m_action = 0;
+    m_request->m_handle = 0xFFFFFFFFu;
 }
 
 // Frees the member's formation slot.

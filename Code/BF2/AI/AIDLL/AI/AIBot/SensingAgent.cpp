@@ -3,6 +3,10 @@
 
 #include "SensingAgent.h"
 
+#include "../AIPlanInterpreter/PlanInterpreter.h"
+#include "../AIBotActionPlan/BAPStatement.h"
+
+#include "BotMain.h"                       // executePlan: the plan interpreter
 #include "BotSenses.h"
 #include "../AIPlanInterpreter/BAPContext.h"
 #include "SensingAgentPatterns.h"           // ISensingAgentPattern::reset - the shared patterns
@@ -68,7 +72,7 @@ void SensingAgent::deletePlan()
         BF2_AI_FRONTIER("dice::hfe::ai::SensingAgent::deletePlan (non-null plan)");
         m_plan = 0;
     }
-    m_flag140 = true;
+    m_planInvalid = true;
 }
 
 // Clears the current plan's target information.
@@ -81,12 +85,12 @@ void SensingAgent::clearPlanTargetInformation()
 // Resets sensing state and draws a new reaction delay in [0.5, 1.0).
 void SensingAgent::reset()
 {
-    m_flag120 = false;
+    m_planReplaced = false;
     m_flag121 = false;
     m_double112 = 0.0;
     m_flag122 = false;
-    m_flag132 = false;
-    m_flag140 = true;
+    m_overrideDisallowed = false;
+    m_planInvalid = true;
     m_flag133 = false;
 
     // the shared patterns, RE-indexed. See the block above.
@@ -127,17 +131,40 @@ void SensingAgent::reset()
     m_senses->reset();
 }
 
-// Ignores the override while m_flag132 is set. Otherwise stores the requested value
+// Ignores the override while m_overrideDisallowed is set. Otherwise stores the requested value
 // and the current game time. reset clears the refusal flag.
 void SensingAgent::setOverride(bool value)
 {
     // The refusal. See the block above.
-    if (!m_flag132)
+    if (!m_overrideDisallowed)
     {
         m_flag122 = value;
         m_double124 =
             static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
     }
+}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+void SensingAgent::update()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgent::update");
+}
+
+void SensingAgent::executePlan()
+{
+    bool ok = false;
+    bool done = false;
+    m_bot->getPlanInterpreter()->execute(m_plan, m_bot, ok, done);
+    m_planInvalid = done || !ok;
+    if (m_planInvalid)
+        clearPlanTargetInformation();
+}
+
+// Also drops a pending override request (+122).
+void SensingAgent::disallowOverride(bool disallow)
+{
+    m_flag122 = false;
+    m_overrideDisallowed = disallow;
 }
 
 } // namespace ai

@@ -18,6 +18,9 @@
 #include "BotSubObjects.h"
 #include "../AIBotBehaviour/UrgencyMerger.h"
 #include "../AIBotBehaviour/BotBehaviour.h"          // updateBot / addBehaviour
+#include "../AIBotActionPlan/BotScript.h"             // planExecution: the plan's owner
+#include "../AIPlanInterpreter/PlanInterpreter.h"
+#include "../../../AIInterface/BFKnowledge/BFCollisionHandler.h"
 #include "../AIBotBehaviourPattern/PlanGenerator.h"
 #include "../AIKnowledge/IPIUnit.h"                  // updateBot: the equipment type
 #include "../Main/AISettingsInterfaces.h"
@@ -156,7 +159,7 @@ BotMain::BotMain(IAIPlayer* player,
     m_avoidSide = 0;
     for (int k = 0; k < 3; ++k)
         (&m_wantsToSimulateArtillery)[k] = false;   // +500..+502
-    m_gap512[0] = 0;                    // +512
+    m_avoidSideSwitched = false;        // +512
     m_collidedObject = -1;
     m_double516 = 0.0;
     for (int k = 0; k < 3; ++k)
@@ -303,7 +306,7 @@ void BotMain::reset()
     m_wantsToSimulateArtillery = false;
     m_isSimulatingArtillery = false;
     m_flag502 = false;
-    m_gap512[0] = 0;
+    m_avoidSideSwitched = false;
     m_collidedObjectPosition[0] = 0;
     m_collidedObjectPosition[1] = 0;
     m_collidedObjectPosition[2] = 0;
@@ -473,15 +476,56 @@ void BotMain::setSpawnCoord(const Vec3& coord)
 
 // The two plan-execution brackets. not vtable slots - `planExecution` at +0x010 is, but these
 // two are ordinary members, so whatever calls them does so on a `BotMain*` and not through `Bot`.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// Before a step only the movement is released; the plan presses what it needs again.
 void BotMain::prePlanExecution()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::prePlanExecution");
+    resetAllControls(true, false, false);
 }
 
+// For a soldier, during the second after a friend stood in its line of fire: turn towards the
+// side it is avoiding while that side has room, else switch to the other side when that one has
+// room. Afterwards it avoids nothing. Retail does not guard the equipment.
 void BotMain::postPlanExecution()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::postPlanExecution");
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(getCurrentEquipment());
+    if (!(equipment->getObjectTypeFlags() & 0x200000u))
+        return;
+    const double sinceFriends =
+        static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime()
+        - getFriendsInLineOfFireTime();
+    if (!(1.0 > sinceFriends))
+    {
+        setAvoidSide(0);
+        return;
+    }
+    if (m_avoidSide == 1)
+    {
+        if (getBotNavigation()->getSideSpace(0) > 0.5f)
+            m_playerInput->setInput(io::PIYaw, -1.0f);
+        else if (getBotNavigation()->getSideSpace(1) > 0.5f)
+            setAvoidSide(2);
+    }
+    else
+    {
+        if (getBotNavigation()->getSideSpace(1) > 0.5f)
+            m_playerInput->setInput(io::PIYaw, 1.0f);
+        else if (getBotNavigation()->getSideSpace(0) > 0.5f)
+            setAvoidSide(1);
+    }
+}
+
+// The change target is chosen anew on every plan step.
+void BotMain::resetChangeTarget()
+{
+    m_changeTarget = 0xFFFFFFFFu;
+}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+void BotMain::pollRequestedSoldierPose()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::pollRequestedSoldierPose");
 }
 
 // Bot interface implementations, in virtual declaration order.
@@ -499,10 +543,95 @@ BotLodLevel BotMain::getLodLevel() const
     return m_lodLevel;
 }
 
-// +0x010
-void BotMain::planExecution(const double& slice)
+// +0x010. One plan step. A projectile the bot fired that passed its point feeds the fire
+// correction. Without a valid plan the bot asks its equipment's default behaviour (the man-down
+// equipment's while down) for one. The plan and then the sensing agent's plan run. An invalid
+// plan releases every control. Last come the weapon-select hold of a falling soldier and the
+// pose input. Returns whether the plan is still valid.
+bool BotMain::planExecution(const double&)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::planExecution");
+    bool ok = true;
+    bool done = false;
+    resetChangeTarget();
+    IBFCollisionHandler* const handler = checkPointer(
+        static_cast<IBFCollisionHandler*>(CommonSingletonServer::m_iBFCollisionHandler));
+    if (handler->botProjectilePassedPoint(m_botId))
+    {
+        m_fireCorrection->setProjectile(handler->botProjectilePrePoint(m_botId),
+                                        handler->botProjectilePostPoint(m_botId),
+                                        handler->botProjectileTargetPoint(m_botId),
+                                        handler->botProjectileMaxHeight(m_botId));
+        handler->removeBotProjectile(m_botId);
+    }
+
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(getCurrentEquipment());
+    if (m_planInvalid && m_activePlan)
+    {
+        delete m_activePlan;
+        m_activePlan = 0;
+        m_sensingAgent->setOverride(false);
+    }
+    if ((m_planInvalid || !m_activePlan) && equipment && equipment->getUnit())
+    {
+        IPIUnit* const unit = equipment->getUnit();
+        const int type = unit->getEquipmentType();
+        if (!m_manDown)
+            unit->setTime();
+        IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+        BotBehaviour* const behaviour = settings->getDefaultBehaviour(
+            getManDown() ? settings->getManDownEquipmentType() : type);
+        if (behaviour)
+        {
+            behaviour->getGenerator()->forceInitiated(this);
+            m_activePlan = behaviour->generatePlan(this);
+            if (m_activePlan)
+            {
+                m_activePlan->m_owner = this;
+                m_hasDefaultPlan = true;
+                m_planInvalid = false;
+            }
+        }
+    }
+
+    if (!m_planInvalid)
+    {
+        prePlanExecution();
+        m_planInterpreter->execute(m_activePlan, this, ok, done);
+        postPlanExecution();
+        m_planInvalid = done || !ok;
+        if (m_planInvalid)
+        {
+            setPlanLock(false);
+            resetAllControls(true, true, true);
+            m_sensingAgent->clearPlanTargetInformation();
+        }
+        m_sensingAgent->update();
+        if (m_sensingAgent->hasPlan())
+        {
+            m_sensingAgent->disallowOverride(true);
+            m_sensingAgent->executePlan();
+            m_sensingAgent->disallowOverride(false);
+        }
+    }
+
+    // Retail reads the current equipment again here without a null guard, then the mobile of the
+    // equipment read above.
+    Information* const current = informationManager->getInformation(m_currentEquipment);
+    if (!(current->getObjectTypeFlags() & 0x200000u))
+    {
+        m_playerInput->setInput(io::PIWeaponSelect9, 0.0f);
+    }
+    else if (IPIMobile* const mobile = equipment->getMobile())
+    {
+        // A soldier falling at 1 m/s or more keeps a held weapon-select 9 down, past setInput.
+        if (mobile->getSpeed().y <= -1.0f
+            && ((m_playerInput->mappingFlags >> io::PIWeaponSelect9) & 1))
+            m_playerInput->inputs[io::PIWeaponSelect9] = 1.0f;
+    }
+    pollRequestedSoldierPose();
+    return !m_planInvalid;
 }
 
 // +0x014. Returns the count BotManager::actionDecisionMaking banks in BotInfo +32 (see BotMain.h).
@@ -1098,10 +1227,18 @@ int BotMain::getSpawnToStrategicAreaId()
     return m_spawnToStrategicAreaId;
 }
 
-// +0x118
+// +0x118. True while the player is dead and on the first call after it lives again.
 bool BotMain::isJustSpawned()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::isJustSpawned");
+    if (!m_player->getIsAlive())
+    {
+        m_wasDead = true;
+        return true;
+    }
+    if (!m_wasDead)
+        return false;
+    m_wasDead = false;
+    return true;
 }
 
 // +0x11C
@@ -1219,7 +1356,7 @@ void BotMain::enableBotScriptDebugger(bool /*enable*/)
 }
 
 // +0x164
-void* BotMain::getDebugger()
+BotScriptDebugger* BotMain::getDebugger()
 {
     return m_debugger;
 }
@@ -1287,10 +1424,15 @@ float BotMain::getFireInclination()
     return m_fireInclination;
 }
 
-// +0x194
-void BotMain::requestSoldierPose(int pose, bool b)
+// +0x194. A new pose is taken when forced, or when no change is under way (+285) and the last
+// one (+288) is over a second old. A forced request marks itself (+502).
+void BotMain::requestSoldierPose(int pose, bool force)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::requestSoldierPose");
+    const double time = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (pose != m_requestedSoldierPose && ((!m_flag285 && time > 1.0 + m_time288) || force))
+        m_requestedSoldierPose = pose;
+    if (force)
+        m_flag502 = true;
 }
 
 // +0x198
@@ -1555,10 +1697,17 @@ bool BotMain::getBotIsSimulatingArtillery() const
     return m_isSimulatingArtillery;
 }
 
-// +0x238
-void BotMain::setAvoidSide(int side)
+// +0x238. Side 0 avoids nothing. Moving from one side to the other marks the switch, and a
+// further switch to another side reports true. [UNRESOLVED] Retail takes an AvoidSide enum.
+bool BotMain::setAvoidSide(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setAvoidSide");
+    const bool switchedAgain = m_avoidSideSwitched && side != m_avoidSide && side != 0;
+    if (side == 0)
+        m_avoidSideSwitched = false;
+    else if (side != m_avoidSide && m_avoidSide != 0)
+        m_avoidSideSwitched = true;
+    m_avoidSide = side;
+    return switchedAgain;
 }
 
 // +0x23C

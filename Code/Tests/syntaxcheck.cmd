@@ -1169,6 +1169,38 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategicEntity\AIStrategicObject.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategicEntity\AIStrategicArea.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategicEntity\SAWayPoint.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategic\SAI.cpp"
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPStatement.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPCondition.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPBoleanOp.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPConWeaponIsZoomed.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPCombiner.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPCombinerParallel.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPFlowCWhile.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPFlowCIf.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPInfoWrapper.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPIWIdle.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPAction.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPATrigger.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPAComponentSoldierPose.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPASoldierPose.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPAResetControls.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIPlanInterpreter\InfanteryControl.cpp"
+if errorlevel 1 set /a RC+=1
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIStrategic\SCArea.cpp"
 if errorlevel 1 set /a RC+=1

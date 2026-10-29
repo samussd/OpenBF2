@@ -2,7 +2,16 @@
 
 #include "BAPEntries.h"
 
+#include "InfanteryControl.h"
+#include "PlanInterpreter.h"
+#include "../AIBot/BotMain.h"
+#include "../AIBotActionPlan/BAPAResetControls.h"
+#include "../AIBotActionPlan/BAPASoldierPose.h"
+#include "../AIBotActionPlan/BAPInfoWrapper.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
 #include "../Main/AIDllFrontier.h"
+#include "../../../../IO/Input/PlayerInput.h"
 
 namespace dice {
 namespace hfe {
@@ -435,9 +444,23 @@ int EntryInfanteryResetControls::getTargetId()
     return 14;
 }
 
-bool EntryInfanteryResetControls::execute(BotScript *, Bot *, bool&, bool&)
+// A statement with a single input releases that input; otherwise the soldier's control groups.
+bool EntryInfanteryResetControls::execute(BotScript* script, Bot* bot, bool& ok, bool& done)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryInfanteryResetControls::execute");
+    BAPAResetControls* const reset = static_cast<BAPAResetControls*>(script);
+    if (!reset->hasSingleInput())
+    {
+        infanteryResetControls(bot, static_cast<BotMain*>(bot)->getPlayerInput(), reset->m_movement,
+                               reset->m_look, reset->m_actions);
+        done = true;
+        ok = true;
+        return true;
+    }
+    static_cast<BotMain*>(bot)->getPlayerInput()->setInput(
+        static_cast<io::PlayerInputMap>(reset->getInput()), 0.0f);
+    ok = true;
+    done = true;
+    return true;
 }
 
 
@@ -568,9 +591,36 @@ int EntrySoldierPose::getTargetId()
     return 26;
 }
 
-bool EntrySoldierPose::execute(BotScript *, Bot *, bool&, bool&)
+// A soldier that is turning, moving or sprinting is asked to stand; otherwise the statement's
+// normal pose. The entry finishes once the soldier holds that pose. A swimming soldier is left
+// alone. Retail does not guard the equipment.
+bool EntrySoldierPose::execute(BotScript* script, Bot* bot, bool& ok, bool& done)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntrySoldierPose::execute");
+    BAPASoldierPose* const pose = static_cast<BAPASoldierPose*>(script);
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(bot->getCurrentEquipment());
+    SoldierPose wanted = pose->getNormalPose();
+    const io::PlayerInput* const input = static_cast<BotMain*>(bot)->getPlayerInput();
+    const unsigned long long mapped = input->mappingFlags;
+    const float throttle = (mapped >> io::PIThrottle) & 1 ? input->inputs[io::PIThrottle] : 0.0f;
+    const float yaw = (mapped >> io::PIYaw) & 1 ? input->inputs[io::PIYaw] : 0.0f;
+    const float sprint = (mapped >> io::PISprint) & 1 ? input->inputs[io::PISprint] : 0.0f;
+    if (throttle != 0.0f || yaw != 0.0f || sprint != 0.0f)
+        wanted = SPStanding;
+
+    if (equipment->getSoldierPose() == wanted)
+    {
+        ok = true;
+        done = true;
+        return true;
+    }
+    const SoldierPose current = equipment->getSoldierPose();
+    if (current != SPSwimming && current != wanted)
+        bot->requestSoldierPose(wanted, pose->m_bool48);
+    ok = true;
+    done = false;
+    return true;
 }
 
 
@@ -701,9 +751,10 @@ int EntryInfoWrapper::getTargetId()
     return 15;
 }
 
-bool EntryInfoWrapper::execute(BotScript *, Bot *, bool&, bool&)
+bool EntryInfoWrapper::execute(BotScript* script, Bot* bot, bool& ok, bool& done)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryInfoWrapper::execute");
+    BAPStatement* const statement = static_cast<BAPInfoWrapper*>(script)->m_statement;
+    return static_cast<BotMain*>(bot)->getPlanInterpreter()->execute(statement, bot, ok, done);
 }
 
 

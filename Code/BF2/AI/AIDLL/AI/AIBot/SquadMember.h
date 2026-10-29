@@ -31,6 +31,9 @@ public:
     void setMemberIndex(int index);          // the squad renumbers members after a removal
     void reset();                            // round restart: no position, no movement state
     void squadMemberKilled();
+    void setIsIdle(bool idle);               // an idle plan holds the member idle
+    bool getIsIdle();
+    void clearRequestAction();               // no action, no handle
     void setIsSquadLeader(bool leader);
     bool isSquadLeader();
     bool isMoving();                         // returns m_moved
@@ -74,7 +77,7 @@ public:
     /* +0x38 */ int m_int38;                 // [UNRESOLVED]
     /* +0x3C */ Vec3 m_position;
     /* +0x48 */ bool m_positionValid;
-    /* +0x49 */ bool m_flag49;               // [UNRESOLVED]
+    /* +0x49 */ bool m_isIdle;               // get/setIsIdle
     /* +0x4A */ bool m_flag4A;               // setHavePath writes the inverse of its argument
     /* +0x4B */ bool m_flag4B;               // [UNRESOLVED]
     /* +0x4C */ float m_formationDistanceSq; // [INFERRED] name, starts at 900.0

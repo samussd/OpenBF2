@@ -16,8 +16,21 @@ FireCorrectionData::FireCorrectionData()
     // +0..+3 and +68..+83 are deliberately untouched - see above.
     for (int i = 0; i < 15; ++i)
         m_zero8[i] = 0;
-    for (int i = 0; i < 9; ++i)
-        m_zero88[i] = 0;
+    m_projectilePre = Vec3::getZero();
+    m_projectilePost = Vec3::getZero();
+    m_projectileTarget = Vec3::getZero();
+}
+
+void FireCorrectionData::setProjectile(const Vec3& pre, const Vec3& post, const Vec3& target,
+                                       float maxHeight)
+{
+    m_projectilePre = pre;
+    m_projectilePost = post;
+    m_projectileTarget = target;
+    m_projectileMaxHeight = maxHeight;
+    m_flag5 = true;
+    m_flag84 = true;
+    m_flag85 = true;
 }
 
 

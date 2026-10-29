@@ -22,6 +22,7 @@ namespace ai {
 
 class AIStrategicObject;
 class BAPContext;
+class BotScriptDebugger;
 class BotBehaviour;
 class IAIObject;
 class BotMemory;
@@ -56,7 +57,7 @@ public:
 
     virtual void setLodLevel(BotLodLevel level) = 0;                                              // +0x008
     virtual BotLodLevel getLodLevel() const = 0;                                                  // +0x00C
-    virtual void planExecution(const double& slice) = 0;                                          // +0x010 [FRONTIER]
+    virtual bool planExecution(const double& slice) = 0;                                          // +0x010
     virtual int decisionMaking(const double& slice) = 0;                                          // +0x014 [FRONTIER]
     virtual void cheatExecution() = 0;                                                            // +0x018
     virtual void see(const double& dt) = 0;                                                       // +0x01C [FRONTIER]
@@ -122,7 +123,7 @@ public:
     virtual void setSpawnTarget(int spawnGroup, int kit) = 0;                                    // ELF +0x10C / PE +0x10C (overload order)
     virtual void setSpawnTarget(int strategicArea, int spawnGroup, int kit) = 0;                 // +0x110
     virtual int getSpawnToStrategicAreaId() = 0;                                                  // +0x114
-    virtual bool isJustSpawned() = 0;                                                             // +0x118 [FRONTIER]
+    virtual bool isJustSpawned() = 0;                                                             // +0x118
     virtual IBotDeathCallBack* getDeathCallBack() const = 0;                                      // +0x11C
     virtual void setDeathCallBack(IBotDeathCallBack* cb) = 0;                                     // +0x120
     virtual IBotSpawnCallBack* getSpawnCallBack() const = 0;                                      // +0x124
@@ -141,7 +142,7 @@ public:
     virtual void* getC4() = 0;                                                                    // +0x158 [FRONTIER]
     virtual void updateC4() = 0;                                                                  // +0x15C [FRONTIER]
     virtual void enableBotScriptDebugger(bool /*enable*/) = 0;                                    // +0x160
-    virtual void* getDebugger() = 0;                                                              // +0x164
+    virtual BotScriptDebugger* getDebugger() = 0;                                                              // +0x164
     virtual BAPContext* getScriptContext();                                                       // +0x168
     virtual void event_projectile(FireObject* f, unsigned int h) = 0;                             // +0x16C [FRONTIER]
     virtual void event_shotHit(int i, world::IObject* o, const Vec3& v) = 0;                      // +0x170 [FRONTIER]
@@ -153,7 +154,7 @@ public:
     virtual void addToFireInclination(float f) = 0;                                               // +0x188
     virtual float getMoveInclination() = 0;                                                       // +0x18C
     virtual float getFireInclination() = 0;                                                       // +0x190
-    virtual void requestSoldierPose(int pose, bool b) = 0;                                        // +0x194 [FRONTIER]
+    virtual void requestSoldierPose(int pose, bool b) = 0;                                        // +0x194
     virtual int getRequestedSolderPose() = 0;                                                     // +0x198
     virtual void setPoseStatus(int pose, unsigned int h, bool a, bool b) = 0;                     // +0x19C [FRONTIER]
     virtual void event_airborn() = 0;                                                             // +0x1A0 [FRONTIER]
@@ -176,6 +177,9 @@ public:
     // [INFERRED] friendship, like BotMain's below: BotManager::actionExecutePlan reads +4 inline
     // through a `Bot*` to press a climbing bot's inputs.
     friend class BotManager;
+
+    // [INFERRED] source-level accessor; the interpreter entries read +4 inline.
+    io::PlayerInput* getPlayerInput() const { return m_playerInput; }
 
 protected:
     // Base construction leaves both pointers uninitialized. Player input is borrowed and
@@ -208,7 +212,7 @@ public:
 // [RETIRE-WHEN: botmain-bases] Remove when the corresponding implementation is complete and validated.
     virtual void setLodLevel(BotLodLevel level);                                                  // +0x008
     virtual BotLodLevel getLodLevel() const;                                                      // +0x00C
-    virtual void planExecution(const double& slice);                                              // +0x010 [FRONTIER]
+    virtual bool planExecution(const double& slice);                                              // +0x010
     // [INFERRED] Returns an integer work count accumulated by BotManager.
     virtual int decisionMaking(const double& slice);                                              // +0x014 [FRONTIER]
     virtual void cheatExecution();                                                                // +0x018
@@ -275,7 +279,7 @@ public:
     virtual void setSpawnTarget(int spawnGroup, int kit);
     virtual void setSpawnTarget(int strategicArea, int spawnGroup, int kit);                     // +0x110
     virtual int getSpawnToStrategicAreaId();                                                      // +0x114
-    virtual bool isJustSpawned();                                                                 // +0x118 [FRONTIER]
+    virtual bool isJustSpawned();                                                                 // +0x118
     virtual IBotDeathCallBack* getDeathCallBack() const;                                          // +0x11C
     virtual void setDeathCallBack(IBotDeathCallBack* cb);                                         // +0x120
     virtual IBotSpawnCallBack* getSpawnCallBack() const;                                          // +0x124
@@ -294,7 +298,7 @@ public:
     virtual void* getC4();                                                                        // +0x158 [FRONTIER]
     virtual void updateC4();                                                                      // +0x15C [FRONTIER]
     virtual void enableBotScriptDebugger(bool /*enable*/);                                        // +0x160
-    virtual void* getDebugger();                                                                  // +0x164
+    virtual BotScriptDebugger* getDebugger();                                                                  // +0x164
     // Inherits Bot::getScriptContext; do not add a derived override for that slot.
     virtual void event_projectile(FireObject* f, unsigned int h);                                 // +0x16C [FRONTIER]
     virtual void event_shotHit(int i, world::IObject* o, const Vec3& v);                          // +0x170 [FRONTIER]
@@ -306,7 +310,7 @@ public:
     virtual void addToFireInclination(float f);                                                   // +0x188
     virtual float getMoveInclination();                                                           // +0x18C
     virtual float getFireInclination();                                                           // +0x190
-    virtual void requestSoldierPose(int pose, bool b);                                            // +0x194 [FRONTIER]
+    virtual void requestSoldierPose(int pose, bool b);                                            // +0x194
     virtual int getRequestedSolderPose();                                                         // +0x198
     virtual void setPoseStatus(int pose, unsigned int h, bool a, bool b);                         // +0x19C [FRONTIER]
     virtual void event_airborn();                                                                 // +0x1A0 [FRONTIER]
@@ -347,7 +351,7 @@ public:
     virtual bool getBotWantsToSimulateArtillery() const;                                          // +0x22C
     virtual void setBotIsSimulatingArtillery(bool b);                                             // +0x230
     virtual bool getBotIsSimulatingArtillery() const;                                             // +0x234
-    virtual void setAvoidSide(int side);                                                          // +0x238 [FRONTIER]
+    virtual bool setAvoidSide(int side);                                                          // +0x238
     virtual int getAvoidSide() const;                                                             // +0x23C
     virtual int getMoveToStatus() const;                                                          // +0x240
     virtual void setMoveToStatus(int status);                                                     // +0x244 [FRONTIER]
@@ -380,6 +384,8 @@ public:
     // not in the vtable. Ordinary members; the vtable dump above is the authority on which
     // every name here is absent from all 171 slots.
     void  prePlanExecution();
+    void  resetChangeTarget();
+    void  pollRequestedSoldierPose();          // [FRONTIER]
     void  postPlanExecution();
     void  addBehaviour(BotBehaviour* b, int i);
     void  removeBehaviour(BotBehaviour* b);
@@ -423,7 +429,7 @@ private:
     // [INFERRED] friendship: addUnspawnedBot directly replaces +28 in both images.
     friend class BotManager;
     // [CHOSEN] Names for fields whose original identifiers are unavailable. Offsets describe the retail x86 layout.
-    /*  12 */ void*        m_debugger;              // = 0 getDebugger
+    /*  12 */ BotScriptDebugger* m_debugger;        // = 0 getDebugger
     /*  16 */ BotLodLevel  m_lodLevel;              // = 0 get/setLodLevel
     /*  20 */ bool         m_planInvalid;           // = true hasPlan / invalidatePlan
     /*  21 */ bool         m_hasDefaultPlan;        // = false hasDefaultPlan
@@ -514,7 +520,8 @@ private:
     /* 304 */ int          m_int304;                // = -1
     /* 308 */ unsigned int m_unresolvedCollision;   // = -1
     /* 312 */ bool         m_airBorn;               // = false isAirBorn
-    /* 313 */ char         m_pad313[3];
+    /* 313 */ bool         m_wasDead;               // isJustSpawned: set while the player is dead
+    /* 314 */ char         m_pad314[2];
     /* 316 */ float        m_spawnCoord[3];         // a Vec3; the constructor zeroes its words
     /* 328 */ IBotDeathCallBack*  m_deathCallBack;  // = 0
     /* 332 */ IBotSpawnCallBack*  m_spawnCallBack;  // = 0
@@ -556,7 +563,8 @@ private:
     /* 503 */ char         m_pad503;
     /* 504 */ int          m_moveToStatus;          // = 0
     /* 508 */ int          m_avoidSide;             // = 0
-    /* 512 */ char         m_gap512[4];             // +512 byte = 0
+    /* 512 */ bool         m_avoidSideSwitched;     // = false; setAvoidSide
+    /* 513 */ char         m_pad513[3];
     /* 516 */ double       m_double516;             // = 0.0
     /* 524 */ unsigned int m_collidedObject;        // = -1
     /* 528 */ float        m_collidedObjectPosition[3];  // a Vec3 - getCollidedObjectPosition

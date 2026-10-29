@@ -1,5 +1,5 @@
 // Plan generator for the behaviour of the same family. sizeof == 0xC.
-// [FRONTIER] Plan creation and destruction remain named stops.
+// [FRONTIER] Destruction remains a named stop.
 
 #ifndef AI_AIDLL_AI_AIBOTBEHAVIOURPATTERN_BBPIDLEINFANTERY_H
 #define AI_AIDLL_AI_AIBOTBEHAVIOURPATTERN_BBPIDLEINFANTERY_H
@@ -18,6 +18,8 @@ public:
 
     virtual BotScript* createPlan(Bot* bot);                         // +0x08
     virtual int getType();                                          // +0x18
+
+    void init(Bot* bot);                                            // starts the bot's idle plans
 };
 
 } // namespace ai

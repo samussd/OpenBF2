@@ -242,6 +242,22 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\AIStrategicArea.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\SAWayPoint.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategic\SAI.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPStatement.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPCondition.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPBoleanOp.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPConWeaponIsZoomed.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPCombiner.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPCombinerParallel.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPFlowCWhile.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPFlowCIf.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPInfoWrapper.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPIWIdle.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPAction.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPATrigger.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPAComponentSoldierPose.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPASoldierPose.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPAResetControls.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIPlanInterpreter\InfanteryControl.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategic\SCArea.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategic\Strategy.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategic\StrategyCondition.cpp" ^

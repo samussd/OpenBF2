@@ -61,8 +61,10 @@ BotNavigation::BotNavigation(BotMain* owner)
     m_zero64 = 0;
     m_zero308[0] = 0;
     m_zero308[1] = 0;
-    for (int i = 0; i < 5; ++i)
+    for (int i = 0; i < 3; ++i)
         m_zero280[i] = 0;
+    m_sideSpace[0] = 0.0f;
+    m_sideSpace[1] = 0.0f;
     for (int i = 0; i < 6; ++i)
         m_zero320[i] = 0;
 
@@ -151,8 +153,8 @@ void BotNavigation::reset()
 
     // The sentinel is the interesting one - see the block above.
     m_sentinel188 = 9999999.0f;
-    m_zero280[3] = 0;
-    m_zero280[4] = 0;
+    m_sideSpace[0] = 0.0f;
+    m_sideSpace[1] = 0.0f;
 }
 
 // Clears progress counters and restarts the progress timer at the current game time.

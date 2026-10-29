@@ -1,8 +1,8 @@
-// [FRONTIER] execute remains a named stop.
-
 #include "BAPInterpreter.h"
 
 #include "BAPEntry.h"
+#include "../AIBotActionPlan/BAPStatement.h"
+#include "../../../../Core/Debug.h"
 #include "../Main/AIDllFrontier.h"
 
 namespace dice {
@@ -39,9 +39,34 @@ BAPInterpreter::~BAPInterpreter()
     m_activeTypes = 0;
 }
 
-bool BAPInterpreter::execute(BotScript*, Bot*, bool&, bool&)
+// A dead or just respawned bot skips its plan: ok and not done. A statement type the bot's LOD
+// does not interpret is an error that fails the step and finishes it. A type with an entry runs
+// through the entry, any other through the statement's own execute.
+// [CHOSEN] The type and LOD are written as numbers; the enum writers are not recovered.
+bool BAPInterpreter::execute(BotScript* script, Bot* bot, bool& ok, bool& done)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BAPInterpreter::execute");
+    if (bot->isJustSpawned())
+    {
+        done = false;
+        ok = true;
+        return true;
+    }
+    const BAPStatementType type = static_cast<BAPStatement*>(script)->getId();
+    const BotLodLevel lod = bot->getLodLevel();
+    if (!((m_activeTypes[lod] >> type) & 1))
+    {
+        Debug(DebugTypeError, "AI/AIDLL/AI/AIPlanInterpreter/BAPInterpreter.cpp", 154, "")
+            << bot->getName() << " " << bot->getBotId() << " lod level " << static_cast<int>(lod)
+            << " cannot interpret \n" << " (" << static_cast<int>(type) << ") "
+            << static_cast<int>(type) << ".";
+        done = true;
+        ok = false;
+        return false;
+    }
+    BAPEntry* const entry = m_entries[type][lod];
+    if (!entry)
+        return script->execute(bot, ok, done);
+    return entry->execute(script, bot, ok, done);
 }
 
 bool BAPInterpreter::addEntry(BAPEntry* entry)

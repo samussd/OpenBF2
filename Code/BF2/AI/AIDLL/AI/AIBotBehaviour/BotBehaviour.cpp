@@ -1,6 +1,8 @@
 #include "BotBehaviour.h"
 
 #include "../AIBot/BotMain.h"                           // Bot::getBotId
+#include "../AIBot/SensingAgent.h"                       // generatePlan
+#include "../AIBotActionPlan/BotScript.h"
 #include "../AIBotBehaviourPattern/PlanGenerator.h"
 #include "../Main/AIDllFrontier.h"
 #include "../Main/AISettingsInterfaces.h"
@@ -88,9 +90,36 @@ void BotBehaviour::reset(Bot* bot)
         m_targets[bot->getBotId()] = -1;
 }
 
-BotScript* BotBehaviour::generatePlan(Bot*)
+// A locked plan stays. A bot the generator was not started for loses its plan. Otherwise the
+// generator builds the plan, which the behaviour then owns. A plan it replaces is handed to the
+// behaviour too, and the bot's sensing agent learns of the switch. The old plan is first marked
+// as the generator's, as shipped. The bot still holds the old plan; the caller swaps them.
+BotScript* BotBehaviour::generatePlan(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotBehaviour::generatePlan");
+    if (bot->getPlanLock())
+        return bot->getPlan();
+    if (!m_generator->isInitiated(bot))
+    {
+        if (bot->getPlan())
+        {
+            delete bot->getPlan();
+            bot->setPlan(0);
+        }
+        return 0;
+    }
+    if (bot->getPlan())
+        bot->getPlan()->m_owner = m_generator;
+    BotScript* const plan = m_generator->createPlan(bot);
+    if (plan)
+    {
+        plan->m_owner = this;
+        if (bot->getPlan() && bot->getPlan() != plan)
+        {
+            bot->getPlan()->m_owner = this;
+            bot->getSensingAgent()->setPlanReplaced();
+        }
+    }
+    return plan;
 }
 
 bool BotBehaviour::isAplicable(Information*, Bot*)

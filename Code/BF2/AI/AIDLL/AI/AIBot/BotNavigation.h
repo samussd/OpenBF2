@@ -58,6 +58,8 @@ public:
     bool isActive();
     // returns true, unconditionally, in both images.
     bool isRunning();
+    // [INFERRED] accessor; BotMain::postPlanExecution inlines the loads.
+    float getSideSpace(int side) const { return m_sideSpace[side]; }
     void checkProgress();
     void clearProgress();
     bool checkArrivedAtPoint(float distance);
@@ -154,7 +156,9 @@ private:
     /* 268 */ double m_double268;          // = 0.0
     /* 276 */ bool  m_flag276;             // = false
     /* 277 */ char  m_pad277[3];
-    /* 280 */ int   m_zero280[5];          // +280..+296
+    /* 280 */ int   m_zero280[3];          // +280..+288
+    // [INFERRED] Room beside the bot, 0 to 1, on avoid side 1 and side 2 (updateSpaceLeftAndRight).
+    /* 292 */ float m_sideSpace[2];        // reset: 0
     /* 300 */ double m_double300;          // Initially -1.0; independent of the distance sentinel.
     /* 308 */ int   m_zero308[2];          // +308, +312
     // `reset`'s first statement clears the byte here.
