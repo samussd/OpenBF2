@@ -47,7 +47,7 @@ SquadMember::SquadMember(SquadCoordinator* squad, IAIPlayer* player, int squadIn
     : m_squadIndex(squadIndex), m_memberIndex(index), m_isSquadLeader(true), m_playerId(-70),
       m_player(player), m_bot(nullptr), m_squad(squad), m_side(side), m_estimatedArrival(1.75f),
       m_time24(12.25), m_maxSpeed(4.25f), m_flag30(true), m_havePath(true), m_request(nullptr),
-      m_int38(-7), m_position{2.0f, 3.0f, 4.0f}, m_positionValid(false), m_flag49(true),
+      m_int38(-7), m_position{2.0f, 3.0f, 4.0f}, m_positionValid(false), m_isIdle(true),
       m_flag4A(false), m_flag4B(true), m_formationDistanceSq(800.0f), m_moved(true),
       m_vector54{5.0f, 6.0f, 7.0f}, m_vector60{8.0f, 9.0f, 10.0f} {}
 SquadMember::~SquadMember() {}
@@ -98,7 +98,7 @@ static void unchanged(const SquadMember& m)
     require(m.m_side == 1, "side retained");
     require(m.m_estimatedArrival == 1.75f && m.m_time24 == 12.25 && m.m_maxSpeed == 4.25f, "movement scalar values retained");
     require(m.m_flag30 && m.m_havePath && !m.m_request && m.m_int38 == -7, "request/path state retained");
-    require(!m.m_positionValid && m.m_flag49 && !m.m_flag4A && m.m_flag4B, "position/path flags retained");
+    require(!m.m_positionValid && m.m_isIdle && !m.m_flag4A && m.m_flag4B, "position/path flags retained");
     require(m.m_formationDistanceSq == 800.0f && m.m_moved, "movement state retained");
     require(m.m_vector54.x == 5 && m.m_vector54.y == 6 && m.m_vector54.z == 7, "first previous vector retained");
     require(m.m_vector60.x == 8 && m.m_vector60.y == 9 && m.m_vector60.z == 10, "second previous vector retained");

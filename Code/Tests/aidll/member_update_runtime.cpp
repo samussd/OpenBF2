@@ -49,7 +49,7 @@ SquadCoordinator::SquadCoordinator(int side,int index):m_squadIndex(index),m_sid
 SquadMember::SquadMember(SquadCoordinator* squad,IAIPlayer* player,int squadIndex,int side,int index)
     :m_squadIndex(squadIndex),m_memberIndex(index),m_player(player),m_bot(nullptr),m_squad(squad),m_side(side),
     m_time24(0.0),m_havePath(true),m_request(nullptr),m_int38(777),m_position{1,2,3},m_positionValid(false),
-    m_flag49(true),m_flag4A(false),m_flag4B(true),m_moved(true),m_vector54{},m_vector60{} {}
+    m_isIdle(true),m_flag4A(false),m_flag4B(true),m_moved(true),m_vector54{},m_vector60{} {}
 SquadMember::~SquadMember() {}
 SquadFormation::SquadFormation(SquadCoordinator* squad):m_coordinator(squad),m_maxSquadMembers(0) {}
 IAIPlayer::~IAIPlayer() {}
@@ -222,7 +222,7 @@ int main(int argc,char** argv)
     require(stopTrace.empty(),"expected production boundary must stop");
     require(calls==expected,"exact callback trace");
     require(member.m_havePath==!invalidated&&member.m_flag4A==invalidated,"path and inverse flag");
-    require(member.m_flag4B==expectedFlag4B&&member.m_flag49,"artillery and adjacent flags");
+    require(member.m_flag4B==expectedFlag4B&&member.m_isIdle,"artillery and adjacent flags");
     require((std::isnan(expectedTime)&&std::isnan(member.m_time24))||member.m_time24==expectedTime,"timer stores only completed reconsideration");
     require(same(member.m_vector54,invalidated?member.m_vector60:initialHistory),"history copy only on displacement invalidation");
 #if defined(REAL_POSITION)

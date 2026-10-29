@@ -53,7 +53,7 @@ SquadCoordinator::SquadCoordinator(int side, int index)
 SquadMember::SquadMember(SquadCoordinator* squad, IAIPlayer* player, int squadIndex, int side, int index)
     : m_squadIndex(squadIndex), m_memberIndex(index), m_player(player), m_bot(nullptr),
       m_squad(squad), m_side(side), m_havePath(true), m_request(nullptr), m_position{},
-      m_positionValid(false), m_flag49(true), m_flag4A(false), m_flag4B(true) {}
+      m_positionValid(false), m_isIdle(true), m_flag4A(false), m_flag4B(true) {}
 SquadMember::~SquadMember() {}
 SquadFormation::SquadFormation(SquadCoordinator* coordinator)
     : m_coordinator(coordinator), m_maxSquadMembers(0) {}
@@ -311,7 +311,7 @@ int main(int argc, char** argv)
         member.updateFormationStatus();
         require(calls == expected && queries == 2 && allowanceCalls == 1, "exact calls, two membership queries and one allowance");
         const bool changedFlags = mode == "leave_clear_timing" || mode == "join_clear_timing" || mode == "no_action_flags";
-        require(member.m_flag4A == changedFlags && member.m_flag49 && member.m_flag4B, "inverse and adjacent flags preserved");
+        require(member.m_flag4A == changedFlags && member.m_isIdle && member.m_flag4B, "inverse and adjacent flags preserved");
         require(member.m_havePath == (actions == 0 && mode != "no_action_flags"), "only action arms clear path");
     }
 #endif
