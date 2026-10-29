@@ -359,6 +359,11 @@ void SensingAgent::disallowOverride(bool disallow)
     m_overrideDisallowed = disallow;
 }
 
+// 0x1cdf70 (Ghidra). Reproduced empty.
+void SensingAgent::insertBehaviourInformation(float, const Vec3&, unsigned char)
+{
+}
+
 void SensingAgent::insertPlanDirectionInformation(float weight, const Vec3& direction, bool force)
 {
     m_planDirection = direction;

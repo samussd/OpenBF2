@@ -65,6 +65,7 @@ public:
     explicit SquadFormation(SquadCoordinator* coordinator);
 
     void update(double time);                 // complete scheduler
+    bool shouldSquadMoveOut();               // returns m_b36
     void updateFormation();                  // leader/anchor reassignment
     void updateWaitForSquadMembers(double time); // occupied timing seam
     void updateFormationForwardVector();     // occupied owner-query seam

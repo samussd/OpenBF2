@@ -1,5 +1,6 @@
 #include "BBPGotoWaypointSoldier.h"
 
+#include "../AIBot/BotMain.h"
 #include "../Main/AIDllFrontier.h"
 
 namespace dice {
@@ -22,9 +23,10 @@ BotScript* BBPGotoWaypointSoldier::createPlan(Bot*)
     BF2_AI_FRONTIER("dice::hfe::ai::BBPGotoWaypointSoldier::createPlan");
 }
 
-void BBPGotoWaypointSoldier::init(Bot*)
+// 0x294700 (Ghidra).
+void BBPGotoWaypointSoldier::init(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPGotoWaypointSoldier::init");
+    m_initiated[bot->getBotId()] = true;
 }
 
 } // namespace ai

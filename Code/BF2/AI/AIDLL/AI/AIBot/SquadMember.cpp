@@ -361,6 +361,18 @@ bool SquadMember::isMoving()
     return m_moved;
 }
 
+// 0x1c5540 (Ghidra).
+bool SquadMember::isAtFormationSlot()
+{
+    return m_flag30;
+}
+
+// 0x1c2e90 (Ghidra).
+bool SquadMember::isAvoidingArtillery()
+{
+    return m_flag4B;
+}
+
 // These are the complete refusal paths before vehicle information.
 // The remaining body queries the vehicle at ELF +0xB8 / PE +0xB4 with m_side+1, checks its
 // information/type/physical records, then compares the squad destination distance if assigned.

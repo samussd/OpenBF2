@@ -1262,7 +1262,7 @@ SensingAgent* BotMain::getSensingAgent()
 // +0x08C
 void BotMain::insertBehaviourInformation(float f, const Vec3& v, unsigned char c)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::insertBehaviourInformation");
+    m_sensingAgent->insertBehaviourInformation(f, v, c);
 }
 
 // +0x090. The sensing agent's senses' records, keyed by information handle.

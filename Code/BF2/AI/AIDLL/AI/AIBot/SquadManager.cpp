@@ -579,6 +579,46 @@ bool SquadManager::haveCampingHumans(int side, Vec2& position)
 // Warns the side of a strike at the position: the side's block records when and where, and a
 // delay of half the configured time scaled by one plus a random fraction. Every flee position,
 // on both sides, becomes invalid.
+// 0x1c0b00 (Ghidra).
+bool SquadManager::isInArtilleryDangerZone(Vec3 position, int side, double& timeSince, int& bySide)
+{
+    SideBlock* const blocks[2] = { &m_sideBlock0, &m_sideBlock1 };
+    const int other = side - 1 == 0 ? 1 : 0;
+    timeSince = -1.0f;
+    bySide = 0;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    const float safeSq = m_float152 * m_float152;
+
+    const SideBlock& own = *blocks[side - 1];
+    if (own.m_b0)
+    {
+        const float dx = own.m_artilleryPosition.x - position.x;
+        const float dy = own.m_artilleryPosition.y - position.y;
+        const float dz = own.m_artilleryPosition.z - position.z;
+        if (safeSq > dx * dx + dy * dy + dz * dz)
+        {
+            timeSince = now - own.m_artilleryStartTime;
+            bySide = side;
+            return true;
+        }
+    }
+    const SideBlock& enemy = *blocks[other];
+    if (enemy.m_b0)
+    {
+        const float dx = enemy.m_artilleryPosition.x - position.x;
+        const float dy = enemy.m_artilleryPosition.y - position.y;
+        const float dz = enemy.m_artilleryPosition.z - position.z;
+        if (safeSq > dx * dx + dy * dy + dz * dz
+            && now > enemy.m_artilleryStartTime + enemy.m_artilleryDelay)
+        {
+            timeSince = now - enemy.m_artilleryStartTime;
+            bySide = other + 1;
+            return true;
+        }
+    }
+    return false;
+}
+
 void SquadManager::incomingArtillery(Vec3 position, int side)
 {
     SideBlock* const blocks[2] = { &m_sideBlock0, &m_sideBlock1 };

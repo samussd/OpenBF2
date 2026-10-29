@@ -56,6 +56,8 @@ public:
     // The plan statements' override of where to look: a weight, a direction and whether to
     // recompute at once. The bot's current equipment becomes the plan target.
     void insertPlanDirectionInformation(float weight, const Vec3& direction, bool force);
+    // A behaviour's hint of where to look. Empty in the shipped binary (a bare `ret`).
+    void insertBehaviourInformation(float weight, const Vec3& position, unsigned char behaviour);
 
     // The eight quadrants around the bot: 0 N, 1 E, 2 S, 3 W, 4 NE, 5 SE, 6 SW, 7 NW, as unit
     // directions in the XZ plane (x east, y north).

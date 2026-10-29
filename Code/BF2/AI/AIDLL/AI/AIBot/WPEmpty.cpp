@@ -7,7 +7,7 @@ namespace ai {
 WPEmpty::WPEmpty(const Vec3& position)
 {
     m_float08 = -1.0f;
-    m_flag04 = true;
+    m_targetChanged = true;
     m_flag05 = false;
     m_wayPointError = false;
     m_position = position;
@@ -17,7 +17,7 @@ WPEmpty::WPEmpty(const Vec3& position)
 // The flag write at +4 is the shipped one.
 float WPEmpty::getUrgency(const Vec3& position, Bot*)
 {
-    m_flag04 = true;
+    m_targetChanged = true;
     m_position = position;
     return 0.0f;
 }

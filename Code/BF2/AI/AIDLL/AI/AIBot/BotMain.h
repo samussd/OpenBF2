@@ -103,7 +103,7 @@ public:
     virtual unsigned int getFiringTarget() const = 0;                                             // +0x080
     virtual double getFiringTargetTime() const = 0;                                               // +0x084
     virtual SensingAgent* getSensingAgent() = 0;                                                  // +0x088
-    virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c) = 0;         // +0x08C [FRONTIER]
+    virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c) = 0;         // +0x08C
     virtual const std::map<unsigned int, SensedObject*>& getSensedObjects() const = 0;            // +0x090
     virtual SensedObject* getSensedObjectFromHandle(unsigned int handle) const = 0;               // +0x094
     virtual void setUnresolvedCollisionObject(unsigned int handle) = 0;                           // +0x098

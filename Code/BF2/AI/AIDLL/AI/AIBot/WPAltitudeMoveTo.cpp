@@ -9,7 +9,7 @@ namespace ai {
 WPAltitudeMoveTo::WPAltitudeMoveTo(float a, float b, float c, unsigned int d,
                                    const std::list<Vec3>& points)
 {
-    m_flag04 = true;
+    m_targetChanged = true;
     m_float08 = -1.0f;
     m_flag05 = false;
     m_wayPointError = false;

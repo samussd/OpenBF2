@@ -37,6 +37,8 @@ public:
     void setIsSquadLeader(bool leader);
     bool isSquadLeader();
     bool isMoving();                         // returns m_moved
+    bool isAtFormationSlot();                // returns m_flag30
+    bool isAvoidingArtillery();              // returns m_flag4B
     void setHavePath(bool havePath);
     void update(double time);                // bounded dependent calls
     void updateFormationStatus();
@@ -71,7 +73,7 @@ public:
     /* +0x20 */ float m_estimatedArrival;    // getEstimatedArrival
     /* +0x24 */ double m_time24;             // last path reconsideration time; initialized to zero
     /* +0x2C */ float m_maxSpeed;            // getMaxSpeed
-    /* +0x30 */ bool m_flag30;               // [UNRESOLVED]
+    /* +0x30 */ bool m_flag30;               // isAtFormationSlot
     /* +0x31 */ bool m_havePath;
     /* +0x34 */ RequestState* m_request;
     /* +0x38 */ int m_int38;                 // [UNRESOLVED]
@@ -79,7 +81,7 @@ public:
     /* +0x48 */ bool m_positionValid;
     /* +0x49 */ bool m_isIdle;               // get/setIsIdle
     /* +0x4A */ bool m_flag4A;               // setHavePath writes the inverse of its argument
-    /* +0x4B */ bool m_flag4B;               // [UNRESOLVED]
+    /* +0x4B */ bool m_flag4B;               // isAvoidingArtillery
     /* +0x4C */ float m_formationDistanceSq; // [INFERRED] name, starts at 900.0
     /* +0x50 */ bool m_moved;
     /* +0x54 */ Vec3 m_vector54;             // [UNRESOLVED]

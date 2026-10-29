@@ -342,6 +342,12 @@ int SquadFormation::getSquadMemberIndexAtSlot(int slotIndex)
     return m_slots[slotIndex]->m_memberIndex;
 }
 
+// 0x1bb6f0 (Ghidra).
+bool SquadFormation::shouldSquadMoveOut()
+{
+    return m_b36;
+}
+
 bool SquadFormation::shouldLeaveSquadLeader()
 {
     return m_b84;

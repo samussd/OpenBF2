@@ -26,7 +26,8 @@ public:
     virtual float getWayPointRadius() const { return 0.0f; }                 // +7
 
     // The subclass constructors write these; WPMoveTo stores true, false, false.
-    /* +0x04 */ bool m_flag04;         // [UNRESOLVED]
+    // [INFERRED] name: BBMoveTo copies it into its changed-target flag.
+    /* +0x04 */ bool m_targetChanged;
     /* +0x05 */ bool m_flag05;         // [UNRESOLVED]; SAI::updateBotPositions requires it set
     /* +0x06 */ bool m_wayPointError;
     /* +0x08 */ float m_float08;       // [UNRESOLVED] -1 in WPEmpty and WPAltitudeMoveTo
