@@ -111,6 +111,11 @@ public:
     virtual int collideLineWithObjects(const Vec3& from, const Vec3& to, const std::vector<IAIObject*>& ignore, bool a, float b, bool c, bool& hit);
 
 private:
+    // [CHOSEN] shared body: the binary carries it twice, once per caller.
+    bool soldierSensePosition(Vec3& position, Vec3& normal, IAIObject* object);
+public:
+
+private:
     /* +0x00 */ // vptr
     // [UNRESOLVED] Three pointer-vector fields remain opaque. The trailing clock value is a double.
     /* +0x04 */ unsigned char m_opaque[0x24];      // three std::vector members, zeroed as retail does

@@ -20,6 +20,17 @@
 #include "../../../Game/Objects/GameLogicComp/IArmorGLComp.h"          // getHitPoints / getMaxHitPoints
 #include "../../../Game/Objects/GameLogicComp/ArmorGLCompTemplate.h"   // getCanBeDestroyed
 #include "BFTimer.h"                                                   // IBFTimer::getGameTime
+#include "BFTerrain.h"                                                 // collideLineWithWorld: intersectTerrain
+#include "IAIObject.h"
+#include "IAIObjectPlugIn.h"                                           // getUnit()->isOccupied
+#include "../../../Scene/Object/ObjectManager.h"                       // intersectLine, intersectLineWithSpheres
+#include "../../../Scene/Object/ObjectPredicator.h"
+#include "../../../Physics/MaterialManager.h"                          // RayCastStopPredicate: see-through surfaces
+#include "../../../Physics/Material.h"
+#include "../../../Game/Objects/Game/Soldier.h"                        // getCameras
+#include "../../../Game/Objects/ICameraObject.h"
+#include <cfloat>
+#include <set>
 
 namespace dice {
 namespace hfe {
@@ -62,6 +73,113 @@ BFObjectEnvironment::~BFObjectEnvironment()
 {
 }
 
+} // namespace ai
+
+namespace world { extern IBase* materialManager; }
+
+namespace ai {
+namespace {
+
+// bf2 0x08400bc0. The object's AI component, or for a ladder, parachute, zipline or grappling
+// rope container the AI component of what it carries.
+IAIObject* getIAIObject(world::IObject* object)
+{
+    IAIObject* found = static_cast<IAIObject*>(object->getAIComponent());
+    if (found)
+        return found;
+    const unsigned int classId = object->getTemplate()->getClassID();
+    if (classId == world::CID_LadderContainerTemplate || classId == world::CID_ZiplineContainerTemplate
+        || classId == world::CID_GrapplingHookRopeContainerTemplate)
+    {
+        world::IObject* const occupying =
+            static_cast<world::PlayerControlObject*>(object)->getOccupingObject();
+        if (occupying)
+            found = static_cast<IAIObject*>(occupying->getAIComponent());
+    }
+    else if (classId == world::CID_ParachuteTemplate)
+    {
+        world::IObject* const occupying = static_cast<world::IPlayerControlObject*>(
+            object->queryInterface(world::IID_IPlayerControlObject))->getOccupingObject();
+        if (occupying)
+            found = static_cast<IAIObject*>(occupying->getAIComponent());
+    }
+    return found;
+}
+
+// bf2 vtable 0x088d75b8. Lets the line through the objects to ignore and, when asked, through
+// see-through surfaces, keeping the squared distance from the start to the nearest such surface.
+class RayCastStopPredicate : public world::ObjectPredicator
+{
+public:
+    RayCastStopPredicate(const std::vector<IAIObject*>& ignore, bool seeThrough, const Vec3& from)
+        : m_ignore(&ignore), m_seeThrough(seeThrough), m_object(0), m_nearest(FLT_MAX), m_from(from)
+    {
+    }
+    // 0x0840b310
+    virtual bool predicate(world::IObject* object)
+    {
+        IAIObject* const ai = getIAIObject(object);
+        if (ai)
+        {
+            for (std::vector<IAIObject*>::const_iterator it = m_ignore->begin(); it != m_ignore->end(); ++it)
+                if (ai == *it)
+                    return false;
+        }
+        m_object = object;
+        return true;
+    }
+    virtual unsigned int getFlags() const { return 0x1000000; }
+    virtual bool performCulling(world::IObject*) { return false; }
+    // 0x0840b360
+    virtual bool predicateSurface(int surface)
+    {
+        world::Material* const material =
+            static_cast<world::MaterialManager*>(world::materialManager)->getMaterialPtr(surface);
+        if (!m_seeThrough || !material->getIsSeeThrough())
+            return true;
+        const Vec3& at = m_object->getAbsolutePosition();
+        const float dx = at.x - m_from.x;
+        const float dy = at.y - m_from.y;
+        const float dz = at.z - m_from.z;
+        const float distance = dx * dx + dy * dy + dz * dz;
+        if (distance < m_nearest)
+            m_nearest = distance;
+        return false;
+    }
+
+    /* +0x04 */ const std::vector<IAIObject*>* m_ignore;
+    /* +0x08 */ bool m_seeThrough;
+    /* +0x0C */ world::IObject* m_object;
+    /* +0x10 */ float m_nearest;
+    /* +0x14 */ Vec3 m_from;
+};
+
+// bf2 vtable 0x088d75d0. Lets the sphere test through the objects whose primary object is to be
+// ignored. [UNRESOLVED] the flag at +8 is stored and not read.
+class SphereExcludeFilter : public world::ObjectPredicator
+{
+public:
+    SphereExcludeFilter(const std::vector<IAIObject*>& ignore, bool flag) : m_ignore(&ignore), m_flag(flag) {}
+    // 0x0840b280
+    virtual bool predicate(world::IObject* object)
+    {
+        IAIObject* const ai = getIAIObject(object);
+        if (!ai)
+            return true;
+        for (std::vector<IAIObject*>::const_iterator it = m_ignore->begin(); it != m_ignore->end(); ++it)
+            if (*it && ai == (*it)->getPrimaryObject())
+                return false;
+        return true;
+    }
+    virtual unsigned int getFlags() const { return 0x1000000; }
+    virtual bool performCulling(world::IObject*) { return true; }
+
+    /* +0x04 */ const std::vector<IAIObject*>* m_ignore;
+    /* +0x08 */ bool m_flag;
+};
+
+} // namespace
+
 void BFObjectEnvironment::getWorldFrustumObjects(std::vector<IAIObject*>& out, const Frustum& frustum, AIObjectPredicate* filter) const
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getWorldFrustumObjects");
@@ -87,9 +205,51 @@ void BFObjectEnvironment::getWorldPlayerIds(std::vector<int>& out) const
     BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getWorldPlayerIds");
 }
 
+// bf2 0x08401700. The objects living players stand or ride in, as in the version with ids, but each
+// vehicle once: a primary object goes in as it is found; a seat's primary object goes in at the
+// end, unless its unit counts as occupied (its own occupant has put it in already).
 void BFObjectEnvironment::getWorldPlayerOccupiedObjects(std::vector<IAIObject*>& out, AIObjectPredicate* filter) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getWorldPlayerOccupiedObjects");
+    const std::list<world::IPlayer*>& players = world::playerManager->getPlayers();
+    std::set<IAIObject*> primaries;
+    for (std::list<world::IPlayer*>::const_iterator it = players.begin(); it != players.end(); ++it)
+    {
+        world::IPlayer* const player = *it;
+        if (!player || !player->getIsAlive() || player->getIsManDown() || !player->getVehicle())
+            continue;
+        IAIObject* aiObject = static_cast<IAIObject*>(player->getVehicle()->getAIComponent());
+        if (!aiObject)
+        {
+            const unsigned int classId = player->getVehicle()->getTemplate()->getClassID();
+            if (classId == world::CID_LadderContainerTemplate || classId == world::CID_ZiplineContainerTemplate
+                || classId == world::CID_GrapplingHookRopeContainerTemplate)
+            {
+                world::IObject* const occupying =
+                    static_cast<world::PlayerControlObject*>(player->getVehicle())->getOccupingObject();
+                if (occupying)
+                    aiObject = static_cast<IAIObject*>(occupying->getAIComponent());
+            }
+            else if (classId == world::CID_ParachuteTemplate)
+            {
+                world::IPlayerControlObject* const control = static_cast<world::IPlayerControlObject*>(
+                    player->getVehicle()->queryInterface(world::IID_IPlayerControlObject));
+                aiObject = static_cast<IAIObject*>(control->getOccupingObject()->getAIComponent());
+            }
+            if (!aiObject)
+                continue;
+        }
+        if (!aiObject->isPrimary())
+            primaries.insert(aiObject->getPrimaryObject());
+        else if (!filter || filter->predicate(aiObject))
+            out.push_back(aiObject);
+    }
+    for (std::set<IAIObject*>::const_iterator it = primaries.begin(); it != primaries.end(); ++it)
+    {
+        if ((*it)->getUnit()->isOccupied())
+            continue;
+        if (!filter || filter->predicate(*it))
+            out.push_back(*it);
+    }
 }
 
 // Collects AI objects matching the supplied predicate within the requested region.
@@ -182,9 +342,52 @@ int BFObjectEnvironment::getNextPlayerId(int id) const
     BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getNextPlayerId");
 }
 
+// bf2 0x08401dd0. Whether the terrain or an object (collideLineWithObjects) stands between the two.
 bool BFObjectEnvironment::collideLineWithWorld(const Vec3& from, const Vec3& to, const std::vector<IAIObject*>& ignore, bool a, float b, bool c, bool& hit)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::collideLineWithWorld");
+    Vec3 point;
+    point.x = 0.0f;
+    point.y = 0.0f;
+    point.z = 0.0f;
+    Vec3 normal = point;
+    float distance;
+    if (static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain)->intersectTerrain(from, to, point, distance, normal))
+        return true;
+    return collideLineWithObjects(from, to, ignore, a, b, c, hit) != 0;
+}
+
+// bf2 0x08402130. Whether an object other than the ones to ignore stands between the two; with
+// spheres the cheaper sphere test (radius b) is used. hit: a see-through surface (when c asks
+// for them) lay nearer than the object hit.
+int BFObjectEnvironment::collideLineWithObjects(const Vec3& from, const Vec3& to, const std::vector<IAIObject*>& ignore, bool spheres, float radius, bool c, bool& hit)
+{
+    Vec3 point;
+    point.x = 0.0f;
+    point.y = 0.0f;
+    point.z = 0.0f;
+    Vec3 normal = point;
+    world::IObject* object = 0;
+    int part = 0;
+    RayCastStopPredicate stop(ignore, c, from);
+    Vec3 direction;
+    direction.x = to.x - from.x;
+    direction.y = to.y - from.y;
+    direction.z = to.z - from.z;
+    bool found;
+    if (spheres)
+    {
+        SphereExcludeFilter exclude(ignore, c);
+        found = world::objectManager->intersectLineWithSpheres(object, point, normal, part, from, direction,
+                                                               &exclude, &stop, radius);
+    }
+    else
+        found = world::objectManager->intersectLine(object, point, normal, part, from, direction, &stop,
+                                                    true, false, false, true, 0);
+    const float dx = point.x - from.x;
+    const float dy = point.y - from.y;
+    const float dz = point.z - from.z;
+    hit = stop.m_nearest < dx * dx + dy * dy + dz * dz;
+    return found;
 }
 
 bool BFObjectEnvironment::collideLineWithWorld(const Vec3& from, const Vec3& to, AIObjectPredicate* filter, Vec3* hit)
@@ -207,14 +410,34 @@ void BFObjectEnvironment::pickRandomSensePosition(Vec3& position, Vec3& normal, 
     BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::pickRandomSensePosition");
 }
 
-bool BFObjectEnvironment::pickSoldierRandomSensePosition(Vec3& position, Vec3& normal, IAIObject* object, unsigned int& part)
+// bf2 0x08403010; getSoldierSensePosition is the same body. A soldier's sense position is its first
+// camera: where it is and its offset. The part is not used.
+bool BFObjectEnvironment::pickSoldierRandomSensePosition(Vec3& position, Vec3& normal, IAIObject* object, unsigned int&)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::pickSoldierRandomSensePosition");
+    return soldierSensePosition(position, normal, object);
 }
 
-bool BFObjectEnvironment::getSoldierSensePosition(Vec3& position, Vec3& normal, IAIObject* object, unsigned int part)
+// bf2 0x08403100.
+bool BFObjectEnvironment::getSoldierSensePosition(Vec3& position, Vec3& normal, IAIObject* object, unsigned int)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getSoldierSensePosition");
+    return soldierSensePosition(position, normal, object);
+}
+
+bool BFObjectEnvironment::soldierSensePosition(Vec3& position, Vec3& normal, IAIObject* object)
+{
+    if (!object->getObject() || !object || !object->isOfType(static_cast<InformationType>(0x15)))
+        return false;
+    world::IObject* const soldier = object->getObject();
+    if (!const_cast<world::IObjectTemplate*>(soldier->getTemplate())->queryImplementation(world::CID_SoldierTemplate))
+        return false;
+    // no empty-map guard, as shipped
+    world::ICameraObject* const camera = static_cast<world::Soldier*>(soldier)->getCameras()->begin()->second;
+    world::IObject* eye = 0;
+    if (camera)
+        eye = static_cast<world::IObject*>(camera->queryInterface(world::IID_IObject));
+    position = eye->getAbsolutePosition();
+    normal = eye->getRelativePosition();
+    return true;
 }
 
 int BFObjectEnvironment::getHeightAndNormalForObject(IAIObject* object, const Vec3& position, float& height, Vec3& normal, float& slope)
@@ -334,11 +557,6 @@ void BFObjectEnvironment::damageSeverelyDamagedVehicles()
                                   position, direction, -1, false, true, false);
         }
     }
-}
-
-int BFObjectEnvironment::collideLineWithObjects(const Vec3& from, const Vec3& to, const std::vector<IAIObject*>& ignore, bool a, float b, bool c, bool& hit)
-{
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::collideLineWithObjects");
 }
 
 } // namespace ai
