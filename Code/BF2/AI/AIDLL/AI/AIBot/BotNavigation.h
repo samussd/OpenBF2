@@ -73,8 +73,13 @@ public:
     void getLargestAngleDiff(float& out);
     void getTraceData(int a, unsigned int& b, unsigned int& c, Vec3& d);
 
-    void getGrenadeWarning(Vec3& position, double& time);
-    void setGrenadeWarning(const Vec3& position, double time, bool b);
+    // A grenade the bot should know about: where, and the fuse time it had when it was set.
+    // getGrenadeWarning gives the position and the time left of the 2.8 s since; true while some
+    // is left.
+    bool getGrenadeWarning(Vec3& position, double& timeLeft);
+    void setGrenadeWarning(const Vec3& position, double time, bool flag);
+    // [INFERRED] accessor; BBRandom::calculateUrgency inlines the load.
+    bool getGrenadeFlag() const { return m_grenadeFlag; }
 
     void reset();                          // - (one arm frontier)
     void resetAll();
@@ -163,9 +168,9 @@ private:
     /* 244 */ double m_lastActiveTime;     // not a gap - `reset` zeroes it
     // resetAll clears this field.
     /* 252 */ int   m_obstacleCount;       // resetAll: 0; updateObstacles
-    /* 256 */ int   m_zero256[3];          // +256, +260, +264
-    /* 268 */ double m_double268;          // = 0.0
-    /* 276 */ bool  m_flag276;             // = false
+    /* 256 */ Vec3  m_grenadePosition;     // = 0
+    /* 268 */ double m_grenadeTime;        // = 0.0; resetAll: -9999.0
+    /* 276 */ bool  m_grenadeFlag;         // = false [UNRESOLVED] meaning; BBRandom reacts only to it
     /* 277 */ char  m_pad277[3];
     /* 280 */ int   m_zero280[3];          // +280..+288
     // [INFERRED] Room beside the bot, 0 to 1, on avoid side 1 and side 2 (updateSpaceLeftAndRight).

@@ -23,10 +23,12 @@ public:
     virtual bool isApplicable(Information* information, Bot* bot);   // +0x34
 
 protected:
-    /* +0x24 */ bool m_flag24;                           // [UNRESOLVED] false
-    /* +0x28 */ double m_double28;                       // [UNRESOLVED] zero
-    /* +0x30 */ double m_double30;                       // [UNRESOLVED] zero
-    /* +0x38 */ Vec3 m_vec38;                            // [UNRESOLVED] zero
+    // [INFERRED] names. A flagged grenade warning, shared by every bot: when it was noticed,
+    // the fuse time it had left then, and where the grenade is.
+    /* +0x24 */ bool m_grenadePending;                   // = false
+    /* +0x28 */ double m_grenadeNoticed;                 // = 0
+    /* +0x30 */ double m_grenadeTimeLeft;                // = 0
+    /* +0x38 */ Vec3 m_grenadePosition;                  // = 0
 };
 
 } // namespace ai

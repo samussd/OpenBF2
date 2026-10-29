@@ -1,6 +1,9 @@
 #include "BBPRandom.h"
 
+#include "../AIBot/BotMain.h"
 #include "../Main/AIDllFrontier.h"
+#include "../Main/CommonSingletonServer.h"
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"
 
 namespace dice {
 namespace hfe {
@@ -11,6 +14,13 @@ BBPRandom::BBPRandom(int behaviourId)
 {
     m_behaviourId = behaviourId;
     m_int0C = new int[getNumberOfBots()];
+}
+
+// 0x2a77f0 (Ghidra).
+void BBPRandom::init(Bot* bot)
+{
+    m_initiated[bot->getBotId()] = true;
+    m_initTime = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
 }
 
 BBPRandom::~BBPRandom()

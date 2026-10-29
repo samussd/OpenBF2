@@ -49,8 +49,8 @@ BotNavigation::BotNavigation(BotMain* owner)
     , m_int208(-1)
     , m_int212(-1)
     , m_int240(0)
-    , m_double268(0.0)
-    , m_flag276(false)
+    , m_grenadeTime(0.0)
+    , m_grenadeFlag(false)
     // Independent sentinel, initialized to -1.0.
     , m_double300(-1.0)
 {
@@ -60,8 +60,10 @@ BotNavigation::BotNavigation(BotMain* owner)
         m_zero44[i]  = 0;
         m_zero176[i] = 0;
         m_zero216[i] = 0;
-        m_zero256[i] = 0;
     }
+    m_grenadePosition.x = 0.0f;
+    m_grenadePosition.y = 0.0f;
+    m_grenadePosition.z = 0.0f;
     m_pathOwner = 0;                   // +60 - a pointer, see BotNavigation.h
     m_quadTree = 0;
     m_zero308[0] = 0;
@@ -85,15 +87,32 @@ BotNavigation::~BotNavigation()
     BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::~BotNavigation");
 }
 
+// 0x1a5280 (Ghidra). The shipped body also reads the game time and drops it.
+void BotNavigation::setGrenadeWarning(const Vec3& position, double time, bool flag)
+{
+    m_grenadeTime = time;
+    m_grenadePosition = position;
+    m_grenadeFlag = flag;
+}
+
+// 0x1a5310 (Ghidra).
+bool BotNavigation::getGrenadeWarning(Vec3& position, double& timeLeft)
+{
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    position = m_grenadePosition;
+    timeLeft = 2.8 - (now - m_grenadeTime);
+    return timeLeft > 0.0;
+}
+
 // Resets navigation, movement flags and progress timing.
 void BotNavigation::resetAll()
 {
     reset();
 
     m_obstacleCount = 0;
-    m_flag276 = false;
+    m_grenadeFlag = false;
     // Not the constructor's 0.0 - see the block above.
-    m_double268 = -9999.0;
+    m_grenadeTime = -9999.0;
     m_zero308[0] = 0;
     m_double300 = -1.0;
 
