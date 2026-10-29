@@ -28,6 +28,9 @@ public:
     bool isBot();
     Bot* getBot();                           // borrowed
     int getMemberIndex();
+    int getSquadId();                        // returns m_squadIndex
+    // Whether the member's current request is this action on this handle.
+    bool isSameRequest(unsigned int handle, int action);
     void setMemberIndex(int index);          // the squad renumbers members after a removal
     void reset();                            // round restart: no position, no movement state
     void squadMemberKilled();

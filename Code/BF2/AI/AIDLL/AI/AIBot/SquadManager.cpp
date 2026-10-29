@@ -419,6 +419,54 @@ void SquadManager::newSquadLeader(int side, int squadId)
 
 // Search this side in coordinator order and return the first
 // matching member. The coordinator's output index is intentionally not used by this caller.
+// 0x1bf480 (Ghidra).
+SquadMember* SquadManager::getSquadMember(unsigned int handle, int side)
+{
+    Information* const information = informationManager->getInformation(handle);
+    if (!information || !information->getUnit())
+        return 0;
+    const int playerId = information->getUnit()->getOccupyingPlayerId(side);
+    if (playerId == -1)
+        return 0;
+    return getSquadMember(playerId, side);
+}
+
+// 0x1bf600 (Ghidra).
+SquadCoordinator* SquadManager::getSquadFromPlayer(unsigned int handle, int side)
+{
+    Information* const information = informationManager->getInformation(handle);
+    if (!information || !information->getUnit())
+        return 0;
+    const int playerId = information->getUnit()->getOccupyingPlayerId(side);
+    if (playerId == -1)
+        return 0;
+    return getSquadFromPlayer(playerId, side);
+}
+
+// 0x1c0440 (Ghidra).
+bool SquadManager::isAnySquadMemberRespondingToRequest(unsigned int handle, int action, int side)
+{
+    std::vector<SquadCoordinator*>& coordinators = m_coordinators[side - 1];
+    for (unsigned int i = 0; i < coordinators.size(); ++i)
+    {
+        if (coordinators[i]->isAnySquadMemberRespondingToRequest(handle, action))
+            return true;
+    }
+    return false;
+}
+
+// 0x1c0390 (Ghidra).
+float SquadManager::requestResponseModifier(SquadMember* member, unsigned int handle, int action,
+                                            int side)
+{
+    SquadCoordinator* const squad = getSquadFromPlayer(member->getPlayerId(), side);
+    if (!squad)
+        return 0.0f;
+    if (member->isSameRequest(handle, action))
+        return 1.0f;
+    return squad->requestResponseModifier(member, handle, action);
+}
+
 SquadMember* SquadManager::getSquadMember(int playerId, int side)
 {
     std::vector<SquadCoordinator*>& coordinators = m_coordinators[side - 1];

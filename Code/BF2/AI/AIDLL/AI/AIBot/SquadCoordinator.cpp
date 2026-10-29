@@ -9,6 +9,10 @@
 #include "CommunicationAgent.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../AIKnowledge/IPIUnit.h"
+#include "../Main/IBotManager.h"
+#include "SquadManager.h"
 #include "../Main/AIDllFrontier.h"
 #include "../Main/AIMain.h"
 #include "../AIStrategic/SAI.h"
@@ -869,6 +873,136 @@ bool SquadCoordinator::hasMemberWithKit(KitType type)
             return true;
     }
     return false;
+}
+
+// 0x1b86d0 (Ghidra).
+bool SquadCoordinator::isAnySquadMemberRespondingToRequest(unsigned int handle, int action)
+{
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+    {
+        if (m_squadMembers[i]->isSameRequest(handle, action))
+            return true;
+    }
+    return false;
+}
+
+namespace {
+
+// A living requester: its health above 0.001. No null guard on the information, as shipped.
+bool isAlive(unsigned int handle)
+{
+    IPIPhysical* const physical = informationManager->getInformation(handle)->getPhysical();
+    return physical && physical->getHealth() > 0.001f;
+}
+
+} // namespace
+
+// 0x1b8730 (Ghidra). Squad sides are zero-based here, so the manager calls add one.
+float SquadCoordinator::requestResponseModifier(SquadMember* member, unsigned int handle, int action)
+{
+    float modifier = 1.0f;
+    bool answered = false;
+    Vec3 requesterPosition;
+    requesterPosition.x = 0.0f;
+    requesterPosition.y = 0.0f;
+    requesterPosition.z = 0.0f;
+    SquadManager* const manager = SquadManager::m_instance;
+    SquadMember* const requester = manager->getSquadMember(handle, m_side + 1);
+
+    if (requester && requester->getSquadId() == member->getSquadId())
+    {
+        if (requester->getMemberIndex() != member->getMemberIndex() && action == 1 && isAlive(handle)
+            && requester->getPlayer()->getSpawnKit() == 5)
+        {
+            modifier = 0.0f;
+        }
+        else
+        {
+            if (action == 4 && requester->getMemberIndex() != member->getMemberIndex()
+                && isAlive(handle) && requester->getPlayer()->getSpawnKit() == 3)
+            {
+                modifier = 0.0f;
+                answered = true;
+            }
+            if (!answered)
+            {
+                for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+                {
+                    SquadMember* const other = m_squadMembers[i];
+                    if (member->getMemberIndex() == other->getMemberIndex()
+                        || !other->isSameRequest(handle, action))
+                        continue;
+                    if (action != 5)
+                    {
+                        modifier = 0.0f;
+                        break;
+                    }
+                    modifier *= 0.75f;
+                }
+            }
+        }
+    }
+    else if (requester)
+    {
+        const bool responding = manager->isAnySquadMemberRespondingToRequest(handle, action, m_side + 1);
+        float distanceSquared = 0.0f;
+        if (requester->getPosition(requesterPosition))
+        {
+            const float dx = requesterPosition.x - m_v108.x;
+            const float dy = requesterPosition.y - m_v108.y;
+            const float dz = requesterPosition.z - m_v108.z;
+            distanceSquared = dx * dx + dy * dy + dz * dz;
+        }
+        int kit = -1;
+        if (action == 1)
+            kit = 5;
+        else if (action == 2)
+            kit = 4;
+        else if (action == 4)
+            kit = 3;
+        if (kit != -1)
+        {
+            if (responding || !(1000.0f > distanceSquared))
+            {
+                modifier = 0.0f;
+            }
+            else
+            {
+                SquadCoordinator* const squad =
+                    manager->getSquadFromPlayer(requester->getPlayerId(), m_side + 1);
+                modifier = squad->hasMemberWithKit(static_cast<KitType>(kit)) ? 0.1f : 0.5f;
+            }
+        }
+    }
+    else if (manager->isAnySquadMemberRespondingToRequest(handle, action, m_side + 1))
+    {
+        modifier = 0.0f;
+    }
+    else
+    {
+        Information* const information = informationManager->getInformation(handle);
+        modifier = 1.0f;
+        if (information)
+        {
+            const Vec3& position = information->getPosition();
+            const float dx = position.x - m_v108.x;
+            const float dy = position.y - m_v108.y;
+            const float dz = position.z - m_v108.z;
+            if (dx * dx + dy * dy + dz * dz > 20000.0f)
+                modifier = 0.0f;
+            IPIUnit* const unit = information->getUnit();
+            if (unit)
+            {
+                const int playerId = unit->getOccupyingPlayerId(m_side + 1);
+                if (playerId != -1 && !IBotManager::instance->getBotFromPlayerId(playerId))
+                    modifier = modifier + modifier;
+            }
+        }
+    }
+
+    if (requester && !requester->isBot())
+        modifier = modifier + modifier;
+    return modifier;
 }
 
 // Only pointer presence is tested;

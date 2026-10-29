@@ -44,6 +44,14 @@ public:
     void playerRemovedFromSquad(int playerId, int squadId, int side);
     SquadMember* getSquadMember(int playerId, int side);
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
+    // The same for the player occupying the unit behind an information handle, if any.
+    SquadMember* getSquadMember(unsigned int handle, int side);
+    SquadCoordinator* getSquadFromPlayer(unsigned int handle, int side);
+    // Whether a member of any of the side's squads already answers the request.
+    bool isAnySquadMemberRespondingToRequest(unsigned int handle, int action, int side);
+    // A member's factor to answer a request: 1 when it already makes this request, else its
+    // squad's SquadCoordinator::requestResponseModifier; without a squad 0.
+    float requestResponseModifier(SquadMember* member, unsigned int handle, int action, int side);
     int getSquadStrengths(int side, int areaIndex, StrategicStrengthType type);
     // The nearest available squad with members and strength, skipping one requested to the
     // area unless a bot leads it. strength receives twice its attack or defence strength.

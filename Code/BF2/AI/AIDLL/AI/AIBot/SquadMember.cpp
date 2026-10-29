@@ -207,6 +207,18 @@ bool SquadMember::getIsIdle()
     return m_isIdle;
 }
 
+// 0x1c56b0 (Ghidra).
+int SquadMember::getSquadId()
+{
+    return m_squadIndex;
+}
+
+// 0x1c39e0 (Ghidra).
+bool SquadMember::isSameRequest(unsigned int handle, int action)
+{
+    return handle == m_request->m_handle && action == m_request->m_action;
+}
+
 void SquadMember::clearRequestAction()
 {
     m_request->m_action = 0;

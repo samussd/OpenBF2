@@ -80,6 +80,17 @@ public:
     SquadMember* getSquadMember(int index);
     SquadMember* getSquadMember(int playerId, int& index);
     bool hasMemberWithKit(KitType type);
+    // Whether a member of this squad already answers the request.
+    bool isAnySquadMemberRespondingToRequest(unsigned int handle, int action);
+    // The factor on a member's urgency to answer a request (action) about a handle. The
+    // handle's own squad member, in this squad: 0 when another member already answers it
+    // (each such member a quarter less for action 5), or for actions 1 and 4 when the
+    // requester is a living medic (kit 5) or support soldier (kit 3). In another squad: 0 when
+    // anyone answers it or the requester is 1000 or more (squared) from this squad's position;
+    // otherwise 0.1 if the requester's squad has the kit the action needs (1: 5, 2: 4, 4: 3),
+    // else 0.5. Not a squad member: 0 when anyone answers it or it is more than 20000 (squared)
+    // away, doubled when a human occupies it. A human requester doubles the result.
+    float requestResponseModifier(SquadMember* member, unsigned int handle, int action);
     bool isSquadAssignedToAnyArea();
     bool squadHasMission();                      // the maneuver state is 2
     bool isSquadCloseToNonOwnedTarget();         // any member, while the area is not neutral
