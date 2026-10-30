@@ -29,6 +29,9 @@
 #include "../../../Physics/Material.h"
 #include "../../../Game/Objects/Game/Soldier.h"                        // getCameras
 #include "../../../Game/Objects/ICameraObject.h"
+#include "../../../Core/Random.h"                                       // pickRandomSensePosition: the draws
+#include "../../../Physics/ICollisionMesh.h"
+#include "../../../Game/Objects/ObjectLayoutAccess.h"                    // collisionMesh (+0x40)
 #include <cfloat>
 #include <set>
 
@@ -64,7 +67,7 @@ IAIObjectEnvironment::~IAIObjectEnvironment()
 // Leaves padding at +0x29..+0x2B untouched.
 BFObjectEnvironment::BFObjectEnvironment()
 {
-    std::memset(m_opaque, 0, sizeof(m_opaque));  // +0x04 .. +0x27, the three vectors
+    std::memset(m_opaque, 0, sizeof(m_opaque));  // +0x10 .. +0x27, the other two vectors
     m_byte28 = 0;                                // +0x28, a byte
     m_lastSevereDamageTime = 0.0;                // +0x2C, a double
 }
@@ -177,6 +180,30 @@ public:
     /* +0x04 */ const std::vector<IAIObject*>* m_ignore;
     /* +0x08 */ bool m_flag;
 };
+
+// bf2 0x0840b1d0 / 0x0840b450. A part counts when it has collision at the first level of detail.
+// getAllChildren walks the first-child chain of each part again, as shipped, so a deep chain is
+// listed more than once.
+struct CollisionPredicate
+{
+    bool predicate(world::IObject* object) const { return object->hasCollisionLod(0); }
+};
+
+void getAllChildren(world::IObject* object, std::vector<world::IObject*>& out, const CollisionPredicate* filter)
+{
+    if (!filter || filter->predicate(object))
+        out.push_back(object);
+    for (world::IObject* child = object->getChild(); child; child = child->getChild())
+        getAllChildren(child, out, filter);
+}
+
+// A random index below count: the draw on the engine's random state, scaled and rounded
+// (the x87 store runs with the chop control word, so the 0.5 rounds).
+unsigned int randomIndex(unsigned int count)
+{
+    const float draw = static_cast<float>(static_cast<int>(((g_random.getRaw() >> 7) | 1u) + 1u)) * 5.9604645e-08f;
+    return static_cast<unsigned int>(static_cast<double>(draw) * (static_cast<double>(count) - 1.0) + 0.0 + 0.5);
+}
 
 } // namespace
 
@@ -405,9 +432,84 @@ bool BFObjectEnvironment::hasIndirectLineOfFire(IWeapon* weapon, const Vec3& fro
     BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::hasIndirectLineOfFire");
 }
 
-void BFObjectEnvironment::pickRandomSensePosition(Vec3& position, Vec3& normal, Vec3 hint, IAIObject* object)
+// bf2 0x084024b0. A random point on an object that is not a soldier: a random part with collision,
+// then a random point on a random face of its collision mesh, or with no faces a random vertex.
+// position: the point in the world; normal: the same point in the object's own frame (BotSenses
+// keeps it to look at again). No part with collision, or a mesh with neither: the object's
+// position and a zero point. The hint is not used.
+void BFObjectEnvironment::pickRandomSensePosition(Vec3& position, Vec3& normal, Vec3, IAIObject* object)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::pickRandomSensePosition");
+    world::IObject* const root = object->getObject();
+    m_senseParts.clear();
+    const CollisionPredicate collides;
+    if (collides.predicate(root))
+        m_senseParts.push_back(root);
+    for (world::IObject* child = root->getChild(); child; child = child->getChild())
+        getAllChildren(child, m_senseParts, &collides);
+    world::ICollisionMesh* mesh = 0;
+    world::IObject* part = 0;
+    Mat4 toLocal;
+    if (!m_senseParts.empty())
+    {
+        toLocal.setInverse(root->getAbsoluteTransformation());
+        do
+        {
+            const unsigned int count = static_cast<unsigned int>(m_senseParts.size());
+            if (count < 2)
+            {
+                part = m_senseParts[0];
+                if (part->hasCollisionLod(0))
+                    mesh = static_cast<world::ICollisionMesh*>(world::object_detail::LayoutAccess::collisionMesh(part));
+                break;
+            }
+            part = m_senseParts[randomIndex(count)];
+            if (part->hasCollisionLod(0))
+                mesh = static_cast<world::ICollisionMesh*>(world::object_detail::LayoutAccess::collisionMesh(part));
+        } while (!mesh);
+    }
+    // no null guard on a single part's mesh, as shipped
+    const int faces = m_senseParts.empty() ? 0 : mesh->getFaceCount(0);
+    const unsigned int vertices = m_senseParts.empty() ? 0 : mesh->getVertexCount(0);
+    if (m_senseParts.empty() || (faces == 0 && vertices == 0))
+    {
+        object->getBoundingRadius();   // asked and dropped, as shipped
+        normal.x = 0.0f;
+        normal.y = 0.0f;
+        normal.z = 0.0f;
+        position = object->getPosition();
+        return;
+    }
+    Vec3 local;
+    if (faces == 0)
+        local = static_cast<const Vec3*>(mesh->getVertexVector(0))[randomIndex(vertices)];
+    else
+    {
+        const unsigned int face = randomIndex(static_cast<unsigned int>(faces));
+        float u = static_cast<float>(static_cast<int>(((g_random.getRaw() >> 7) | 1u) + 1u)) * 5.9604645e-08f;
+        float v = static_cast<float>(static_cast<int>(((g_random.getRaw() >> 7) | 1u) + 1u)) * 5.9604645e-08f;
+        if (1.0f < u + v)
+        {
+            u = 1.0f - u;
+            v = 1.0f - v;
+        }
+        const unsigned short* const corner = static_cast<const unsigned short*>(mesh->getFaceVector(0)) + face * 4;
+        const Vec3* const vertex = static_cast<const Vec3*>(mesh->getVertexVector(0));
+        const Vec3& a = vertex[corner[0]];
+        const Vec3& b = vertex[corner[1]];
+        const Vec3& c = vertex[corner[2]];
+        local.x = (b.x - a.x) * u + a.x + (c.x - a.x) * v;
+        local.y = (b.y - a.y) * u + a.y + (c.y - a.y) * v;
+        local.z = (b.z - a.z) * u + a.z + (c.z - a.z) * v;
+    }
+    const Mat4& frame = part->getAbsoluteTransformation();
+    Vec3 atWorld;
+    atWorld.x = frame.m[8] * local.z + frame.m[0] * local.x + frame.m[4] * local.y + frame.m[12];
+    atWorld.y = frame.m[1] * local.x + frame.m[5] * local.y + frame.m[9] * local.z + frame.m[13];
+    atWorld.z = local.x * frame.m[2] + local.y * frame.m[6] + local.z * frame.m[10] + frame.m[14];
+    position = atWorld;
+    normal.x = toLocal.m[8] * atWorld.z + toLocal.m[0] * atWorld.x + toLocal.m[4] * atWorld.y + toLocal.m[12];
+    normal.y = toLocal.m[1] * atWorld.x + toLocal.m[5] * atWorld.y + toLocal.m[9] * atWorld.z + toLocal.m[13];
+    normal.z = atWorld.x * toLocal.m[2] + atWorld.y * toLocal.m[6] + atWorld.z * toLocal.m[10] + toLocal.m[14];
 }
 
 // bf2 0x08403010; getSoldierSensePosition is the same body. A soldier's sense position is its first

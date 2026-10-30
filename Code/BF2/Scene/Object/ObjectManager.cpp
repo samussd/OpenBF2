@@ -14,6 +14,8 @@
 #include "../../Geom/IGeometryTemplate.h"
 #include "ICuller.h"
 #include "ObjectPredicator.h"
+#include <algorithm>
+#include "../../Core/Random.h"                 // intersectLineWithSpheres: the pass draw
 #include "../../Core/ClassManager.h"  // classManager - the ctor builds its cullers through it
 #include "../../Core/Ids.h"           // CID_BinTreeCuller / CID_QuadTreeCuller / IID_ICuller
 #include "../../AI/AIInterface/BFKnowledge/IAIObject.h"   // the per-frame positionChanged
@@ -1793,14 +1795,101 @@ bool ObjectManager::intersectPill(std::vector<Vec3>&, std::vector<Vec3>&, const 
     std::fflush(stderr);
     std::abort();
 }
-bool ObjectManager::intersectLineWithSpheres(IObject*&, Vec3&, Vec3&, int&, const Vec3&, const Vec3&,
-                                             ObjectPredicator*, ObjectPredicator*, float)
+namespace {
+
+// Nearest first.
+struct DistanceSortPredicate
 {
-    // [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: RW-4-line-with-spheres]
-    std::fprintf(stderr,
-                 "[FRONTIER] dice::hfe::world::ObjectManager::intersectLineWithSpheres reached\n");
-    std::fflush(stderr);
-    std::abort();
+    bool operator()(const std::pair<float, IObject*>& a, const std::pair<float, IObject*>& b) const
+    {
+        return a.first < b.first;
+    }
+};
+
+// Unit length, unless already within an epsilon of it; zero for a zero vector.
+Vec3 normalisedOrZero(const Vec3& v)
+{
+    const float length2 = v.x * v.x + v.y * v.y + v.z * v.z;
+    if (std::fabs(length2 - 1.0f) < 1.1920929e-07f)
+        return v;
+    Vec3 out = { 0.0f, 0.0f, 0.0f };
+    if (std::fabs(length2) < 1.1920929e-07f)
+        return out;
+    const float inverse = 1.0f / std::sqrt(length2);
+    out.x = v.x * inverse;
+    out.y = v.y * inverse;
+    out.z = inverse * v.z;
+    return out;
+}
+
+} // namespace
+
+// ELF 0x08318070. The AI's cheap line test (a seen bot at reduced detail): each object along the
+// line, nearest first, or its children, is a sphere of its physics bounding radius. Inside the
+// sphere the line stops with a chance that grows toward the centre, a draw on the engine's random
+// state deciding against ((1 - depth) * 0.75 + 0.25) * passChance. As shipped, the depth is taken
+// from the projection of (position - direction) on the unnormalised direction, and the hit normal
+// is turned a quarter round the y axis. The part is not set.
+bool ObjectManager::intersectLineWithSpheres(IObject*& hitObject, Vec3& hitPoint, Vec3& hitNormal, int&,
+                                             const Vec3& from, const Vec3& direction,
+                                             ObjectPredicator* include, ObjectPredicator* stop,
+                                             float passChance)
+{
+    m_objectTempVector.resize(0);
+    m_lineCandidates.resize(0);
+    m_gridCuller->getObjects(from, direction, m_lineCandidates);
+    m_quadTreeCuller->getObjects(from, direction, m_lineCandidates);
+    std::sort(m_lineCandidates.begin(), m_lineCandidates.end(), DistanceSortPredicate());
+    if (m_lineCandidates.empty())
+        return false;
+    hitObject = 0;
+    const Vec3 unit = normalisedOrZero(direction);
+    std::vector<IObject*> parts;
+    for (std::vector<std::pair<float, IObject*> >::const_iterator it = m_lineCandidates.begin();
+         it != m_lineCandidates.end(); ++it)
+    {
+        IObject* const object = it->second;
+        parts.resize(0);
+        if (!include || (include->getFlags() & 0x1000000u) == 0)
+            getChilds(object, parts, include, stop);
+        else if (include->predicate(object))
+            parts.push_back(object);
+        for (std::vector<IObject*>::const_iterator part = parts.begin(); part != parts.end(); ++part)
+        {
+            const float radius = (*part)->getPhysicBoundingRadius();
+            if (radius <= 0.0f)
+                continue;
+            const Vec3& at = (*part)->getAbsolutePosition();
+            Vec3 offset;
+            offset.x = at.x - direction.x;
+            offset.y = at.y - direction.y;
+            offset.z = at.z - direction.z;
+            const float along = direction.x * offset.x + offset.y * direction.y + offset.z * direction.z;
+            const float cx = unit.x * along;
+            const float cy = unit.y * along;
+            const float cz = unit.z * along;
+            const float depth = (cx * cx + cy * cy + cz * cz) / (radius * radius);
+            if (!(depth < 1.0f))
+                continue;
+            const float chance = ((1.0f - depth) * 0.75f + 0.25f) * passChance;
+            const float draw = static_cast<float>(static_cast<int>(((g_random.getRaw() >> 7) | 1u) + 1u))
+                               * 5.9604645e-08f;
+            if (!(draw > chance))
+                continue;
+            hitObject = *part;
+            hitPoint = (*part)->getAbsolutePosition();
+            Vec3 back;
+            back.x = -offset.x;
+            back.y = -offset.y;
+            back.z = -offset.z;
+            const Vec3 normal = normalisedOrZero(back);
+            hitNormal.x = -normal.z;
+            hitNormal.y = normal.y;
+            hitNormal.z = normal.x;
+            return true;
+        }
+    }
+    return false;
 }
 IObject* ObjectManager::raycast(const Vec3&, const Vec3&, ObjectPredicator*, ObjectPredicator*,
                                 unsigned int*)

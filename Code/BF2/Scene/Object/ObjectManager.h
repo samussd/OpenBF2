@@ -176,10 +176,11 @@ public:
     virtual bool  intersectPill(std::vector<Vec3>& hitPoints, std::vector<Vec3>& hitNormals,
                                 const Vec3& from, const Vec3& to, float radius,
                                 ObjectPredicator* pred, bool b);                // +0x6C
+    // The same delta as intersectLine; passChance scales the chance a sphere lets the line by.
     virtual bool  intersectLineWithSpheres(IObject*& hitObject, Vec3& hitPoint,
                                 Vec3& hitNormal, int& hitPart, const Vec3& from,
-                                const Vec3& to, ObjectPredicator* pred,
-                                ObjectPredicator* pred2, float radius);         // +0x70
+                                const Vec3& direction, ObjectPredicator* include,
+                                ObjectPredicator* stop, float passChance);      // +0x70
     virtual IObject* raycast(const Vec3& from, const Vec3& to, ObjectPredicator* pred,
                                 ObjectPredicator* pred2, unsigned int* outPart); // +0x74
 
