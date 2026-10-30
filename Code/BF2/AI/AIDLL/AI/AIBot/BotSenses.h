@@ -20,6 +20,7 @@ class BotMain;
 // still stops where it would delete them: the Information release around each delete is not
 // read yet. See the reset block in the .cpp.
 class FireObject;
+class IAIObject;
 class Information;
 class SensedObject;
 
@@ -30,8 +31,15 @@ public:
     explicit BotSenses(BotMain* owner);
     ~BotSenses();
     void reset();                            // - (two arms frontier)
-    void see(const double& dt);              // [FRONTIER]
-    void updateSensing(const double& dt);    // [FRONTIER]
+    // Sight, in phases over the ticks (see the .cpp).
+    void see(const double& budget);
+    // Hearing, the shots on record and sight, within the tick's budget.
+    void updateSensing(const double& dt);
+    // The object was seen, by the bot itself or by a bot riding with it.
+    void event_seenObject(unsigned int handle, const Vec3& localPoint, unsigned int part,
+                          Information* information, bool self, bool clear);
+    // A shot the bot noticed, with its shooter.
+    void event_projectile(FireObject* fire, unsigned int handle);
     // A sound from the object reached the bot (BotManager::actionHearing, through BotMain).
     void event_heardObject(unsigned int handle);
 
@@ -48,6 +56,18 @@ private:
     float hear(unsigned int handle, Information* information);
     // Goes over the heard objects, oldest first, for as long as the budget allows.
     void updateHearing(const double& budget);
+    void updateSeeing(const double& budget);
+    void updateFireObjects(const double& budget);
+    bool isCloseAndInFront(Information* equipment, IAIObject* object);
+    // [CHOSEN] helpers for blocks the binary inlines.
+    void setThirdIgnored(std::vector<IAIObject*>& ignore, Information* target, int side);
+    void writeThirdIgnored(std::vector<IAIObject*>& ignore, Information* target, int side);
+    void tellRiders(Information* equipment, unsigned int handle, const Vec3& local, unsigned int part,
+                    Information* target, bool clear);
+    void tellOtherRiders(Information* equipment, SensedObject* so, unsigned int part, Information* target,
+                         bool clear, const Vec3& eye, const Vec3& local, bool visible);
+    void testPose(Information* equipment, SensedObject* so, const Vec3& eye, const Vec3& point,
+                  const std::vector<IAIObject*>& ignore, bool lod, float radius, bool checkLying);
 
     typedef std::pair<double, SensedObject*>      TimedObject;   // a time and a thing
     typedef std::list<TimedObject>                TimedList;
@@ -56,19 +76,20 @@ private:
 
     /*   0 */ BotMain* m_bot;                // the ctor argument, and the first store
     /*   4 */ Frustum* m_frustum;            // new(0x1E8) - . See the header block.
-    /*   8 */ char m_gap8[4];                // [UNRESOLVED] - never written, by anything read so far
-    /*  12 */ double m_double12;             // = -1000000.0 a fifth kind of sentinel
+    // see: 1 when the equipment flies (0x400000), choosing the frustum's width.
+    /*   8 */ int m_frustumGroup;
+    /*  12 */ double m_gatherTime;             // = -1000000.0; see: when the candidates were gathered
     // the distance sort buffer - what `InfoDistPred` and `partial_sort` operate on. Held as a
     // member rather than a local, so the seeing path does not reallocate every tick.
     /*  20 */ std::vector<std::pair<float, unsigned int> > m_sortBuffer;
-    /*  32 */ int m_int32;                   // ctor: 0, reset: 0
-    /*  36 */ int m_int36;                   // ctor: 0, reset: 0
-    /*  40 */ int m_int40;                   // ctor: 0, reset: 0
+    /*  32 */ int m_frustumStep;                   // ctor: 0, reset: 0
+    /*  36 */ int m_phase;                   // ctor: 0, reset: 0
+    /*  40 */ int m_sortIndex;                   // ctor: 0, reset: 0
     // handle -> position in the list at +56. See the header block.
-    /*  44 */ std::map<unsigned int, TimedList::iterator> m_map44;
-    /*  56 */ TimedList m_list56;
+    /*  44 */ std::map<unsigned int, TimedList::iterator> m_seenNodes;
+    /*  56 */ TimedList m_seen;
     // A cursor into the list above, seeded to end by the constructor's last statement.
-    /*  60 */ TimedList::iterator m_cursor60;
+    /*  60 */ TimedList::iterator m_seenCursor;
     // The objects the bot hears, and the same in the order updateHearing goes over them.
     /*  64 */ std::set<unsigned int> m_heardHandles;
     /*  76 */ TimedList m_heard;
@@ -76,14 +97,16 @@ private:
     // Only `reset` makes it valid. See the header block.
     /*  80 */ TimedList::iterator m_cursor80;
     /*  84 */ std::list<FireEntry> m_list84;
-    /*  88 */ int m_int88;                   // ctor: 0, reset: 0
-    /*  92 */ int m_int92;                   // ctor: 0, reset: 0
-    /*  96 */ char m_gap96[4];               // [UNRESOLVED] - never written
+    // updateFireObjects: the shots' strengths, over all battle strengths and against the bot, and
+    // that of the shooters still attacking it.
+    /*  88 */ float m_firedStrength;         // ctor: 0, reset: 0
+    /*  92 */ float m_firedStrengthOwn;      // ctor: 0, reset: 0
+    /*  96 */ float m_attackStrength;
     /* 100 */ std::map<unsigned int, FireObject*> m_map100;
     /* 112 */ SensedObjectMap m_sensedObjects;
     // the only two containers `reset` does not empty. Element width 4 and trivially destructible
     // (the destructor deallocates without a per-element loop); the element type is [INFERRED].
-    /* 124 */ std::vector<unsigned int> m_vector124;
+    /* 124 */ std::vector<IAIObject*> m_candidates;   // see: the objects gathered in phase 0
     /* 136 */ std::vector<unsigned int> m_vector136;
 };
 

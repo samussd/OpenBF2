@@ -12,7 +12,9 @@
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../../Core/ClassManager.h"
 #include "../../../Game/GameServer/ServerSettings.h"
-#include "../../../Game/IGame.h"       // the `game` global and queryInterface (+0x0C)
+#include "../../../Game/IGame.h"
+#include "../../../Game/Objects/IPlayer.h"
+#include "../../../IO/Network/INetworkable.h"    // enemySpottedByAI: the network id       // the `game` global and queryInterface (+0x0C)
 #include "../../../Game/IGameLogic.h"  // the `gameLogic` global - the fog and view-distance reads
 #include "../../../Core/Ids.h"         // IID_IGameServer
 #include "../../../Core/SettingsRepostitory.h"   // the `settings` global - getLevelPath's two keys
@@ -329,9 +331,23 @@ bool BFGame::getIsPrecaching() const
     return m_isPrecaching;
 }
 
+// bf2 0x083ffe30. As a player's spot: the spotted marker on the object (vehicle type 0x1a, no
+// position) and its spotted radio message from the bot's player on channel 1.
 void BFGame::enemySpottedByAI(world::IPlayer* player, world::IObject* object) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFGame::enemySpottedByAI");
+    if (!game)
+        return;
+    unsigned short id = 0;
+    io::INetworkable* const networkable = object->getNetworkable();
+    if (networkable)
+        id = networkable->m_networkableId;
+    Vec2 at;
+    at.x = 0.0f;
+    at.y = 0.0f;
+    game->sendSpottedMessage(player, id, at, static_cast<world::VehicleType>(0x1a));
+    const unsigned int playerId = player->getId();
+    const std::string message = game->getSpottedMessage(id);
+    game->radioMessageFromPlayer(static_cast<TargetChannel>(1), message, playerId, 0, false, false);
 }
 
 } // namespace ai

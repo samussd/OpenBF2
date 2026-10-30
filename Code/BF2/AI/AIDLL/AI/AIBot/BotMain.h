@@ -128,7 +128,7 @@ public:
     virtual int getBotType() const;                                                               // +0x0E4
     virtual unsigned int getBotId() const = 0;                                                    // +0x0E8
     virtual BotMemory* getMemory() = 0;                                                           // +0x0EC
-    virtual const std::string& getName() const = 0;                                               // +0x0F0 [FRONTIER]
+    virtual const std::string& getName() const = 0;                                               // +0x0F0
     virtual void setTimeOfLastGrenadeThrown(double t) = 0;                                        // +0x0F4 [FRONTIER]
     virtual double getTimeOfGrenadeThrown(int i) const = 0;                                       // +0x0F8
     virtual BotNavigation* getBotNavigation() = 0;                                                // +0x0FC
@@ -159,7 +159,7 @@ public:
     virtual void enableBotScriptDebugger(bool /*enable*/) = 0;                                    // +0x160
     virtual BotScriptDebugger* getDebugger() = 0;                                                              // +0x164
     virtual BAPContext* getScriptContext();                                                       // +0x168
-    virtual void event_projectile(FireObject* f, unsigned int h) = 0;                             // +0x16C [FRONTIER]
+    virtual void event_projectile(FireObject* f, unsigned int h) = 0;                             // +0x16C
     virtual void event_shotHit(int i, world::IObject* o, const Vec3& v) = 0;                      // +0x170 [FRONTIER]
     virtual void event_shotMissed(int i, const Vec3& v) = 0;                                      // +0x174 [FRONTIER]
     virtual void event_heardObject(unsigned int h) = 0;                                           // +0x178
@@ -171,7 +171,7 @@ public:
     virtual float getFireInclination() = 0;                                                       // +0x190
     virtual void requestSoldierPose(int pose, bool b) = 0;                                        // +0x194
     virtual int getRequestedSolderPose() = 0;                                                     // +0x198
-    virtual void setPoseStatus(int pose, unsigned int h, bool a, bool b) = 0;                     // +0x19C [FRONTIER]
+    virtual void setPoseStatus(int pose, unsigned int h, bool a, bool b) = 0;                     // +0x19C
     virtual void event_airborn() = 0;                                                             // +0x1A0 [FRONTIER]
     virtual bool isAirBorn() const = 0;                                                           // +0x1A4
     virtual void setLastChangeTime(double t) = 0;                                                 // +0x1A8
@@ -284,7 +284,7 @@ public:
     virtual int getBotType() const;                                                               // +0x0E4
     virtual unsigned int getBotId() const;                                                        // +0x0E8
     virtual BotMemory* getMemory();                                                               // +0x0EC
-    virtual const std::string& getName() const;                                                   // +0x0F0 [FRONTIER]
+    virtual const std::string& getName() const;                                                   // +0x0F0
     virtual void setTimeOfLastGrenadeThrown(double t);                                            // +0x0F4 [FRONTIER]
     virtual double getTimeOfGrenadeThrown(int i) const;                                           // +0x0F8
     virtual BotNavigation* getBotNavigation();                                                    // +0x0FC
@@ -315,7 +315,7 @@ public:
     virtual void enableBotScriptDebugger(bool /*enable*/);                                        // +0x160
     virtual BotScriptDebugger* getDebugger();                                                                  // +0x164
     // Inherits Bot::getScriptContext; do not add a derived override for that slot.
-    virtual void event_projectile(FireObject* f, unsigned int h);                                 // +0x16C [FRONTIER]
+    virtual void event_projectile(FireObject* f, unsigned int h);                                 // +0x16C
     virtual void event_shotHit(int i, world::IObject* o, const Vec3& v);                          // +0x170 [FRONTIER]
     virtual void event_shotMissed(int i, const Vec3& v);                                          // +0x174 [FRONTIER]
     virtual void event_heardObject(unsigned int h);                                               // +0x178
@@ -327,7 +327,7 @@ public:
     virtual float getFireInclination();                                                           // +0x190
     virtual void requestSoldierPose(int pose, bool b);                                            // +0x194
     virtual int getRequestedSolderPose();                                                         // +0x198
-    virtual void setPoseStatus(int pose, unsigned int h, bool a, bool b);                         // +0x19C [FRONTIER]
+    virtual void setPoseStatus(int pose, unsigned int h, bool a, bool b);                         // +0x19C
     virtual void event_airborn();                                                                 // +0x1A0 [FRONTIER]
     virtual bool isAirBorn() const;                                                               // +0x1A4
     virtual void setLastChangeTime(double t);                                                     // +0x1A8
@@ -391,7 +391,7 @@ public:
     virtual double getTimeOfLastFailedSplashDamageAttack() const;                                 // +0x290
     virtual void setTakeOffPosition(const Vec3& v);                                               // +0x294 [FRONTIER]
     virtual const Vec3& getTakeOffPosition() const;                                               // +0x298
-    virtual void setQuadSeen();                                                                   // +0x29C [FRONTIER]
+    virtual void setQuadSeen();                                                                   // +0x29C
     virtual bool isAttacking(unsigned int handle, double& out) const;                             // +0x2A0
     virtual void event_shotTimeOut(int i);                                                        // +0x2A4 [FRONTIER]
     virtual void event_firing(bool& b, int i, const Vec3& v);                                     // +0x2A8 [FRONTIER]

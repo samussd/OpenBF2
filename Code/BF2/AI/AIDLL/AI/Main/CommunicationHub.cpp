@@ -3,6 +3,15 @@
 #include "CommunicationHub.h"
 
 #include "AIDllFrontier.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../AIInterface/BFKnowledge/BFGame.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "CommonSingletonServer.h"
+#include "../AIStrategicEntity/AIStrategicArea.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/Information.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"   // reset sizes by the area count
 
 namespace dice {
@@ -64,9 +73,62 @@ void CommunicationHub::reset()
     }
 }
 
-void CommunicationHub::enemySpottedByAI(IAIPlayer*, IAIObject*, int)
+// 0x3f57e0 (Ghidra). A bot saw an enemy primary object near a strategic area. Aircraft (strength
+// types 4 and 5) count within 100 m of an area and are reported at most once a minute in all;
+// anything else within 30 m, at most once a minute per area and side, sooner when a soldier
+// (type 2) follows a type 0 or 1. The engine takes the report.
+void CommunicationHub::enemySpottedByAI(IAIPlayer* player, IAIObject* object, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommunicationHub::enemySpottedByAI");
+    Information* const information = informationManager->getInformation(object->getInformation(side));
+    // no null guard, as shipped
+    if (!information->isPrimary() || !information->getPhysical())
+        return;
+    const int type = information->getPhysical()->getStrengthType();
+    const std::map<std::string, AIStrategicArea*>& areas = AIStrategicObjectManager::getInstance()->getStrategicAreas();
+    const bool aircraft = static_cast<unsigned int>(type - 4) < 2;
+    const float range = aircraft ? 10000.0f : 900.0f;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    int index = 0;
+    for (std::map<std::string, AIStrategicArea*>::const_iterator it = areas.begin(); it != areas.end(); ++it, ++index)
+    {
+        Vec2 at;
+        at.x = 0.0f;
+        at.y = 0.0f;
+        vec3ToVec2XZ(object->getPosition(), at);
+        const Vec2& centre = it->second->getCenterPosition();
+        const float dx = at.x - centre.x;
+        const float dz = at.y - centre.y;
+        if (!(dz * dz + dx * dx < range))
+            continue;
+        bool report = false;
+        if (aircraft && 60.0 < now - m_time44)
+        {
+            m_time44 = now;
+            report = true;
+        }
+        else
+        {
+            std::pair<CombatStrengthType, double>& record = m_combatStrength[side - 1][index];
+            if (60.0 < now - record.second)
+            {
+                record.first = static_cast<CombatStrengthType>(type);
+                record.second = now;
+                report = true;
+            }
+            else if ((record.first == 0 || record.first == 1) && type == 2)
+            {
+                record.first = static_cast<CombatStrengthType>(2);
+                record.second = now;
+                report = true;
+            }
+        }
+        if (report)
+        {
+            static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)
+                ->enemySpottedByAI(player->getPlayer(), object->getObject());
+            return;
+        }
+    }
 }
 
 void CommunicationHub::enemySpottedByHuman(IAIObject*, unsigned char) const

@@ -1526,7 +1526,7 @@ BotMemory* BotMain::getMemory()
 // +0x0F0
 const std::string& BotMain::getName() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getName");
+    return m_player->getName();
 }
 
 // +0x0F4
@@ -1747,7 +1747,7 @@ BotScriptDebugger* BotMain::getDebugger()
 // +0x16C
 void BotMain::event_projectile(FireObject* f, unsigned int h)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::event_projectile");
+    m_sensingAgent->getBotSenses()->event_projectile(f, h);
 }
 
 // +0x170
@@ -1845,9 +1845,21 @@ int BotMain::getRequestedSolderPose()
 }
 
 // +0x19C
+// 0x19d620 (Ghidra). Whether the firing target would be in sight from the asked pose, and clear of
+// see-through surfaces: pose 2 in the first pair of results, any other in the second.
 void BotMain::setPoseStatus(int pose, unsigned int h, bool a, bool b)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setPoseStatus");
+    m_poseTestTarget = h;
+    if (pose == 2)
+    {
+        m_poseTestResults[0] = a;
+        m_poseTestResults[1] = b;
+    }
+    else
+    {
+        m_poseTestResults[2] = a;
+        m_poseTestResults[3] = b;
+    }
 }
 
 // +0x1A0
@@ -2262,7 +2274,7 @@ const Vec3& BotMain::getTakeOffPosition() const
 // +0x29C
 void BotMain::setQuadSeen()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setQuadSeen");
+    m_sensingAgent->setQuadSeen();
 }
 
 // +0x2A0. 0x19b140 (Ghidra): whether the object has shot at the bot, and when.

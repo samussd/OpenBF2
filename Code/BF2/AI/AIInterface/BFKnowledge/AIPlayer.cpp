@@ -261,9 +261,12 @@ float AIPlayer::getStandardFieldOfView()
                     " - eleven bytes, one float constant at ds:0x889AA58, not yet read");
 }
 
+// bf2 0x083fc960. A fifth of the view distance on a night map.
 float AIPlayer::getViewDistance()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::getViewDistance");
+    if (getPlayer()->isPlayerInNightMap())
+        return 0.2f * m_viewDistance;
+    return m_viewDistance;
 }
 
 void AIPlayer::setViewDistance(float)

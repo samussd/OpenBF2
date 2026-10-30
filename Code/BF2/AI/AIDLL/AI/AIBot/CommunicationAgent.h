@@ -76,6 +76,8 @@ public:
     bool getReceivedMessage(AIRadioMessageInfo& out, AIRadioMessageType type, int playerId) const;
     // Whether a message of the type was received from the player (from anyone for -1).
     bool receivedMessageExists(AIRadioMessageType type, int playerId);
+    // The bot saw an enemy it was not in contact with (BotSenses::event_seenObject).
+    void setSeenNewEnemy(Information* information);
 
 private:
     typedef std::priority_queue<CAPrioMessage, std::vector<CAPrioMessage>,

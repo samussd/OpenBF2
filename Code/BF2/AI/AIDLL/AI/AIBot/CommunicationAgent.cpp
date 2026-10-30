@@ -3,6 +3,8 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining CommunicationAgent operations.
 
 #include "CommunicationAgent.h"
+#include "BotMain.h"
+#include "../AIKnowledge/Information.h"
 
 #include "../Main/AIDllFrontier.h"
 #include "../Main/CommonSingletonServer.h"
@@ -131,6 +133,14 @@ bool CommunicationAgent::receivedMessageExists(AIRadioMessageType type, int play
 void CommunicationAgent::update()
 {
     BF2_AI_FRONTIER("dice::hfe::ai::CommunicationAgent::update");
+}
+
+// 0x1d5460 (Ghidra). The hub may report the sighting.
+void CommunicationAgent::setSeenNewEnemy(Information* information)
+{
+    const int side = m_bot->getSide();
+    IAIObject* const object = information->getAIObject();
+    m_hub->enemySpottedByAI(m_bot->getPlayer(), object, side);
 }
 
 } // namespace ai

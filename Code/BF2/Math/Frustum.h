@@ -33,6 +33,8 @@ public:
     void reSetup();
     void transform(const Mat4& m);
     float getFov() { return m_fov; }
+    // [INFERRED] accessor: BotSenses::see reads +0x194..+0x19C, the forward row, directly.
+    const Mat4& getTransformation() const { return m_transformation; }
     void  setFov(float fov);
     float getNearDist() const { return m_nearDist; }
     void  setNearDist(float d);                                                  // [FRONTIER]

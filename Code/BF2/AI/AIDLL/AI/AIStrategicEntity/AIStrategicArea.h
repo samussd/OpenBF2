@@ -119,6 +119,8 @@ public:
     // position its centre. The Vec3 form drops y.
     bool isInside(const Vec2& point) const;
     bool isInside(const Vec3& point) const;
+    // 0x3496e0 (Ghidra): the side-one position.
+    const Vec2& getCenterPosition() const { return m_position[0]; }
 
     // Additional virtual overload declared after the inherited slots.
     virtual float gravity(float distance, int side);               // slot 33,

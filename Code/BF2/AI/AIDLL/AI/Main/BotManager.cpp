@@ -645,7 +645,7 @@ BotManager::BotManager()
     // m_selectedBots: the three zero stores at +216..+224 are its default construction.
     , m_lastCreatedBot(0)
     , m_vehicleBailValue(0.3f)
-    , m_flag236(false)
+    , m_renderBotSensing(false)
     // m_occupiedObjects: the three zero stores at +240..+248 are its default construction.
     , m_navPointCursor(0)
     , m_planHalfToggle(true)
@@ -1162,9 +1162,10 @@ void BotManager::setRenderBotSensing(bool)
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setRenderBotSensing");
 }
 
+// 0x3f2ce0 (Ghidra).
 bool BotManager::getRenderBotSensing() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::getRenderBotSensing");
+    return m_renderBotSensing;
 }
 
 void BotManager::writeBotPlans()
