@@ -163,7 +163,7 @@ BotMain::BotMain(IAIPlayer* player,
         (&m_wantsToSimulateArtillery)[k] = false;   // +500..+502
     m_avoidSideSwitched = false;        // +512
     m_collidedObject = -1;
-    m_double516 = 0.0;
+    m_moveToStatusTime = 0.0;
     for (int k = 0; k < 3; ++k)
         m_collidedObjectPosition[k] = 0;                // +528..+536
 
@@ -304,7 +304,7 @@ void BotMain::reset()
     m_grenadeThrownTime[2] = 0.0;
     m_timeOfLastFailedStaticAttack = 0.0;
     m_timeOfLastFailedStaticSkyAttack = 0.0;
-    m_double516 = 0.0;
+    m_moveToStatusTime = 0.0;
     m_wantsToSimulateArtillery = false;
     m_isSimulatingArtillery = false;
     m_poseForced = false;
@@ -2138,9 +2138,20 @@ int BotMain::getMoveToStatus() const
 }
 
 // +0x244
+// 0x19d9a0 (Ghidra). At most one change per game time; a time ahead of the clock starts over from 0.
 void BotMain::setMoveToStatus(int status)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setMoveToStatus");
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    double last = m_moveToStatusTime;
+    if (last > now)
+    {
+        last = 0.0f;
+        m_moveToStatusTime = last;
+    }
+    if (!(now - last > 0.0f))
+        return;
+    m_moveToStatusTime = now;
+    m_moveToStatus = status;
 }
 
 // +0x248

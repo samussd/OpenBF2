@@ -3,6 +3,7 @@
 #include "../AIBot/BotMain.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
+#include "../Main/AIDllFrontier.h"
 #include "../../../../IO/Input/PlayerInput.h"
 #include "../../../../Math/Mat4.h"
 
@@ -58,6 +59,28 @@ void infanteryResetControls(Bot* bot, io::PlayerInput* input, bool movement, boo
         input->setInput(io::PIReload, 0.0f);
         input->setInput(io::PIFlareFire, 0.0f);
     }
+}
+
+// 0x2dbc90 (Ghidra).
+bool needsUpdate(const Vec2& point, unsigned int obstacle, float radius)
+{
+    Information* const object = informationManager->getInformation(obstacle);
+    if (!object)
+        return false;
+    Vec2 at;
+    at.x = 0.0f;
+    at.y = 0.0f;
+    vec3ToVec2XZ(object->getPosition(), at);
+    const float distanceSqr = (point.y - at.y) * (point.y - at.y) + (point.x - at.x) * (point.x - at.x);
+    return distanceSqr < radius * radius || (radius + 1.5f) * (radius + 1.5f) < distanceSqr;
+}
+
+// [FRONTIER] 0x2dbd70 (Ghidra), 4.3 KB: the bot's obstacles (BotNavigation +88) in front of it,
+// the traces around the nearest (AIPathfinding 0x88 / 0x8c) and the side to pass on.
+bool updateInfantryMoveToPosWithObstacles(Bot*, const Vec2&, const Vec3&, unsigned int, Vec2&,
+                                          unsigned int&, float&, Vec2&, float&, bool&, Information*, bool)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::updateInfantryMoveToPosWithObstacles");
 }
 
 } // namespace ai

@@ -589,7 +589,7 @@ private:
     /* 508 */ int          m_avoidSide;             // = 0
     /* 512 */ bool         m_avoidSideSwitched;     // = false; setAvoidSide
     /* 513 */ char         m_pad513[3];
-    /* 516 */ double       m_double516;             // = 0.0
+    /* 516 */ double       m_moveToStatusTime;      // = 0.0; setMoveToStatus
     /* 524 */ unsigned int m_collidedObject;        // = -1
     /* 528 */ float        m_collidedObjectPosition[3];  // a Vec3 - getCollidedObjectPosition
     /* 540 */ bool         m_ignoreObstacles;       // = false

@@ -28,14 +28,14 @@ public:
     // [FRONTIER] Navigation methods below remain incomplete unless implemented explicitly.
     bool update(bool& a, bool* b);
     void updateOccationally();                  // dice's spelling - "Occationally"
-    void updatePath(Vec2& a, bool& b, bool& c, float d);
+    bool updatePath(Vec2& a, bool& b, bool& c, float d);
     void updateNavPoints();
     void updateObstacles();
     void updateLastPoint(Information* info);
     void updateSpaceLeftAndRight();
     void updateClosestDistance();
 
-    void initPathfinding(const Vec3& to, float a, float b);
+    bool initPathfinding(const Vec3& to, float a, float b);
     void initPathfinding(unsigned int a, unsigned int b, const Vec3& to, float c, float d);
     bool doPolygonSearch(bool& a, bool* b);
     bool doClusterSearch(bool& a, bool* b);
@@ -69,8 +69,10 @@ public:
 
     bool pointWithinObstacleRadius(const Vec3& point);
     void getFirstPointBeyondDist(const Vec2& from, float distance, Vec2& out);
-    void getSecondPoint(Vec2& out);
-    void getLargestAngleDiff(float& out);
+    bool getSecondPoint(Vec2& out);
+    bool getLargestAngleDiff(float& out);
+    // [INFERRED] accessor for the +188 distance (BAPAMoveToFinding::getTargetDistance reads it inline).
+    float getClosestDistance() const { return m_sentinel188; }
     void getTraceData(int a, unsigned int& b, unsigned int& c, Vec3& d);
 
     // A grenade the bot should know about: where, and the fuse time it had when it was set.
@@ -97,11 +99,15 @@ public:
         NavigationPoint()
             : m_index36(-1)
         {
-            for (int i = 0; i < 36; ++i)
+            for (int i = 0; i < 24; ++i)
                 m_bytes[i] = 0;
+            m_position.x = 0.0f;
+            m_position.y = 0.0f;
+            m_position.z = 0.0f;
         }
 
-        char m_bytes[36];       // [UNRESOLVED]
+        char m_bytes[24];       // [UNRESOLVED]
+        Vec3 m_position;        // +24; getFirstPointBeyondDist reads its x and z
         int  m_index36;         // = -1; the polygon (hasIllegalPath)
     };
 

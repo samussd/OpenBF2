@@ -355,6 +355,47 @@ bool BotNavigation::isRunning()
     return true;
 }
 
+// 0x1a4e50 (Ghidra). From the current point on, the first navigation point farther than the
+// distance from `from` (XZ). out keeps the last point looked at, and is left as it was when no
+// point is left.
+void BotNavigation::getFirstPointBeyondDist(const Vec2& from, float distance, Vec2& out)
+{
+    for (unsigned int i = static_cast<unsigned int>(m_int116); i < m_points.size(); ++i)
+    {
+        const Vec3& at = m_points[i].m_position;
+        out.x = at.x;
+        out.y = at.z;
+        const float dx = from.x - at.x;
+        const float dz = from.y - at.z;
+        if (distance * distance < dz * dz + dx * dx)
+            return;
+    }
+}
+
+// [FRONTIER] 0x1a01b0 (Ghidra), 248 B: starts a search toward a position.
+bool BotNavigation::initPathfinding(const Vec3&, float, float)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::initPathfinding");
+}
+
+// [FRONTIER] 0x1a2200 (Ghidra), 1.4 KB: follows the found path one step.
+bool BotNavigation::updatePath(Vec2&, bool&, bool&, float)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updatePath");
+}
+
+// [FRONTIER] 0x1a40c0 (Ghidra), 94 B.
+bool BotNavigation::getSecondPoint(Vec2&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::getSecondPoint");
+}
+
+// [FRONTIER] 0x1a4120 (Ghidra), 1.4 KB.
+bool BotNavigation::getLargestAngleDiff(float&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::getLargestAngleDiff");
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

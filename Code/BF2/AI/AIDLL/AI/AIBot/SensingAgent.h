@@ -51,6 +51,9 @@ public:
     const Vec2& getMoveDirection() const { return m_moveDirection; }
     const Vec3& getMoveTargetPosition() const { return m_moveTargetPosition; }
     unsigned int getMoveTarget() const { return m_moveTarget; }
+    // [CHOSEN] setters; BAPAMoveTo::setIsSprinting stores the fields inline.
+    void setMoveTargetPosition(const Vec3& position) { m_moveTargetPosition = position; }
+    void setMoveTarget(unsigned int object) { m_moveTarget = object; }
     // Recompute the sensing plan on the next update (a behaviour switched the bot's plan).
     void forceUpdate() { m_forceUpdate = true; }
     // The plan statements' override of where to look: a weight, a direction and whether to
