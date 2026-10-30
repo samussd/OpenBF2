@@ -58,10 +58,12 @@ BotNavigation::BotNavigation(BotMain* owner)
     for (int i = 0; i < 3; ++i)
     {
         m_zero24[i]  = 0;
-        m_zero44[i]  = 0;
         m_zero176[i] = 0;
         m_zero216[i] = 0;
     }
+    m_searchTarget.x = 0.0f;
+    m_searchTarget.y = 0.0f;
+    m_searchTarget.z = 0.0f;
     m_grenadePosition.x = 0.0f;
     m_grenadePosition.y = 0.0f;
     m_grenadePosition.z = 0.0f;

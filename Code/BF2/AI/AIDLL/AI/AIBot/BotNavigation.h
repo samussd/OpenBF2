@@ -56,6 +56,8 @@ public:
     // constructor, initPathfinding's other exits and reset. +316: set by initPathfinding
     // cleared by update and reset.
     bool isSearchActive() const { return m_flag193; }
+    // [INFERRED] accessor; BAPAMoveToFinding::update inlines the +44 loads.
+    const Vec3& getSearchTarget() const { return m_searchTarget; }
     bool isSearchNew() const { return m_flag316; }
     bool isActive();
     // returns true, unconditionally, in both images.
@@ -122,7 +124,9 @@ private:
     /*  36 */ int   m_int36;               // = -1
     /*  40 */ bool  m_flag40;              // = false
     /*  41 */ char  m_pad41[3];
-    /*  44 */ int   m_zero44[3];           // +44..+52, all 0
+    // [INFERRED] the position the search goes toward (BAPAMoveToFinding::update compares its
+    // target with it). = 0.
+    /*  44 */ Vec3  m_searchTarget;
     /*  56 */ int   m_int56;               // not a gap - `reset` zeroes it
     // Owns polygon and cluster path reservations, released through virtual slots +156 and
     // +164 during reset. [UNRESOLVED] The interface type is not yet known.
