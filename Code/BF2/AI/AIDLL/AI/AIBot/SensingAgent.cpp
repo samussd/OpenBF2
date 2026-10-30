@@ -364,6 +364,11 @@ void SensingAgent::insertBehaviourInformation(float, const Vec3&, unsigned char)
 {
 }
 
+// 0x1cdf80 (Ghidra). Reproduced empty.
+void SensingAgent::insertPlanTargetInformation(float, unsigned int, bool)
+{
+}
+
 void SensingAgent::insertPlanDirectionInformation(float weight, const Vec3& direction, bool force)
 {
     m_planDirection = direction;

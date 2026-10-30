@@ -56,6 +56,8 @@ public:
     // The plan statements' override of where to look: a weight, a direction and whether to
     // recompute at once. The bot's current equipment becomes the plan target.
     void insertPlanDirectionInformation(float weight, const Vec3& direction, bool force);
+    // The same for a target. Empty in the shipped binary (a bare `ret`).
+    void insertPlanTargetInformation(float weight, unsigned int target, bool force);
     // A behaviour's hint of where to look. Empty in the shipped binary (a bare `ret`).
     void insertBehaviourInformation(float weight, const Vec3& position, unsigned char behaviour);
 
