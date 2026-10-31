@@ -105,7 +105,7 @@ int AIPathfinding::reset()
 
     m_debugPath->m_nodes.resize(0);
     m_debugPath->m_i0 = 0;
-    m_debugPath->m_i20 = 0;
+    m_debugPath->m_cost = 0.0f;
 
     m_debugClusterPath->m_nodes.resize(0);
     m_debugClusterPath->m_i0 = 0;
@@ -906,22 +906,124 @@ void AIPathfinding::resetDestroyableMapParts()
         m_maps[i]->m_quadTreeManager->resetDestroyableMapParts();
 }
 
-int AIPathfinding::localSearch(int, int, unsigned int, unsigned int, const Vec3&, unsigned int,
-                               const Vec3&, int, QTPath*)
+// 0x3b5430 (Ghidra). A failed search answers its status until it is given back; a found one collects
+// its path; a running one is left to the engine; otherwise a new search, which needs valid ids.
+int AIPathfinding::localSearch(int resource, int map, unsigned int quadTree, unsigned int polygon,
+                               const Vec3& from, unsigned int goalPolygon, const Vec3& to, int vehicleId,
+                               QTPath* path)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::localSearch");
+    const int status = m_engine->m_searches[resource]->m_status;
+    if (static_cast<unsigned int>(status) - 3 < 2)
+        return status;
+    if (status == 2)
+    {
+        quadTree = 0xFFFFFFFFu;
+        polygon = 0xFFFFFFFFu;
+        goalPolygon = 0xFFFFFFFFu;
+    }
+    else
+    {
+        if (status == 1)
+            return 1;
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(vehicleId);
+        if (quadTree == 0xFFFFFFFFu || polygon == 0xFFFFFFFFu || goalPolygon == 0xFFFFFFFFu)
+            return 4;
+    }
+    return internalLocalSearch(resource, map, quadTree, polygon, from, goalPolygon, to, vehicleId, path);
 }
 
-int AIPathfinding::clusterSearch(int, int, unsigned int, unsigned int, const Vec3&, unsigned int,
-                                 const Vec3&, int, ClusterNodePath*)
+// 0x3b5990 (Ghidra). As localSearch and internalLocalSearch in one, over the clusters. Id checks are
+// not made here.
+int AIPathfinding::clusterSearch(int resource, int map, unsigned int quadTree, unsigned int polygon,
+                                 const Vec3& from, unsigned int goalPolygon, const Vec3& to, int vehicleId,
+                                 ClusterNodePath* path)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::clusterSearch");
+    ClusterResource* const search = m_clusterEngine->m_searches[resource];
+    const int status = search->m_status;
+    if (static_cast<unsigned int>(status) - 3 < 2 || status == 1)
+        return status;
+    if (status == 2)
+    {
+        if (search->m_found)
+            search->m_nodeManager->buildPath(path, search->m_found);
+        return status;
+    }
+    ClusterNodeManager* const manager = search->m_nodeManager;
+    path->m_island = quadTree;
+    path->setVehicle(map, static_cast<unsigned int>(vehicleId));
+    QuadTree* const tree = m_maps[map]->m_quadTreeManager->getIsland(quadTree);
+    manager->setQuadTree(tree);
+    manager->setClusterGraph(m_maps[map]->m_quadTreeManager->getClusterGraph(quadTree));
+    ClusterNode* const start = manager->getNewNode(tree->getPolygon(polygon)->m_cluster, 0, 0);
+    ClusterNode* const goal = manager->getNewNode(tree->getPolygon(goalPolygon)->m_cluster, 0, 0);
+    manager->m_start = from;
+    manager->m_goalPosition = to;
+    manager->m_row = m_maps[map]->m_clusterCostTypes[vehicleId];
+    search->m_iterations = 0;
+    search->m_status = 0;
+    search->m_openLimit = 0;
+    search->m_open->clear();
+    search->m_openCache->clear();
+    search->m_closedNodes->clear();
+    manager->reset();
+    if (start->m_cluster == goal->m_cluster)
+    {
+        manager->recycleNode(goal);
+        search->m_status = 2;
+        search->m_found = start;
+    }
+    else
+    {
+        manager->setGoal(goal);
+        search->pushOpenNode(start);
+        search->m_status = 1;
+    }
+    return search->m_status;
 }
 
-int AIPathfinding::internalLocalSearch(int, int, unsigned int, unsigned int, const Vec3&,
-                                       unsigned int, const Vec3&, int, QTPath*)
+// 0x3b5550 (Ghidra). Collects a found path (the ids are not used then), or starts the search; the
+// start and the goal on one polygon are found at once.
+int AIPathfinding::internalLocalSearch(int resource, int map, unsigned int quadTree, unsigned int polygon,
+                                       const Vec3& from, unsigned int goalPolygon, const Vec3& to, int vehicleId,
+                                       QTPath* path)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::internalLocalSearch");
+    LocalResource* const search = m_engine->m_searches[resource];
+    if (search->m_status == 1 || search->m_status == 2)
+    {
+        if (search->m_status == 2 && search->m_found)
+            search->m_nodeManager->buildPath(path, search->m_found);
+        return search->m_status;
+    }
+    QTSearchNodeManager* const manager = search->m_nodeManager;
+    path->m_sentinel16 = static_cast<int>(quadTree);
+    manager->setQuadTree(m_maps[map]->m_quadTreeManager->getIsland(quadTree));
+    QTSearchNode* const start = manager->getNewNode(polygon, 0, 0);
+    start->m_entry = from;
+    start->m_g = 0.0f;
+    QTSearchNode* const goal = manager->getNewNode(goalPolygon, 0, 0);
+    goal->m_entry = to;
+    manager->m_materials =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(vehicleId);
+    search->m_iterations = 0;
+    search->m_status = 0;
+    search->m_openLimit = 0;
+    search->m_open->clear();
+    search->m_openCache->clear();
+    search->m_closedNodes->clear();
+    manager->reset();
+    if (start->m_polygon == goal->m_polygon)
+    {
+        manager->recycleNode(goal);
+        search->m_status = 2;
+        search->m_found = start;
+    }
+    else
+    {
+        manager->setGoal(goal);
+        search->pushOpenNode(start);
+        search->m_status = 1;
+    }
+    return search->m_status;
 }
 
 // A negative map counts as valid. Retail only rejects negative indices; a map past the end
@@ -1047,6 +1149,13 @@ bool AIPathfinding::areNeighbouringClusters(int map, unsigned int island, unsign
                                             unsigned short other) const
 {
     return m_maps[map]->m_quadTreeManager->getClusterGraph(island)->areNeighbours(cluster, other);
+}
+
+// 0x331fb0 (Ghidra).
+void ClusterNodePath::setVehicle(int map, unsigned int type)
+{
+    m_map = map;
+    m_row = IAIPathfinding::instance->getClusterCostType(m_map, type);
 }
 
 // 0x332000 (Ghidra).
@@ -1320,16 +1429,16 @@ void AIPathfinding::init()
         resource->m_maxIterations = 30000;
         m_engine->m_searches.push_back(resource);
 
-        resource->m_i16      = 0;
+        resource->m_iterations      = 0;
         resource->m_openSize = 21;
         resource->m_hashSize = 1031;
         resource->m_open   = checkPointer(new BinarySearchTree<QTSearchNode, QTSearchNode>(21));
-        resource->m_closed =
+        resource->m_openCache =
             checkPointer(new Hash<QTSearchNode, QTSearchNodeManager, QTSearchNode>(1031));
-        resource->m_cache  =
+        resource->m_closedNodes  =
             checkPointer(new Hash<QTSearchNode, QTSearchNodeManager, QTSearchNode>(1031));
-        resource->m_closed->m_nodeManager = resource->m_nodeManager;
-        resource->m_cache->m_nodeManager  = resource->m_nodeManager;
+        resource->m_openCache->m_nodeManager = resource->m_nodeManager;
+        resource->m_closedNodes->m_nodeManager  = resource->m_nodeManager;
 
         m_engine->m_available.push_back(
             static_cast<unsigned int>(m_engine->m_searches.size() - 1));
@@ -1340,16 +1449,16 @@ void AIPathfinding::init()
         clusterResource->m_maxIterations = 5000;
         m_clusterEngine->m_searches.push_back(clusterResource);
 
-        clusterResource->m_i16      = 0;
+        clusterResource->m_iterations      = 0;
         clusterResource->m_openSize = 13;
         clusterResource->m_hashSize = 313;
         clusterResource->m_open   = checkPointer(new BinarySearchTree<ClusterNode, ClusterNode>(13));
-        clusterResource->m_closed =
+        clusterResource->m_openCache =
             checkPointer(new Hash<ClusterNode, ClusterNodeManager, ClusterNode>(313));
-        clusterResource->m_cache  =
+        clusterResource->m_closedNodes  =
             checkPointer(new Hash<ClusterNode, ClusterNodeManager, ClusterNode>(313));
-        clusterResource->m_closed->m_nodeManager = clusterResource->m_nodeManager;
-        clusterResource->m_cache->m_nodeManager  = clusterResource->m_nodeManager;
+        clusterResource->m_openCache->m_nodeManager = clusterResource->m_nodeManager;
+        clusterResource->m_closedNodes->m_nodeManager  = clusterResource->m_nodeManager;
 
         m_clusterEngine->m_available.push_back(
             static_cast<unsigned int>(m_clusterEngine->m_searches.size() - 1));

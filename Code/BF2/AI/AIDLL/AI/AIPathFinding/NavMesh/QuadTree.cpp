@@ -395,7 +395,7 @@ void QuadTree::destroyMapPart(int mapPartId, ClusterGraph* graph)
             if (graph && !part->m_polygons.empty())
             {
                 const unsigned int first = part->m_polygons[0];
-                graph->m_clusters[m_polygons[first].m_cluster].m_unread0C[2]
+                graph->m_clusters[m_polygons[first].m_cluster].m_state
                     = static_cast<unsigned char>(!part->m_initiallyWalkable);
             }
             part->m_destroyed = true;
@@ -419,7 +419,7 @@ void QuadTree::restoreMapPart(int mapPartId, ClusterGraph* graph)
             if (graph && !part->m_polygons.empty())
             {
                 const unsigned int first = part->m_polygons[0];
-                graph->m_clusters[m_polygons[first].m_cluster].m_unread0C[2]
+                graph->m_clusters[m_polygons[first].m_cluster].m_state
                     = static_cast<unsigned char>(part->m_initiallyWalkable);
             }
             part->m_destroyed = false;
@@ -440,7 +440,7 @@ void QuadTree::resetOriginalMaterialOfDestroyableMapPart(int mapPartId, ClusterG
             if (graph && !part->m_polygons.empty())
             {
                 const unsigned int first = part->m_polygons[0];
-                graph->m_clusters[m_polygons[first].m_cluster].m_unread0C[2]
+                graph->m_clusters[m_polygons[first].m_cluster].m_state
                     = static_cast<unsigned char>(part->m_initiallyWalkable);
             }
             part->m_destroyed = false;
@@ -474,6 +474,19 @@ unsigned int QuadTree::getNeighbourOfPolygon(unsigned int polygon, unsigned char
 const Vec3& QuadTree::getVertexForPolygon(unsigned int polygon, unsigned char corner) const
 {
     return m_vertices[m_vertexIndices[corner + m_polygons[polygon].m_firstIndex]];
+}
+
+// 0x3175c0 (Ghidra).
+const Vec3& QuadTree::getSafeVertexForPolygon(unsigned int polygon, unsigned char corner) const
+{
+    const Polygon& record = m_polygons[polygon];
+    return m_vertices[m_vertexIndices[corner % record.m_numberOfVertices + record.m_firstIndex]];
+}
+
+// 0x317760 (Ghidra).
+const Vec3& QuadTree::getNormalOfPolygon(unsigned int polygon) const
+{
+    return m_polygons[polygon].m_normal;
 }
 
 // 0x317f90 (Ghidra).

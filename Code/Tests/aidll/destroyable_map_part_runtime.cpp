@@ -257,8 +257,9 @@ struct GraphFixture
                 clusters[i].m_unread00[byte] = 0;
             clusters[i].m_firstPortal = 0;
             clusters[i].m_numberOfPortals = 0;
-            for (unsigned int byte = 0; byte < sizeof(clusters[i].m_unread0C); ++byte)
-                clusters[i].m_unread0C[byte] = 0;
+            clusters[i].m_firstPortalCost = 0;
+            clusters[i].m_state = 0;
+            clusters[i].m_unread0F = 0;
         }
         graph->*access(GraphClustersTag()) = clusters.empty() ? 0 : &clusters[0];
         graph->*access(GraphClusterCountTag()) = static_cast<unsigned int>(clusters.size());
@@ -266,7 +267,7 @@ struct GraphFixture
 
     unsigned char& state(unsigned int cluster)
     {
-        return clusters[cluster].m_unread0C[2];
+        return clusters[cluster].m_state;
     }
 
     void fill(unsigned char value)

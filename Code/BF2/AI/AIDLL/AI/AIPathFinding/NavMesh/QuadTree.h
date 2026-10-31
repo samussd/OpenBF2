@@ -81,6 +81,9 @@ public:
     // The polygon across an edge, or -1.
     unsigned int getNeighbourOfPolygon(unsigned int polygon, unsigned char edge) const;
     const Vec3& getVertexForPolygon(unsigned int polygon, unsigned char corner) const;
+    // The same with the corner wrapped round the polygon.
+    const Vec3& getSafeVertexForPolygon(unsigned int polygon, unsigned char corner) const;
+    const Vec3& getNormalOfPolygon(unsigned int polygon) const;
     // Which edge of the polygon borders the neighbour.
     bool getNeighbourIndexForPolygon(unsigned char& edge, unsigned int polygon, unsigned int neighbour) const;
     // Where a line from inside the polygon crosses its edge, skipping the edge to the polygon it

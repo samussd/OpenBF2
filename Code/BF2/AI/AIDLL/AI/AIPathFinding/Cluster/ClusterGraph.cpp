@@ -114,6 +114,72 @@ bool ClusterGraph::areNeighbours(unsigned short cluster, unsigned short other) c
     return false;
 }
 
+// 0x324ea0 (Ghidra).
+unsigned short ClusterGraph::getPortalForNeighbour(unsigned short cluster, unsigned short row,
+                                                   unsigned short neighbour) const
+{
+    if (cluster != 0xFFFF)
+        return findClusterPortalWithNeighbour(cluster, row, neighbour);
+    return 0xFFFF;
+}
+
+// 0x32cf90 (Ghidra).
+unsigned short ClusterGraph::findClusterPortalWithNeighbour(unsigned short cluster, unsigned short row,
+                                                            unsigned short neighbour) const
+{
+    const Cluster& record = m_clusters[cluster];
+    const unsigned short portals = record.m_numberOfPortals;
+    for (unsigned short i = 0; i < portals; ++i)
+    {
+        const unsigned short column = static_cast<unsigned short>(row * portals + i);
+        if (m_portals[column + record.m_firstPortal].m_neighbour == neighbour)
+            return i;
+    }
+    return 0xFFFF;
+}
+
+// 0x324f30 (Ghidra). The same +0x10 within 0.1 of the same place.
+unsigned short ClusterGraph::getCorrespongingPortalInNeighbour(const ClusterPortal* portal, unsigned short row) const
+{
+    if (portal->m_neighbour == 0xFFFF)
+        return 0xFFFF;
+    const Cluster& record = m_clusters[portal->m_neighbour];
+    const unsigned short portals = record.m_numberOfPortals;
+    for (unsigned short i = 0; i < portals; ++i)
+    {
+        const ClusterPortal& other = m_portals[record.m_firstPortal + portals * row + i];
+        if (other.m_int10 != portal->m_int10)
+            continue;
+        const float dx = portal->m_position.x - other.m_position.x;
+        const float dy = portal->m_position.y - other.m_position.y;
+        const float dz = portal->m_position.z - other.m_position.z;
+        if (dx * dx + dy * dy + dz * dz < 0.01f)
+            return i;
+    }
+    return 0xFFFF;
+}
+
+// 0x32cee0 (Ghidra). Each row holds the upper triangle of the cluster's portal pairs.
+float ClusterGraph::getCostBetweenClustersPortals(unsigned short cluster, unsigned short portal,
+                                                  unsigned short other, unsigned short row) const
+{
+    unsigned int low = other;
+    unsigned int high = portal;
+    if (portal < other)
+    {
+        high = other;
+        low = portal;
+    }
+    const Cluster& record = m_clusters[cluster];
+    const unsigned int portals = record.m_numberOfPortals;
+    const unsigned int rest = (portals - low) & 0xFFFF;
+    const unsigned int pairs = (static_cast<int>(portals * (portals - 1)) / 2) & 0xFFFF;
+    const unsigned int restPairs = (static_cast<int>(rest * (rest - 1)) / 2) & 0xFFFF;
+    const unsigned int index = record.m_firstPortalCost + pairs * row
+        + (((pairs - restPairs) + ((high - low) & 0xFFFF)) & 0xFFFF);
+    return m_portalCosts[index - 1];
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

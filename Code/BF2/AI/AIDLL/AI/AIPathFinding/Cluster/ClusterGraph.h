@@ -49,6 +49,16 @@ public:
                                           unsigned short column) const;
     // Whether one of the first cluster's portals leads to the second.
     bool areNeighbours(unsigned short cluster, unsigned short other) const;
+    // [INFERRED] accessor; ClusterNodeManager reads the cluster array inline.
+    const Cluster& getCluster(unsigned short cluster) const { return m_clusters[cluster]; }
+    // The column of the cluster's portal to a neighbour, or 0xFFFF. Two copies in the binary.
+    unsigned short getPortalForNeighbour(unsigned short cluster, unsigned short row, unsigned short neighbour) const;
+    unsigned short findClusterPortalWithNeighbour(unsigned short cluster, unsigned short row,
+                                                  unsigned short neighbour) const;
+    // The column of the same portal seen from the cluster it leads to, or 0xFFFF.
+    unsigned short getCorrespongingPortalInNeighbour(const ClusterPortal* portal, unsigned short row) const;
+    float getCostBetweenClustersPortals(unsigned short cluster, unsigned short portal, unsigned short other,
+                                        unsigned short row) const;
 
 private:
     friend class QuadTree;
