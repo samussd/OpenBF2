@@ -28,7 +28,8 @@ public:
     // [FRONTIER] Navigation methods below remain incomplete unless implemented explicitly.
     bool update(bool& a, bool* b);
     void updateOccationally();                  // dice's spelling - "Occationally"
-    bool updatePath(Vec2& a, bool& b, bool& c, float d);
+    // One step along the path: true with the point to head for. waiting: nothing to head for yet.
+    bool updatePath(Vec2& point, bool& arrived, bool& waiting, float distance);
     void updateNavPoints();
     void updateObstacles();
     void updateLastPoint(Information* info);

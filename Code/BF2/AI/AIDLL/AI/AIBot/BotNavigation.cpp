@@ -19,6 +19,7 @@
 #include "../Main/AIDllFrontier.h"
 #include "../Main/AIPathfindingSearchTypes.h"
 #include "../../../../Core/Debug.h"
+#include "../../../../IO/Input/PlayerInput.h"
 
 #include <cmath>
 
@@ -662,16 +663,143 @@ bool BotNavigation::stillOnPath()
     return false;
 }
 
-// [FRONTIER] 0x1a2200 (Ghidra), 1.4 KB: follows the found path one step.
-bool BotNavigation::updatePath(Vec2&, bool&, bool&, float)
+// 0x1a2200 (Ghidra), read in the asm. A soldier firing at an enemy waits on a polygon of material 4.
+// A progress time of -666 presses the action input once. With 30 m or more left and over ten
+// points to go, the points beyond the next ten are dropped only while the current polygon's
+// cluster is the walk's; as shipped that also compares the cluster with the walk's index. Off the
+// path for longer than 2 s (0.5 s for a non-soldier) the bot retraces, after which retail reads
+// the current point from a list that retrace may have emptied.
+bool BotNavigation::updatePath(Vec2& point, bool& arrived, bool& waiting, float distance)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updatePath");
+    if (m_flag192)
+        return false;
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_lastActiveTime = now;
+    if (!m_flag193)
+        return false;
+    arrived = false;
+    waiting = false;
+    if (static_cast<unsigned int>(m_int56) < 2)
+        m_lastActiveTime = 0.0;
+    if (m_flag120 || m_flag195
+        || (m_flag68 && static_cast<unsigned int>(m_int116) >= m_points.size()))
+    {
+        waiting = true;
+        return true;
+    }
+    Information* const target = informationManager->getInformation(m_bot->getFiringTarget());
+    if (!m_points.empty() && m_flag236 && m_bot->isFiring() && target
+        && target->getSide() != m_bot->getSide())
+    {
+        const int polygon = m_points.size() < 2 ? m_int36 : m_points[m_int116].m_index36;
+        unsigned char material;
+        if (m_pathOwner->getMaterial(m_vehicleNumber, m_startQuadTree, static_cast<unsigned int>(polygon),
+                                     material)
+            && material == 4)
+        {
+            waiting = true;
+            m_lastActiveTime = 0.0;
+            return true;
+        }
+    }
+    if (m_double168 == -666.0f)
+    {
+        m_bot->getPlayerInput()->setInput(io::PIAction, 1.0f);
+        m_double168 = now;
+    }
+    if (checkArrivedAtPoint(distance))
+    {
+        if (m_int116 == static_cast<int>(m_points.size()) - 1)
+        {
+            m_lastActiveTime = 0.0;
+            m_sentinel188 = 100000000.0f;
+            clearProgress();
+            arrived = true;
+        }
+        else
+        {
+            ++m_int116;
+            if (m_int240 > 0)
+                --m_int240;
+        }
+    }
+    bool sameCluster = true;
+    if (!(30.0f > m_pathLength) && m_points.size() > static_cast<unsigned int>(m_int116) + 10)
+    {
+        const int cluster = m_quadTree->getPolygon(m_points[m_int116].m_index36)->m_cluster;
+        if (cluster != m_clusterPath->m_i0)
+        {
+            unsigned short node = 0xFFFF;
+            if (m_clusterPath->m_i0 < static_cast<int>(m_clusterPath->m_nodes.size()))
+                node = m_clusterPath->m_nodes[m_clusterPath->m_i0].first;
+            sameCluster = static_cast<unsigned short>(cluster) == node;
+        }
+    }
+    if (sameCluster && static_cast<unsigned int>(m_clusterPath->m_i0) + 1 <= m_clusterPath->m_nodes.size()
+        && !m_flag68)
+    {
+        m_flag68 = true;
+        const std::size_t keep = static_cast<std::size_t>(m_int116) + 10;
+        if (m_points.size() > keep)
+            m_points.resize(keep);
+    }
+    if (!m_flag195)
+    {
+        if (m_int56 != 2 && (!m_flag68 || static_cast<unsigned int>(m_int56) > 1))
+            return false;
+        stillOnPath();
+        if (!m_flag194)
+            m_double160 = now;
+        else if (now - m_double160 > (m_flag236 ? 2.0f : 0.5f))
+        {
+            m_flag194 = false;
+            // A local static of the binary with no writer: always false.
+            static const bool useSkipTrace = false;
+            m_int240 = (useSkipTrace && m_flag236) ? 1 : 0;
+            retrace();
+        }
+    }
+    // [PLATFORM] data(), not operator[]: see above.
+    vec3ToVec2XZ(m_points.data()[m_int116].m_position, point);
+    return true;
 }
 
-// [FRONTIER] 0x1a40c0 (Ghidra), 94 B.
-bool BotNavigation::getSecondPoint(Vec2&)
+// 0x1a49e0 (Ghidra). Within 3 m in height, and in the plane within 0.5 m for a soldier; otherwise
+// within max(m_float4, 1), or at the last point the equipment's smallest radius less 1 if that is
+// more. No null guard on the equipment, as shipped. The distance is not used.
+bool BotNavigation::checkArrivedAtPoint(float)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::getSecondPoint");
+    static const float soldierMinDist = 0.5f;
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const Vec3& at = equipment->getPosition();
+    if (m_points.empty())
+        return false;
+    const Vec3& point = m_points[m_int116].m_position;
+    if (std::fabs(at.y - point.y) > 3.0f)
+        return false;
+    float radius = soldierMinDist;
+    if (!m_flag236)
+    {
+        radius = m_float4 <= 1.0f ? 1.0f : m_float4;
+        if (m_int116 == static_cast<int>(m_points.size()) - 1)
+        {
+            const float room = m_smallestRadius - 1.0f;
+            radius = room <= radius ? radius : room;
+        }
+    }
+    const float dx = at.x - point.x;
+    const float dz = at.z - point.z;
+    return radius * radius > dx * dx + dz * dz;
+}
+
+// 0x1a40c0 (Ghidra). The point after the current one.
+bool BotNavigation::getSecondPoint(Vec2& out)
+{
+    const std::size_t next = static_cast<std::size_t>(m_int116) + 1;
+    if (next >= m_points.size())
+        return false;
+    vec3ToVec2XZ(m_points[next].m_position, out);
+    return true;
 }
 
 // [FRONTIER] 0x1a4120 (Ghidra), 1.4 KB.
