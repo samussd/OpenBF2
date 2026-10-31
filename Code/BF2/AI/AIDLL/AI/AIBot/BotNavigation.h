@@ -76,7 +76,10 @@ public:
     bool getLargestAngleDiff(float& out);
     // [INFERRED] accessor for the +188 distance (BAPAMoveToFinding::getTargetDistance reads it inline).
     float getClosestDistance() const { return m_sentinel188; }
-    void getTraceData(int a, unsigned int& b, unsigned int& c, Vec3& d);
+    // Where a trace on a map starts: the bot's last valid place there.
+    void getTraceData(int map, unsigned int& polygon, unsigned int& island, Vec3& position);
+    // [INFERRED] accessor; AIPathfinding::trace inlines the load.
+    int getVehicleNumber() const { return m_vehicleNumber; }
 
     // A grenade the bot should know about: where, and the fuse time it had when it was set.
     // getGrenadeWarning gives the position and the time left of the 2.8 s since; true while some
@@ -176,8 +179,9 @@ private:
     /* 204 */ int   m_int204;              // = -1
     /* 208 */ int   m_int208;              // = -1
     /* 212 */ int   m_int212;              // = -1
-    /* 216 */ int   m_zero216[3];          // +216, +220, +224
-    /* 228 */ char  m_gap228[4];           // [UNRESOLVED] - never written by the constructor
+    // getTraceData's cache: the position and map the place in m_int200.. was read for.
+    /* 216 */ Vec3  m_tracePosition;       // = 0
+    /* 228 */ int   m_traceMap;            // the constructor leaves it
     /* 232 */ float m_smallestRadius;      // initPathfinding: the equipment's physical
     /* 236 */ bool  m_flag236;             // updateOccationally: measure the room beside the bot
     /* 237 */ char  m_pad237[3];

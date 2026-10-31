@@ -4,8 +4,11 @@
 #include "AIPathfinding.h"
 
 #include <algorithm>     // std::remove - deleteMap uses the erase-remove idiom
+#include <cmath>
 #include <cstddef>
 
+#include "../AIBot/BotNavigation.h"
+#include "../AIPathFinding/Material/MaterialManager.h"
 #include "../AIPathFinding/Cluster/ClusterGraph.h"         // getClusterOfPolygon's neighbours, the portals
 #include "../AIPathFinding/Cluster/ClusterNodeManager.h"   // init builds one per cluster search
 #include "../AIPathFinding/NavMesh/QuadTree.h"             // MapContainer polygon vertex query
@@ -593,16 +596,41 @@ bool AIPathfinding::MapContainer::isValidPosition(const Vec3& position, Material
     return material != 5;
 }
 
-bool AIPathfinding::MapContainer::isValidPosition(const Vec3&, MaterialManager*, unsigned int,
-                                                  bool) const
+// 0x3b0fd0 (Ghidra). The same on one island.
+bool AIPathfinding::MapContainer::isValidPosition(const Vec3& position, MaterialManager* materials,
+                                                  unsigned int island, bool anyMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::isValidPosition");
+    unsigned int polygon;
+    if (!m_quadTreeManager->getIsland(island)->findPolygon(position, polygon, materials,
+                                                           m_properties->m_allowedHeightDiff)
+        || polygon == 0xFFFFFFFFu)
+        return false;
+    if (anyMaterial)
+        return true;
+
+    unsigned char material;
+    if (!getMaterial(island, polygon, material))
+        return false;
+    return material != 5;
 }
 
-bool AIPathfinding::MapContainer::isValidPosition(const Vec3&, MaterialManager*, unsigned int,
-                                                  unsigned int, bool) const
+// 0x3b1090 (Ghidra). The same from a known place.
+bool AIPathfinding::MapContainer::isValidPosition(const Vec3& position, MaterialManager* materials,
+                                                  unsigned int knownIsland, unsigned int knownPolygon,
+                                                  bool anyMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::isValidPosition");
+    unsigned int polygon;
+    const unsigned int island = m_quadTreeManager->findPolygon(position, polygon, knownPolygon, knownIsland,
+                                                               materials, m_properties->m_allowedHeightDiff);
+    if (island == 0xFFFFFFFFu || polygon == 0xFFFFFFFFu)
+        return false;
+    if (anyMaterial)
+        return true;
+
+    unsigned char material;
+    if (!getMaterial(island, polygon, material))
+        return false;
+    return material != 5;
 }
 
 // Resolves polygon then island outputs. Always writes the full-width island result;
@@ -695,24 +723,111 @@ void AIPathfinding::MapContainer::getPolygonCentre(Vec3&, unsigned int, unsigned
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::getPolygonCentre");
 }
 
-void AIPathfinding::MapContainer::getEdge(Vec3&, Vec3&, unsigned int, unsigned int,
-                                          unsigned int) const
+// 0x3b1610 (Ghidra). The edge of a polygon toward its neighbour; the ends stay as they were when
+// the polygons do not meet. (The binary also answers whether they did; no caller reads it.)
+void AIPathfinding::MapContainer::getEdge(Vec3& end0, Vec3& end1, unsigned int polygon,
+                                          unsigned int neighbour, unsigned int island) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::getEdge");
+    const QuadTree* const tree = m_quadTreeManager->getIsland(island);
+    const Polygon* const record = tree->getPolygon(polygon);
+    if (!record)
+        return;
+    unsigned char edge = 0;
+    if (!tree->getNeighbourIndexForPolygon(edge, polygon, neighbour))
+        return;
+    end0 = tree->getVertexForPolygon(polygon, edge);
+    end1 = tree->getVertexForPolygon(
+        polygon, static_cast<unsigned char>(static_cast<unsigned char>(edge + 1) % record->m_numberOfVertices));
 }
 
-bool AIPathfinding::MapContainer::trace(unsigned int&, unsigned int&, const Vec3&, const Vec3&,
-                                        Vec3&, unsigned int&, int, float, MaterialManager*,
-                                        unsigned char, unsigned char*) const
+// 0x3b1720 (Ghidra). Finds the start on the mesh from a known place, then traces.
+bool AIPathfinding::MapContainer::trace(unsigned int& polygon, unsigned int& island, const Vec3& from,
+                                        const Vec3& to, Vec3& hit, unsigned int& last, int maxPolygons,
+                                        float clearance, MaterialManager* materials,
+                                        unsigned char stopMaterial, unsigned char* materialOut) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::trace");
+    island = m_quadTreeManager->findPolygon(from, polygon, polygon, island, materials,
+                                            m_properties->m_allowedHeightDiff);
+    if (polygon == 0xFFFFFFFFu || island == 0xFFFFFFFFu)
+        return false;
+    return traceKnown(polygon, island, from, to, hit, last, maxPolygons, clearance, materials, stopMaterial,
+                      materialOut);
 }
 
-bool AIPathfinding::MapContainer::traceKnown(unsigned int, unsigned int, const Vec3&, const Vec3&,
-                                             Vec3&, unsigned int&, int, float, MaterialManager*,
-                                             unsigned char, unsigned char*) const
+// 0x3b1800 (Ghidra), read in the asm. Walks the mesh polygon by polygon along the line. True: the
+// target was reached (hit = to), within 2 cm in the plane or 5 cm of the length. False: a polygon
+// without a neighbour on that side, a material the vehicle cannot use, the stop material (5 and 6
+// also stop at 7), past the polygon limit or 30000 polygons, or an edge crossed under the
+// clearance from its end. [PLATFORM] Retail compares that clearance with a second out float the
+// callee never writes, an uninitialised stack slot; 0 here, which leaves the clearance test off.
+bool AIPathfinding::MapContainer::traceKnown(unsigned int polygon, unsigned int island, const Vec3& from,
+                                             const Vec3& to, Vec3& hit, unsigned int& last, int maxPolygons,
+                                             float clearance, MaterialManager* materials,
+                                             unsigned char stopMaterial, unsigned char* materialOut) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::traceKnown");
+    const QuadTree* const tree = m_quadTreeManager->getIsland(island);
+    Vec3 direction;
+    direction.x = to.x - from.x;
+    direction.y = to.y - from.y;
+    direction.z = to.z - from.z;
+    const float length =
+        std::sqrt(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z);
+    if (length <= 1e-6f)
+    {
+        last = polygon;
+        return true;
+    }
+    const float inverse = 1.0f / length;
+    direction.x = direction.x * inverse;
+    direction.y = direction.y * inverse;
+    direction.z = inverse * direction.z;
+    hit = from;
+    unsigned int previous = 0xFFFFFFFFu;
+    last = polygon;
+    int steps = 0;
+    while (polygon != 0xFFFFFFFFu && (maxPolygons == -1 || steps < maxPolygons) && steps <= 30000)
+    {
+        last = polygon;
+        ++steps;
+        unsigned char edge;
+        float edgeClearance = 0.0f;
+        float edgeWidth = 0.0f;
+        const bool testClearance = clearance != 0.0f;
+        if (!tree->getLineIntersectionOnEdgeInPolygon(hit, polygon, edge, previous, from, direction,
+                                                      testClearance ? &edgeClearance : 0,
+                                                      testClearance ? &edgeWidth : 0))
+        {
+            if (previous != 0xFFFFFFFFu)
+                return false;
+            hit = to;
+            return true;
+        }
+        const float dx = hit.x - from.x;
+        const float dy = hit.y - from.y;
+        const float dz = hit.z - from.z;
+        if (length <= std::sqrt(dx * dx + dy * dy + dz * dz) + 0.05f || distXZSqr(to, hit) <= 0.025f)
+        {
+            hit = to;
+            return true;
+        }
+        if (testClearance && edgeClearance + edgeClearance < edgeWidth && edgeClearance < clearance)
+            return false;
+        const unsigned int next = tree->getNeighbourOfPolygon(polygon, edge);
+        if (next == 0xFFFFFFFFu)
+            return false;
+        const unsigned char material = tree->getMaterialOfPolygon(next);
+        if (materialOut)
+            *materialOut = material;
+        if (!materials->isValidMaterial(material))
+            return false;
+        previous = polygon;
+        polygon = next;
+        if (stopMaterial != 0
+            && (material == stopMaterial
+                || (static_cast<unsigned char>(stopMaterial - 5) < 2 && material == 7)))
+            return false;
+    }
+    return false;
 }
 
 bool AIPathfinding::MapContainer::getLineIntersectionWithPolygon(Vec3&, unsigned int, unsigned int,
@@ -822,14 +937,28 @@ bool AIPathfinding::isValidPosition(int map, int vehicleId, const Vec3& position
     return m_maps[map]->isValidPosition(position, materials, anyMaterial);
 }
 
-bool AIPathfinding::isValidPosition(int, int, const Vec3&, unsigned int, bool) const
+// 0x3b7160 (Ghidra).
+bool AIPathfinding::isValidPosition(int map, int vehicleId, const Vec3& position, unsigned int island,
+                                    bool anyMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::isValidPosition");
+    if (map < 0)
+        return true;
+
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    return m_maps[map]->isValidPosition(position, settings->getVehicleMaterialManager(vehicleId), island,
+                                        anyMaterial);
 }
 
-bool AIPathfinding::isValidPosition(int, int, const Vec3&, unsigned int, unsigned int, bool) const
+// 0x3b71f0 (Ghidra).
+bool AIPathfinding::isValidPosition(int map, int vehicleId, const Vec3& position, unsigned int knownIsland,
+                                    unsigned int knownPolygon, bool anyMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::isValidPosition");
+    if (map < 0)
+        return true;
+
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    return m_maps[map]->isValidPosition(position, settings->getVehicleMaterialManager(vehicleId), knownIsland,
+                                        knownPolygon, anyMaterial);
 }
 
 int AIPathfinding::getPolygon(std::vector<const Vec3*>&, int, const Vec3&, int) const
@@ -894,9 +1023,11 @@ void AIPathfinding::getPolygonCentre(Vec3&, int, unsigned int, unsigned int) con
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getPolygonCentre");
 }
 
-void AIPathfinding::getEdge(Vec3&, Vec3&, int, unsigned int, unsigned int, unsigned int) const
+// 0x3b7e70 (Ghidra).
+void AIPathfinding::getEdge(Vec3& end0, Vec3& end1, int map, unsigned int polygon, unsigned int neighbour,
+                            unsigned int island) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getEdge");
+    m_maps[map]->getEdge(end0, end1, polygon, neighbour, island);
 }
 
 bool AIPathfinding::getLineIntersectionWithPolygon(Vec3&, int, unsigned int, unsigned int,
@@ -941,22 +1072,45 @@ void AIPathfinding::updateClusterPortalCosts(unsigned int&,
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::updateClusterPortalCosts");
 }
 
-bool AIPathfinding::trace(int, const Vec3&, const Vec3&, Vec3&, unsigned int&, int, int, float,
-                          unsigned char, unsigned char*) const
+// 0x3b80a0 (Ghidra). From no known place.
+bool AIPathfinding::trace(int map, const Vec3& from, const Vec3& to, Vec3& hit, unsigned int& last,
+                          int vehicleId, int maxPolygons, float clearance, unsigned char stopMaterial,
+                          unsigned char* materialOut) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::trace");
+    return trace(0xFFFFFFFFu, 0xFFFFFFFFu, map, from, to, hit, last, vehicleId, maxPolygons, clearance,
+                 stopMaterial, materialOut);
 }
 
-bool AIPathfinding::trace(unsigned int, unsigned int, int, const Vec3&, const Vec3&, Vec3&,
-                          unsigned int&, int, int, float, unsigned char, unsigned char*) const
+// 0x3b8120 (Ghidra).
+bool AIPathfinding::trace(unsigned int polygon, unsigned int island, int map, const Vec3& from, const Vec3& to,
+                          Vec3& hit, unsigned int& last, int vehicleId, int maxPolygons, float clearance,
+                          unsigned char stopMaterial, unsigned char* materialOut) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::trace");
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    MaterialManager* const materials = settings->getVehicleMaterialManager(vehicleId);
+    return m_maps[map]->trace(polygon, island, from, to, hit, last, maxPolygons, clearance, materials,
+                              stopMaterial, materialOut);
 }
 
-bool AIPathfinding::trace(BotNavigation*, bool, const Vec3&, Vec3&, unsigned int&, int, int, float,
-                          unsigned char, unsigned char*) const
+// 0x3b81c0 (Ghidra). From where the navigation last knew its bot, on the trace map or its own.
+bool AIPathfinding::trace(BotNavigation* navigation, bool onTraceMap, const Vec3& to, Vec3& hit,
+                          unsigned int& last, int vehicleId, int maxPolygons, float clearance,
+                          unsigned char stopMaterial, unsigned char* materialOut) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::trace");
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    MaterialManager* const materials = settings->getVehicleMaterialManager(vehicleId);
+    const int map = onTraceMap ? m_traceMapIndex : navigation->getVehicleNumber();
+    Vec3 from;
+    from.x = 0.0f;
+    from.y = 0.0f;
+    from.z = 0.0f;
+    unsigned int polygon;
+    unsigned int island;
+    navigation->getTraceData(map, polygon, island, from);
+    if (polygon == 0xFFFFFFFFu || island == 0xFFFFFFFFu)
+        return false;
+    return m_maps[map]->traceKnown(polygon, island, from, to, hit, last, maxPolygons, clearance, materials,
+                                   stopMaterial, materialOut);
 }
 
 // The
@@ -976,24 +1130,64 @@ bool AIPathfinding::findClosestValidPolygon(unsigned int& quadTree, unsigned int
                                                 materials);
 }
 
-bool AIPathfinding::acquireResource(unsigned int&, int)
+namespace {
+
+// 0x3b73a0 / 0x3b7560 (Ghidra). The first free search goes to the owner; none while locked.
+template <class Engine>
+bool acquireSearch(Engine* engine, bool locked, unsigned int& resource, int owner)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::acquireResource");
+    if (!locked && !engine->m_available.empty())
+    {
+        resource = engine->m_available.front();
+        if (engine->m_searches[resource]->m_i28 < 0)
+        {
+            engine->m_searches[resource]->m_i28 = owner;
+            engine->m_available.erase(engine->m_available.begin());
+            engine->m_inFlight.push_back(resource);
+            return true;
+        }
+    }
+    resource = 0xFFFFFFFFu;
+    return false;
 }
 
-void AIPathfinding::releaseResource(unsigned int&, int)
+// 0x3b7480 / 0x3b7640 (Ghidra). Only its owner gives a search back.
+template <class Engine>
+void releaseSearch(Engine* engine, unsigned int& resource, int owner)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::releaseResource");
+    if (engine->m_searches[resource]->m_i28 != owner)
+        return;
+    engine->m_searches[resource]->m_i28 = -1;
+    engine->m_searches[resource]->m_maxIterations = 0;
+    engine->m_searches[resource]->m_maxSearchDepth = -1;
+    engine->m_searches[resource]->m_nodeManager->returnReset();
+    engine->m_searches[resource]->m_status = 0;
+    engine->m_searches[resource]->m_i28 = -1;
+    engine->m_available.push_back(resource);
+    engine->m_inFlight.remove(resource);
+    resource = 0xFFFFFFFFu;
 }
 
-bool AIPathfinding::acquireClusterResource(unsigned int&, int)
+} // namespace
+
+bool AIPathfinding::acquireResource(unsigned int& resource, int owner)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::acquireClusterResource");
+    return acquireSearch(m_engine, m_locking, resource, owner);
 }
 
-void AIPathfinding::releaseClusterResource(unsigned int&, int)
+void AIPathfinding::releaseResource(unsigned int& resource, int owner)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::releaseClusterResource");
+    releaseSearch(m_engine, resource, owner);
+}
+
+bool AIPathfinding::acquireClusterResource(unsigned int& resource, int owner)
+{
+    return acquireSearch(m_clusterEngine, m_locking, resource, owner);
+}
+
+void AIPathfinding::releaseClusterResource(unsigned int& resource, int owner)
+{
+    releaseSearch(m_clusterEngine, resource, owner);
 }
 
 // Search-record mutations remain unimplemented: status, iteration/depth limits,
@@ -1013,14 +1207,16 @@ void AIPathfinding::setAdditionalGoals(unsigned int, const std::set<unsigned int
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::setAdditionalGoals");
 }
 
-void AIPathfinding::setAllowedClusters(unsigned int, const std::set<unsigned short>*)
+// 0x3b8480 (Ghidra).
+void AIPathfinding::setAllowedClusters(unsigned int resource, const std::set<unsigned short>* clusters)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::setAllowedClusters");
+    m_engine->m_searches[resource]->m_nodeManager->m_allowedClusters = clusters;
 }
 
-void AIPathfinding::setUsePathTopologySmoothing(unsigned int, bool)
+// 0x3b84a0 (Ghidra).
+void AIPathfinding::setUsePathTopologySmoothing(unsigned int resource, bool use)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::setUsePathTopologySmoothing");
+    m_engine->m_searches[resource]->m_nodeManager->m_usePathTopologySmoothing = use;
 }
 
 int AIPathfinding::getStatus(unsigned int) const

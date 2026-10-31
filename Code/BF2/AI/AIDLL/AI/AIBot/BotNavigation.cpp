@@ -64,12 +64,12 @@ BotNavigation::BotNavigation(BotMain* owner)
     for (int i = 0; i < 3; ++i)
     {
         m_zero176[i] = 0;
-        m_zero216[i] = 0;
     }
     m_startPosition.x = 0.0f;
     m_startPosition.y = 0.0f;
     m_startPosition.z = 0.0f;
     m_searchTarget = m_startPosition;
+    m_tracePosition = m_startPosition;
     m_grenadePosition.x = 0.0f;
     m_grenadePosition.y = 0.0f;
     m_grenadePosition.z = 0.0f;
@@ -1095,6 +1095,49 @@ bool BotNavigation::getSecondPoint(Vec2& out)
 bool BotNavigation::getLargestAngleDiff(float&)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::getLargestAngleDiff");
+}
+
+// 0x1a4f10 (Ghidra). Asks the mobile while the bot moves and caches the place for the bot's own map
+// and the trace map; on the spot, answers from the cache. No null guard on the equipment, as
+// shipped; another map on the spot is logged and leaves polygon and island unset.
+void BotNavigation::getTraceData(int map, unsigned int& polygon, unsigned int& island, Vec3& position)
+{
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const IPIMobile::ValidPos& last = equipment->getMobile()->getLastValidPosition(map);
+    if (m_traceMap != map || 1.1920929e-07f < std::fabs(last.position.x - m_tracePosition.x)
+        || 1.1920929e-07f < std::fabs(last.position.y - m_tracePosition.y)
+        || 1.1920929e-07f < std::fabs(last.position.z - m_tracePosition.z))
+    {
+        m_traceMap = map;
+        m_tracePosition = last.position;
+        position = last.position;
+        polygon = last.polygon;
+        island = last.quadTree;
+        if (m_vehicleNumber == map)
+        {
+            m_int200 = static_cast<int>(last.polygon);
+            m_int204 = static_cast<int>(last.quadTree);
+        }
+        if (map == IAIPathfinding::instance->getTraceMapIndex())
+        {
+            m_int208 = static_cast<int>(last.polygon);
+            m_int212 = static_cast<int>(last.quadTree);
+        }
+        return;
+    }
+    position = m_tracePosition;
+    if (map == IAIPathfinding::instance->getTraceMapIndex())
+    {
+        polygon = static_cast<unsigned int>(m_int208);
+        island = static_cast<unsigned int>(m_int212);
+    }
+    else if (map == m_vehicleNumber)
+    {
+        polygon = static_cast<unsigned int>(m_int200);
+        island = static_cast<unsigned int>(m_int204);
+    }
+    else
+        Debug(DebugTypeError, "AI/AIDLL/AI/AIBot/BotNavigation.cpp", 0x630, "") << "Should not be here!";
 }
 
 } // namespace ai

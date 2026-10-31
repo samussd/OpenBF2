@@ -23,8 +23,8 @@ QTSearchNodeManager::QTSearchNodeManager()
     , m_i32(0)
     , m_i36(0)
     , m_i40(0)
-    , m_i44(0)
-    , m_b48(false)
+    , m_allowedClusters(0)
+    , m_usePathTopologySmoothing(false)
     , m_i52(0)
 {
 }
@@ -41,8 +41,8 @@ QTSearchNodeManager::QTSearchNodeManager(QuadTree* quadTree)
     , m_i32(0)
     , m_i36(0)
     , m_i40(0)
-    , m_i44(0)
-    , m_b48(false)
+    , m_allowedClusters(0)
+    , m_usePathTopologySmoothing(false)
     , m_i52(0)
 {
 }
@@ -53,6 +53,13 @@ QTSearchNodeManager::QTSearchNodeManager(QuadTree* quadTree)
 QTSearchNodeManager::~QTSearchNodeManager()
 {
     BF2_AI_FRONTIER("dice::hfe::ai::QTSearchNodeManager::~QTSearchNodeManager");
+}
+
+// 0x30fc20 (Ghidra).
+void QTSearchNodeManager::returnReset()
+{
+    m_usePathTopologySmoothing = false;
+    m_i40 = 0;
 }
 
 } // namespace ai

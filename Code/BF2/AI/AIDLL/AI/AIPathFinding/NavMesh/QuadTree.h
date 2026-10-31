@@ -78,6 +78,17 @@ public:
     unsigned char getMaterialOfPolygon(unsigned int polygon) const;
     // 0 past the end.
     const Polygon* getPolygon(unsigned int polygon) const;
+    // The polygon across an edge, or -1.
+    unsigned int getNeighbourOfPolygon(unsigned int polygon, unsigned char edge) const;
+    const Vec3& getVertexForPolygon(unsigned int polygon, unsigned char corner) const;
+    // Which edge of the polygon borders the neighbour.
+    bool getNeighbourIndexForPolygon(unsigned char& edge, unsigned int polygon, unsigned int neighbour) const;
+    // Where a line from inside the polygon crosses its edge, skipping the edge to the polygon it
+    // came from. clearance, when asked: how far along the edge from its nearer end. The last
+    // float is never written.
+    bool getLineIntersectionOnEdgeInPolygon(Vec3& hit, unsigned int polygon, unsigned char& edge,
+                                            unsigned int previous, const Vec3& from, const Vec3& direction,
+                                            float* clearance, float* unused) const;
 
     void initializeDestroyableMapPart(int, bool, const Vec3&, const Vec3&, const Mat4&,
                                       ClusterGraph*, bool);

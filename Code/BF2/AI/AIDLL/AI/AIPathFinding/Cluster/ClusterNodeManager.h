@@ -31,6 +31,9 @@ public:
     ClusterNodeManager();
     ~ClusterNodeManager();       // , [FRONTIER]
 
+    // Nothing to reset. Empty in the shipped binary.
+    void returnReset() {}
+
     // layout, on the ELF, read store by store out of the constructor
     /*  +0 */ QuadTree* m_quadTree;          // = 0; `setQuadTree` writes it
     /*  +4 */ ClusterGraph* m_clusterGraph;  // = 0; `setClusterGraph` writes it

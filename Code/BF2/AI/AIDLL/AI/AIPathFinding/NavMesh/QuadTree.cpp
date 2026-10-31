@@ -11,6 +11,8 @@
 #include "../../../../../Math/Mat4.h"
 #include "../../../../../Math/Plane3.h"
 
+#include <cmath>
+
 namespace dice {
 namespace hfe {
 namespace ai {
@@ -459,6 +461,151 @@ void QuadTree::undraw() const
 {
     if (CommonSingletonServer::m_iDPManager)
         static_cast<IDPManager*>(CommonSingletonServer::m_iDPManager)->deleteMesh(m_debugMesh);
+}
+
+// 0x3168b0 (Ghidra).
+unsigned int QuadTree::getNeighbourOfPolygon(unsigned int polygon, unsigned char edge) const
+{
+    const Polygon& record = m_polygons[polygon];
+    return edge < record.m_numberOfVertices ? m_neighbours[edge + record.m_firstIndex] : 0xFFFFFFFFu;
+}
+
+// 0x317530 (Ghidra).
+const Vec3& QuadTree::getVertexForPolygon(unsigned int polygon, unsigned char corner) const
+{
+    return m_vertices[m_vertexIndices[corner + m_polygons[polygon].m_firstIndex]];
+}
+
+// 0x317f90 (Ghidra).
+bool QuadTree::getNeighbourIndexForPolygon(unsigned char& edge, unsigned int polygon, unsigned int neighbour) const
+{
+    const Polygon& record = m_polygons[polygon];
+    edge = 0;
+    unsigned int at = m_neighbours[record.m_firstIndex];
+    for (;;)
+    {
+        if (at == neighbour)
+            return true;
+        ++edge;
+        if (record.m_numberOfVertices <= edge)
+            return false;
+        at = m_neighbours[edge + record.m_firstIndex];
+    }
+}
+
+namespace {
+
+// Places the point t along start-end in hit, and its height along the 3D direction.
+void placeOnLine(Vec3& hit, const Vec2& start, const Vec2& end, float t, const Vec3& from, const Vec3& direction)
+{
+    Vec2 point;
+    point.x = start.x * (1.0f - t) + end.x * t;
+    point.y = (1.0f - t) * start.y + t * end.y;
+    vec2ToVec3XZ(point, hit);
+    Vec2 flat;
+    flat.x = 0.0f;
+    flat.y = 0.0f;
+    vec3ToVec2XZ(hit, flat);
+    const float dx = flat.x - start.x;
+    const float dy = flat.y - start.y;
+    hit.y = std::sqrt(dy * dy + dx * dx) * direction.y + from.y;
+}
+
+} // namespace
+
+// 0x317830 (Ghidra), read in the asm. An edge counts when the line crosses it forward, between its
+// ends. Within a thousandth of an end, a line heading out through the edge's far side (the
+// normal's dot with it not negative) passes it over. With no edge crossed, the closest miss under
+// 0.001 stands in for one; edge is then past the last, so the polygon has no neighbour there.
+bool QuadTree::getLineIntersectionOnEdgeInPolygon(Vec3& hit, unsigned int polygon, unsigned char& edge,
+                                                  unsigned int previous, const Vec3& from, const Vec3& direction,
+                                                  float* clearance, float*) const
+{
+    static const float minInvalid = 0.001f;
+    Vec2 start;
+    start.x = 0.0f;
+    start.y = 0.0f;
+    vec3ToVec2XZ(from, start);
+    Vec2 nearestEnd = start;
+    nearestEnd.x = 0.0f;
+    nearestEnd.y = 0.0f;
+    float nearestMiss = 99999.0f;
+    float nearestT = 0.0f;
+    const Polygon& record = m_polygons[polygon];
+    edge = 0;
+    if (record.m_numberOfVertices != 0)
+    {
+        do
+        {
+            if (previous == 0xFFFFFFFFu || previous != m_neighbours[edge + record.m_firstIndex])
+            {
+                Vec2 end0;
+                Vec2 end1;
+                vec3ToVec2XZ(m_vertices[m_vertexIndices[edge + record.m_firstIndex]], end0);
+                const unsigned char next =
+                    static_cast<unsigned char>(static_cast<unsigned char>(edge + 1) % record.m_numberOfVertices);
+                vec3ToVec2XZ(m_vertices[m_vertexIndices[next + record.m_firstIndex]], end1);
+                Vec3 ahead;
+                ahead.x = direction.x * 1.0f + from.x;
+                ahead.y = 0.0f * 1.0f + from.y;
+                ahead.z = direction.z * 1.0f + from.z;
+                Vec2 end;
+                vec3ToVec2XZ(ahead, end);
+                float t;
+                float u;
+                if (lineIntersect(start, end, end0, end1, t, u))
+                {
+                    if (0.0f <= t && 0.0f <= u && u <= 1.0f)
+                    {
+                        bool crossed = true;
+                        if (u <= 0.001f || 0.999f <= u)
+                        {
+                            Vec2 flat;
+                            vec3ToVec2XZ(direction, flat);
+                            Vec2 side;
+                            side.x = end1.x - end0.x;
+                            side.y = end1.y - end0.y;
+                            Vec2 normal;
+                            getNormal(side, normal);
+                            crossed = !(0.0f <= normal.x * flat.x + normal.y * flat.y);
+                        }
+                        if (crossed)
+                        {
+                            placeOnLine(hit, start, end, t, from, direction);
+                            if (clearance)
+                            {
+                                const float sideX = end0.x - end1.x;
+                                const float sideY = end0.y - end1.y;
+                                const float length = std::sqrt(sideY * sideY + sideX * sideX);
+                                const float rest = 1.0f - u;
+                                *clearance = (rest > u ? u : rest) * length;
+                            }
+                            return true;
+                        }
+                    }
+                    else
+                    {
+                        float miss = 0.0f > t ? std::fabs(t) : 9999.0f;
+                        if (!(0.0f <= u) && miss > -u)
+                            miss = -u;
+                        else if (1.0f < u && u - 1.0f < miss)
+                            miss = u - 1.0f;
+                        if (miss < minInvalid && miss < nearestMiss)
+                        {
+                            nearestMiss = miss;
+                            nearestT = t;
+                            nearestEnd = end;
+                        }
+                    }
+                }
+            }
+            ++edge;
+        } while (edge < record.m_numberOfVertices);
+    }
+    if (!(minInvalid > nearestMiss))
+        return false;
+    placeOnLine(hit, start, nearestEnd, nearestT, from, direction);
+    return true;
 }
 
 } // namespace ai

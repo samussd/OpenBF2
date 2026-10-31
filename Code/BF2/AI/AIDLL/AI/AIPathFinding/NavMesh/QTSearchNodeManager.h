@@ -6,6 +6,8 @@
 #ifndef AI_AIDLL_AI_AIPATHFINDING_NAVMESH_QTSEARCHNODEMANAGER_H      // [INFERRED] guard style
 #define AI_AIDLL_AI_AIPATHFINDING_NAVMESH_QTSEARCHNODEMANAGER_H
 
+#include <set>
+
 namespace dice {
 namespace hfe {
 namespace ai {
@@ -39,6 +41,9 @@ public:
     explicit QTSearchNodeManager(QuadTree* quadTree);
     ~QTSearchNodeManager();                      // , [FRONTIER]
 
+    // What a search left behind that the next one must not inherit.
+    void returnReset();
+
     // layout, on the ELF, read store by store out of the constructor
     /*  +0 */ QuadTree* m_quadTree;      // the one argument the second constructor takes
     /*  +4 */ int m_i4;                  // = 0 [UNRESOLVED]
@@ -50,9 +55,9 @@ public:
     /* +28 */ int m_i28;                 // = 0 [UNRESOLVED]
     /* +32 */ int m_i32;                 // = 0 [UNRESOLVED]
     /* +36 */ int m_i36;                 // = 0 [UNRESOLVED]
-    /* +40 */ int m_i40;                 // = 0 `returnReset` clears this one and m_b48
-    /* +44 */ int m_i44;                 // = 0 [UNRESOLVED]
-    /* +48 */ bool m_b48;                // = false also cleared by `returnReset`
+    /* +40 */ int m_i40;                 // = 0 `returnReset` clears this one and the smoothing
+    /* +44 */ const std::set<unsigned short>* m_allowedClusters;   // = 0; setAllowedClusters
+    /* +48 */ bool m_usePathTopologySmoothing;                     // = false; setUsePathTopologySmoothing
     /* +52 */ int m_i52;                 // = 0 [UNRESOLVED]
 };
 
