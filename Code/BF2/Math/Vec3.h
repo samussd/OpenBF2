@@ -72,6 +72,10 @@ typedef Math::Vec4 Vec4;
 
 void vec3ToVec2XZ(const Vec3& in, Vec2& out);
 void vec2ToVec3XZ(const Vec2& in, Vec3& out);
+// A quarter turn of the vector: (y, -x).
+void getNormal(const Vec2& in, Vec2& out);
+// Where the lines a-b and c-d cross: at a + t (b - a) and c + u (d - c). False when parallel.
+bool lineIntersect(const Vec2& a, const Vec2& b, const Vec2& c, const Vec2& d, float& t, float& u);
 // Squared distance in the XZ plane; ignores y. [INFERRED] Float return.
 // Native return rounds once; original x87 callers could compare the unrounded value.
 float distXZSqr(const Vec3& a, const Vec3& b);

@@ -81,8 +81,8 @@ BotNavigation::BotNavigation(BotMain* owner)
         m_zero280[i] = 0;
     m_sideSpace[0] = 0.0f;
     m_sideSpace[1] = 0.0f;
-    for (int i = 0; i < 6; ++i)
-        m_zero320[i] = 0;
+    m_stageFrom = m_startPosition;
+    m_stageTo = m_startPosition;
 
     // the dead resize - see the block above. Written as what it is rather than dropped.
     m_points.resize(0);
@@ -302,11 +302,54 @@ bool BotNavigation::hasIllegalPath()
     return false;
 }
 
-// [FRONTIER] [TEMP] [RETIRE-WHEN: aidll-02-skeleton] The search and path-following half of the
-// navigation; next in the tick order once the bots get a move order.
+// 0x1a2c00 (Ghidra). With a finished path and the bot near the current point, skips to the next
+// point when a clear trace reaches it (a vehicle up to four points). Otherwise a trace to the
+// current point that fails marks the bot off the path (m_flag194, see updatePath).
 void BotNavigation::updateNavPoints()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateNavPoints");
+    static const float minClearanceSoldier = 0.5f;
+    static const float minClearanceVehicle = 0.0f;   // .bss: never written
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!equipment || !equipment->getMobile() || m_int56 != 2)
+        return;
+    if (equipment->getMobile()->getLastValidPosition().polygon == 0xFFFFFFFFu)
+        return;
+    Vec3 hit;
+    hit.x = 0.0f;
+    hit.y = 0.0f;
+    hit.z = 0.0f;
+    const Vec3& at = equipment->getPosition();
+    const bool soldier = m_flag236;
+    const int depth = soldier ? 8 : 30;
+    const float range = soldier ? 10.0f : 20.0f;
+    const float clearance = soldier ? minClearanceSoldier : minClearanceVehicle;
+    unsigned int polygon;
+    if (m_int240 == 0)
+    {
+        const Vec3& current = m_points[m_int116].m_position;
+        const float dx = at.x - current.x;
+        const float dy = at.y - current.y;
+        const float dz = at.z - current.z;
+        if (dz * dz + dx * dx + dy * dy < range * range)
+        {
+            bool skipped = false;
+            const int steps = soldier ? 1 : 4;
+            for (int i = 0; i < steps; ++i)
+            {
+                if (m_points.size() - 1 <= static_cast<unsigned int>(m_int116)
+                    || !m_pathOwner->trace(this, false, m_points[m_int116 + 1].m_position, hit, polygon,
+                                           m_equipmentType, depth, clearance, 5, 0))
+                    break;
+                ++m_int116;
+                skipped = true;
+            }
+            if (skipped)
+                return;
+        }
+    }
+    if (!m_pathOwner->trace(this, false, m_points[m_int116].m_position, hit, polygon, m_equipmentType, -1,
+                            0.0f, 0, 0))
+        m_flag194 = true;
 }
 
 // 0x1a46a0 (Ghidra). What is left of the way: to the current point, along the points (m_pathLength)
@@ -372,14 +415,260 @@ void BotNavigation::updateSpaceLeftAndRight()
     BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateSpaceLeftAndRight");
 }
 
-bool BotNavigation::doPolygonSearch(bool&, bool*)
+// 0x1a14b0 (Ghidra). The fine search, a stage at a time: from the end of the points to the portal
+// two nodes on along the cluster path (the target itself past the last), within those clusters. A
+// found stage becomes navigation points and the cluster walk moves on. false: no free search
+// resource (*full) or a failed search. On a run still going, *running.
+bool BotNavigation::doPolygonSearch(bool& running, bool* full)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::doPolygonSearch");
+    if (m_polygonResource == 0xFFFFFFFFu)
+    {
+        if (!m_pathOwner->acquireResource(m_polygonResource, m_bot->getBotId()))
+        {
+            if (full)
+                *full = true;
+            return false;
+        }
+        if (m_vehicleNumber != m_pathOwner->getTraceMapIndex())
+            m_pathOwner->setUsePathTopologySmoothing(m_polygonResource, true);
+        if (m_points.empty())
+        {
+            m_stageFrom = m_startPosition;
+            m_stageFromPolygon = static_cast<unsigned int>(m_int20);
+        }
+        else
+        {
+            m_stageFrom = m_points.back().m_position;
+            m_stageFromPolygon = static_cast<unsigned int>(m_points.back().m_index36);
+        }
+        m_allowedClusters.clear();
+        m_allowedClusters.insert(m_quadTree->getPolygon(m_stageFromPolygon)->m_cluster);
+        m_stageReachesTarget = false;
+        if (!m_clusterPath->getPoint(m_stageTo, m_stageToPolygon,
+                                     static_cast<unsigned int>(m_clusterPath->m_i0 + 2)))
+        {
+            m_stageTo = m_searchTarget;
+            m_stageReachesTarget = true;
+            m_stageToPolygon = static_cast<unsigned int>(m_int36);
+        }
+        for (int i = 0; i < 3; ++i)
+        {
+            const int index = m_clusterPath->m_i0 + i;
+            const int nodes = static_cast<int>(m_clusterPath->m_nodes.size());
+            if (static_cast<unsigned int>(index) > static_cast<unsigned int>(nodes))
+                break;
+            const unsigned short cluster = index < nodes ? m_clusterPath->m_nodes[index].first
+                                                         : static_cast<unsigned short>(0xFFFF);
+            m_allowedClusters.insert(cluster);
+        }
+        m_allowedClusters.insert(m_quadTree->getPolygon(m_stageToPolygon)->m_cluster);
+        m_pathOwner->setAllowedClusters(m_polygonResource, &m_allowedClusters);
+    }
+    m_int56 = m_pathOwner->localSearch(static_cast<int>(m_polygonResource), m_vehicleNumber,
+                                       static_cast<unsigned int>(m_int16), m_stageFromPolygon, m_stageFrom,
+                                       m_stageToPolygon, m_stageTo, m_equipmentType, m_polygonPath);
+    if (m_int56 != 1)
+    {
+        m_pathOwner->releaseResource(m_polygonResource, m_bot->getBotId());
+        m_polygonResource = 0xFFFFFFFFu;
+        if (m_int56 == 2)
+        {
+            calculatePoints();
+            if (m_stageReachesTarget)
+            {
+                const std::size_t index = m_points.size();
+                m_points.resize(index + 1);
+                m_points[index].m_position = m_searchTarget;
+                m_points[index].m_index36 = m_int36;
+                m_clusterPath->m_nodes.clear();
+                m_clusterPath->m_i0 = 0;
+            }
+            m_flag192 = false;
+            m_quadTree = static_cast<QuadTree*>(
+                m_pathOwner->getQuadTree(m_vehicleNumber, static_cast<unsigned int>(m_polygonPath->m_sentinel16)));
+            optimizePoints();
+            updateNavPoints();
+            updateNavPoints();
+            ++m_clusterPath->m_i0;
+            m_flag68 = false;
+            return true;
+        }
+        if (static_cast<unsigned int>(m_int56) - 3 < 2)
+            return false;
+    }
+    running = true;
+    return true;
 }
 
-bool BotNavigation::doClusterSearch(bool&, bool*)
+// 0x1a1ab0 (Ghidra). The coarse search across the clusters, which then hands over to the fine one;
+// a failed search ends the navigation's search. See doPolygonSearch for the flags.
+bool BotNavigation::doClusterSearch(bool& running, bool* full)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::doClusterSearch");
+    if (m_clusterResource == 0xFFFFFFFFu
+        && !m_pathOwner->acquireClusterResource(m_clusterResource, m_bot->getBotId()))
+    {
+        if (full)
+            *full = true;
+        return false;
+    }
+    m_int56 = m_pathOwner->clusterSearch(static_cast<int>(m_clusterResource), m_vehicleNumber,
+                                         static_cast<unsigned int>(m_int16), static_cast<unsigned int>(m_int20),
+                                         m_startPosition, static_cast<unsigned int>(m_int36), m_searchTarget,
+                                         m_equipmentType, m_clusterPath);
+    if (m_int56 != 1)
+    {
+        m_pathOwner->releaseClusterResource(m_clusterResource, m_bot->getBotId());
+        m_clusterResource = 0xFFFFFFFFu;
+        if (m_int56 == 2)
+        {
+            m_flag120 = false;
+            m_flag68 = true;
+            m_int56 = 0;
+            return true;
+        }
+        if (static_cast<unsigned int>(m_int56) - 3 < 2)
+        {
+            reset();
+            return false;
+        }
+    }
+    running = true;
+    return true;
+}
+
+// 0x1a32a0 (Ghidra). The found polygons become navigation points after the ones kept: each
+// point's position, its polygon, and the edge from the polygon before it (a first polygon has
+// none: the edge is the point). The list ends empty, ready for the next stage.
+void BotNavigation::calculatePoints()
+{
+    QTPath* const path = m_polygonPath;
+    path->m_i0 = 0;
+    const unsigned int quadTree = static_cast<unsigned int>(path->m_sentinel16);
+    const unsigned int nodes = static_cast<unsigned int>(path->m_nodes.size());
+    unsigned int point = static_cast<unsigned int>(m_points.size()) - 1;
+    if (m_points.size() <= static_cast<unsigned int>(m_int116))
+        point = 0;
+    m_points.resize(point + nodes);
+    int from = nodes != 0 ? static_cast<int>(path->m_nodes[0].second) : -1;
+    int polygon = nodes != 0 ? static_cast<int>(path->m_nodes[0].first) : -1;
+    while (static_cast<unsigned int>(path->m_i0) < nodes)
+    {
+        const triple<unsigned int, unsigned int, Vec3>& node = path->m_nodes[path->m_i0];
+        NavigationPoint& navigationPoint = m_points[point];
+        navigationPoint.m_position = node.third;
+        navigationPoint.m_index36 = static_cast<int>(node.first);
+        if (from == -1)
+        {
+            navigationPoint.m_point0 = node.third;
+            navigationPoint.m_point12 = node.third;
+        }
+        else
+            m_pathOwner->getEdge(navigationPoint.m_point0, navigationPoint.m_point12, m_vehicleNumber,
+                                 static_cast<unsigned int>(from), static_cast<unsigned int>(polygon), quadTree);
+        ++path->m_i0;
+        int next = polygon;
+        int nextPolygon = -1;
+        if (static_cast<unsigned int>(path->m_i0) < nodes)
+        {
+            const int second = static_cast<int>(path->m_nodes[path->m_i0].second);
+            if (second != -1)
+                next = second;
+            nextPolygon = static_cast<int>(path->m_nodes[path->m_i0].first);
+        }
+        from = next;
+        polygon = nextPolygon;
+        ++point;
+    }
+    path->m_nodes.clear();
+    path->m_i0 = 0;
+    path->m_i20 = 0;
+}
+
+// 0x1a37d0 (Ghidra). Pulls the points straight. Twice over, from the bot along the points, each
+// point 5 m or more from the bot moves to where the line from the point before to the next point
+// crosses its edge, kept a margin from the edge's ends (0.8 of the bot's smallest radius, at
+// least 1 m and at most half the edge). A last pass does the same with no margin, only inside
+// the edge. No null guard on the equipment, as shipped.
+void BotNavigation::optimizePoints()
+{
+    if (m_points.empty())
+        return;
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    Vec2 from;
+    from.x = 0.0f;
+    from.y = 0.0f;
+    vec3ToVec2XZ(equipment->getPosition(), from);
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        for (unsigned int i = 0; i < m_points.size() - 1; ++i)
+        {
+            NavigationPoint& point = m_points[i];
+            const Vec3& at = equipment->getPosition();
+            const float dx = at.x - point.m_position.x;
+            const float dy = at.y - point.m_position.y;
+            const float dz = at.z - point.m_position.z;
+            if (!(25.0f > dx * dx + dy * dy + dz * dz))
+            {
+                Vec2 to;
+                to.x = 0.0f;
+                to.y = 0.0f;
+                Vec2 end0 = to;
+                Vec2 end1 = to;
+                vec3ToVec2XZ(m_points[i + 1].m_position, to);
+                vec3ToVec2XZ(point.m_point0, end0);
+                vec3ToVec2XZ(point.m_point12, end1);
+                float t;
+                float u;
+                if (lineIntersect(from, to, end0, end1, t, u))
+                {
+                    const float edgeX = end1.x - end0.x;
+                    const float edgeY = end1.y - end0.y;
+                    const float length = std::sqrt(edgeY * edgeY + edgeX * edgeX);
+                    const float along = length * u;
+                    const float half = length * 0.5f;
+                    float margin = m_smallestRadius * 0.8f;
+                    if (margin <= 1.0f)
+                        margin = 1.0f;
+                    if (half <= margin)
+                        margin = half;
+                    if (half <= along)
+                    {
+                        if (length - margin < along)
+                            u = 1.0f - margin / length;
+                    }
+                    else if (along < margin)
+                        u = margin / length;
+                    const float scale = u <= 1.0f ? u : 1.0f;
+                    point.m_position.x = point.m_point0.x + (point.m_point12.x - point.m_point0.x) * scale;
+                    point.m_position.y = (point.m_point12.y - point.m_point0.y) * scale + point.m_point0.y;
+                    point.m_position.z = (point.m_point12.z - point.m_point0.z) * scale + point.m_point0.z;
+                }
+            }
+            vec3ToVec2XZ(point.m_position, from);
+        }
+    }
+    vec3ToVec2XZ(equipment->getPosition(), from);
+    for (unsigned int i = 0; i < m_points.size() - 1; ++i)
+    {
+        NavigationPoint& point = m_points[i];
+        Vec2 to;
+        to.x = 0.0f;
+        to.y = 0.0f;
+        Vec2 end0 = to;
+        Vec2 end1 = to;
+        vec3ToVec2XZ(m_points[i + 1].m_position, to);
+        vec3ToVec2XZ(point.m_point0, end0);
+        vec3ToVec2XZ(point.m_point12, end1);
+        float t;
+        float u;
+        if (lineIntersect(from, to, end0, end1, t, u) && 0.0f <= u && u <= 1.0f)
+        {
+            point.m_position.x = (point.m_point12.x - point.m_point0.x) * u + point.m_point0.x;
+            point.m_position.y = (point.m_point12.y - point.m_point0.y) * u + point.m_point0.y;
+            point.m_position.z = (point.m_point12.z - point.m_point0.z) * u + point.m_point0.z;
+        }
+        vec3ToVec2XZ(point.m_position, from);
+    }
 }
 
 // 0x1a4cf0 (Ghidra). Whether the point lies within the smallest radius of an obstacle that is

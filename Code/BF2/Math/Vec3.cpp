@@ -172,6 +172,25 @@ void vec2ToVec3XZ(const Vec2& in, Vec3& out)
     out.z = in.y;
 }
 
+// libaidll 0x37af30 (Ghidra).
+void getNormal(const Vec2& in, Vec2& out)
+{
+    const float x = in.x;
+    out.x = in.y;
+    out.y = -x;
+}
+
+// libaidll 0x37c2e0 (Ghidra), bf2 0x083fb520.
+bool lineIntersect(const Vec2& a, const Vec2& b, const Vec2& c, const Vec2& d, float& t, float& u)
+{
+    const float denominator = (b.x - a.x) * (d.y - c.y) - (d.x - c.x) * (b.y - a.y);
+    if (denominator == 0.0f)
+        return false;
+    t = ((a.y - c.y) * (d.x - c.x) - (d.y - c.y) * (a.x - c.x)) / denominator;
+    u = ((b.x - a.x) * (a.y - c.y) - (a.x - c.x) * (b.y - a.y)) / denominator;
+    return true;
+}
+
 // Squared XZ distance; keep differences and products in double precision.
 float distXZSqr(const Vec3& a, const Vec3& b)
 {

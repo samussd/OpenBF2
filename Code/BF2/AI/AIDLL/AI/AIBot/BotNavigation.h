@@ -109,8 +109,9 @@ public:
             m_position = m_point0;
         }
 
-        Vec3 m_point0;          // [UNRESOLVED] testDirectPath: the target, as the next two
-        Vec3 m_point12;         // [UNRESOLVED]
+        // The edge crossed at this point, its two ends; the point itself lies on it.
+        Vec3 m_point0;
+        Vec3 m_point12;
         Vec3 m_position;        // +24; getFirstPointBeyondDist reads its x and z
         int  m_index36;         // = -1; the polygon (hasIllegalPath, stillOnPath)
     };
@@ -157,7 +158,7 @@ private:
     // `allocate(20)` with 0 / 0 / self / self is an `_Rb_tree` header at 16 + sizeof(value_type)
     // so the value type is four bytes - a set of pointers or handles. Which is [UNRESOLVED];
     // `void*` holds the width and claims nothing.
-    /* 132 */ std::set<void*> m_set132;
+    /* 132 */ std::set<unsigned short> m_allowedClusters;   // doPolygonSearch: where the stage may go
     /* 144 */ double m_double144;          // = 0.0
     /* 152 */ double m_double152;          // = 0.0
     /* 160 */ double m_double160;          // = 0.0
@@ -198,8 +199,14 @@ private:
     // `reset`'s first statement clears the byte here.
     /* 316 */ bool  m_flag316;             // reset: false
     /* 317 */ char  m_pad317[3];
-    /* 320 */ int   m_zero320[6];          // +320..+340
-    /* 344 */ char  m_gap344[12];          // +344..+355 - the ctor never reaches them [UNRESOLVED]
+    // The stage of the polygon search: from where the points end to a portal two nodes on, or
+    // to the target. The constructor leaves the polygons and the flag.
+    /* 320 */ Vec3  m_stageFrom;           // = 0
+    /* 332 */ Vec3  m_stageTo;             // = 0
+    /* 344 */ unsigned int m_stageFromPolygon;
+    /* 348 */ unsigned int m_stageToPolygon;
+    /* 352 */ bool  m_stageReachesTarget;
+    /* 353 */ char  m_pad353[3];
 };
 
 } // namespace ai
