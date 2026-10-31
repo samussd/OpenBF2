@@ -52,6 +52,12 @@ public:
     const Vec3& getMoveTargetPosition() const { return m_moveTargetPosition; }
     unsigned int getMoveTarget() const { return m_moveTarget; }
     // [CHOSEN] setters; BAPAMoveTo::setIsSprinting stores the fields inline.
+    // [INFERRED] accessor; the soldier move entries write both fields inline.
+    void setMoveDirection(const Vec2& direction)
+    {
+        m_overrideTime = 0.0;
+        m_moveDirection = direction;
+    }
     void setMoveTargetPosition(const Vec3& position) { m_moveTargetPosition = position; }
     void setMoveTarget(unsigned int object) { m_moveTarget = object; }
     // Recompute the sensing plan on the next update (a behaviour switched the bot's plan).
@@ -129,8 +135,7 @@ private:
     /*  64 */ Vec3  m_planDirection;       // insertPlanDirectionInformation
     /*  76 */ float m_planDirectionWeight; // clearPlanTargetInformation: 0
     // Where the bot wants to go, for BAPAMergeSoldierInputs to turn into inputs: an XZ direction
-    // and a target (handle, -1 for none, else the position). [UNRESOLVED] writer: nothing in this
-    // class writes them - presumably the movement entries. The update looks along the direction
+    // and a target (handle, -1 for none, else the position). The update looks along the direction
     // when it does not look around.
     /*  80 */ Vec2  m_moveDirection;       // reset: 0
     /*  88 */ Vec3  m_moveTargetPosition;  // ctor: 0

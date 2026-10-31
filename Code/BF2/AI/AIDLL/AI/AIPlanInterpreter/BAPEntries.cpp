@@ -7,6 +7,7 @@
 #include "PlanInterpreter.h"
 #include "../AIBot/BotMain.h"
 #include "../AIBot/SensingAgent.h"
+#include "../AIBotActionPlan/BAPAMoveTo.h"
 #include "../AIBotActionPlan/BAPALook.h"
 #include "../AIBotActionPlan/BAPAResetControls.h"
 #include "../AIBotActionPlan/BAPASoldierPose.h"
@@ -15,7 +16,14 @@
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIControlInfo.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../Main/CommonSingletonServer.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/BFGameEffector.h"
+#include "../../../AIInterface/BFKnowledge/BFObjectEnvironment.h"
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"
 #include "../../../../Math/Mat4.h"
 #include <cfloat>
 #include <cmath>
@@ -25,6 +33,114 @@
 namespace dice {
 namespace hfe {
 namespace ai {
+
+namespace {
+
+// A soldier close to a player runs on physics and inputs.
+void wakePhysics(Information* equipment)
+{
+    IAIObjectPhysical* const physical = equipment->getAIObject()->getPhysical();
+    if (!physical->hasPhysicsEnabled())
+        physical->enablePhysics(equipment->getSide());
+}
+
+// One soldier further off is placed by hand and has no physics.
+void sleepPhysics(IAIObject* object)
+{
+    IAIObjectPhysical* const physical = object->getPhysical();
+    if (physical->hasPhysicsEnabled())
+        physical->disablePhysics(object->getSide());
+}
+
+// The speed of a soldier placed by hand in a pose: half crouched, a quarter lying, none otherwise.
+float poseSpeed(float speed, int pose)
+{
+    if (pose == SPCrouching)
+        return speed * 0.5f;
+    if (pose == SPLying)
+        return speed * 0.25f;
+    return pose == SPStanding ? speed : 0.0f;
+}
+
+void normalizeOrZero(Vec3& v)
+{
+    const float length2 = v.x * v.x + v.y * v.y + v.z * v.z;
+    if (std::fabs(length2 - 1.0f) < 1.1920929e-07f)
+        return;
+    if (std::fabs(length2) < 1.1920929e-07f)
+    {
+        v.x = 0.0f;
+        v.y = 0.0f;
+        v.z = 0.0f;
+        return;
+    }
+    const float inverse = 1.0f / std::sqrt(length2);
+    v.x = v.x * inverse;
+    v.y = v.y * inverse;
+    v.z = inverse * v.z;
+}
+
+Vec3 cross(const Vec3& a, const Vec3& b)
+{
+    Vec3 out;
+    out.x = a.y * b.z - a.z * b.y;
+    out.y = a.z * b.x - a.x * b.z;
+    out.z = a.x * b.y - a.y * b.x;
+    return out;
+}
+
+// Sets a hand-placed soldier down at `position` (its y is replaced), facing `forward`: on the ground
+// when near it or under it, otherwise dropping by the slope. A lying soldier lies half a metre lower
+// along the ground; the others stand upright. The position move leaves the side vector as it comes.
+void placeSoldier(IAIObject* object, IAIObjectMobile* mobile, Mat4& matrix, Vec3 position, Vec3 forward, int pose,
+                  float y, bool unitRight, int side)
+{
+    float height = 0.0f;
+    float slope = 0.0f;
+    Vec3 normal;
+    normal.x = 0.0f;
+    normal.y = 0.0f;
+    normal.z = 0.0f;
+    static_cast<IAIObjectEnvironment*>(CommonSingletonServer::m_iaiObjectEnvironment)
+        ->getHeightAndNormalForObject(object, position, height, normal, slope);
+    if (y <= height || y - height <= slope + slope)
+        position.y = mobile->getLodHeight() + height;
+    else
+        position.y = y - slope;
+    Vec3 right;
+    if (pose == SPLying)
+    {
+        position.y = position.y - 0.5f;
+        right = cross(normal, forward);
+        normalizeOrZero(right);
+        forward = cross(right, normal);
+        normalizeOrZero(forward);
+    }
+    else
+    {
+        normal.x = 0.0f;
+        normal.y = 1.0f;
+        normal.z = 0.0f;
+        right = cross(normal, forward);
+        if (unitRight)
+            normalizeOrZero(right);
+    }
+    matrix.m[0] = right.x;
+    matrix.m[1] = right.y;
+    matrix.m[2] = right.z;
+    matrix.m[4] = normal.x;
+    matrix.m[5] = normal.y;
+    matrix.m[6] = normal.z;
+    matrix.m[8] = forward.x;
+    matrix.m[9] = forward.y;
+    matrix.m[10] = forward.z;
+    matrix.m[12] = position.x;
+    matrix.m[13] = position.y;
+    matrix.m[14] = position.z;
+    object->setTransformation(matrix, side);
+}
+
+} // namespace
 
 // Action-plan primitives return their statement type for registry dispatch.
 
@@ -395,9 +511,57 @@ int EntryInfanteryMoveTo::getTargetId()
     return 7;
 }
 
-bool EntryInfanteryMoveTo::execute(BotScript *, Bot *, bool&, bool&)
+// 0x2c7aa0 (Ghidra). One step of a move to a position: the inputs for the direction getTargetDir
+// gives. No move (the path is over, or an obstacle takes the step) lets go of the movement inputs.
+bool EntryInfanteryMoveTo::execute(BotScript* script, Bot* bot, bool& ok, bool& done)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryInfanteryMoveTo::execute");
+    BAPAMoveTo* const move = static_cast<BAPAMoveTo*>(script);
+    BotMain* const main = static_cast<BotMain*>(bot);
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(bot->getCurrentEquipment());
+    IPIMobile* const mobile = equipment ? equipment->getMobile() : 0;
+    if (!mobile)
+    {
+        done = true;
+        ok = false;
+        return true;
+    }
+    wakePhysics(equipment);
+    if (bot->isFireAllowed() && move->isFinished(bot))
+    {
+        done = true;
+        ok = true;
+        return true;
+    }
+    done = false;
+    Vec2 point;
+    point.x = 0.0f;
+    point.y = 0.0f;
+    Vec2 direction = point;
+    bool stopped = false;
+    ok = move->update(point, done, stopped, 0.0f);
+    if (ok)
+    {
+        if (stopped || done)
+        {
+            ok = infanteryResetControls(bot, main->getPlayerInput(), true, false, false);
+            return true;
+        }
+        if (!move->getTargetDir(bot, point, direction, 0, false))
+        {
+            bot->getSensingAgent()->setMoveDirection(direction);
+            removeZoom(bot);
+            infanteryControlThrottle(bot, main->getPlayerInput(), equipment->getControlInfo(), mobile->getMaxSpeed(),
+                                     move->getIsSprinting());
+            if (equipment->getSoldierPose() != SPSwimming)
+                bot->requestSoldierPose(SPStanding, true);
+            return true;
+        }
+    }
+    ok = infanteryResetControls(bot, main->getPlayerInput(), true, false, false);
+    done = true;
+    return true;
 }
 
 
@@ -414,9 +578,78 @@ int EntryInfanteryMoveToObject::getTargetId()
     return 9;
 }
 
-bool EntryInfanteryMoveToObject::execute(BotScript *, Bot *, bool&, bool&)
+// 0x2c80d0 (Ghidra). A step of a move to an object, as EntryInfanteryMoveTo. Under 1.5 s since the
+// failed sky attack the failed static attack time moves on; after it a wish to simulate artillery
+// is dropped. A move that is stuck kills the bot.
+bool EntryInfanteryMoveToObject::execute(BotScript* script, Bot* bot, bool& ok, bool& done)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryInfanteryMoveToObject::execute");
+    BAPAMoveTo* const move = static_cast<BAPAMoveTo*>(script);
+    BotMain* const main = static_cast<BotMain*>(bot);
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(bot->getCurrentEquipment());
+    IPIMobile* const mobile = equipment ? equipment->getMobile() : 0;
+    if (!mobile)
+    {
+        done = true;
+        ok = false;
+        return true;
+    }
+    wakePhysics(equipment);
+    if (!informationManager->getInformation(move->getObject()))
+    {
+        done = true;
+        ok = false;
+        return true;
+    }
+    if (bot->isFireAllowed() && move->isFinished(bot))
+    {
+        done = true;
+        ok = true;
+        return true;
+    }
+    done = false;
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (1.5f <= now - main->getTimeOfLastFailedStaticSkyAttack())
+    {
+        if (main->getBotWantsToSimulateArtillery())
+        {
+            main->setTimeOfLastFailedStaticSkyAttack(now);
+            main->setBotWantsToSimulateArtillery(false);
+        }
+    }
+    else
+        main->setTimeOfLastFailedStaticAttack(now);
+    Vec2 point;
+    point.x = 0.0f;
+    point.y = 0.0f;
+    Vec2 direction = point;
+    bool stopped = false;
+    ok = move->update(point, done, stopped, 0.0f);
+    if (ok)
+    {
+        if (stopped || done)
+        {
+            ok = infanteryResetControls(bot, main->getPlayerInput(), true, false, false);
+            return true;
+        }
+        Information* const target = informationManager->getInformation(move->getObject());
+        if (!move->getTargetDir(bot, point, direction, target, move->getIsMovingAway()))
+        {
+            bot->getSensingAgent()->setMoveDirection(direction);
+            removeZoom(bot);
+            infanteryControlThrottle(bot, main->getPlayerInput(), equipment->getControlInfo(), mobile->getMaxSpeed(),
+                                     move->getIsSprinting());
+            if (equipment->getSoldierPose() != SPSwimming)
+                bot->requestSoldierPose(SPStanding, true);
+            if (move->isStuck())
+                static_cast<IAIGameEffector*>(CommonSingletonServer::m_iaiGameEffector)->suicide(bot->getPlayer());
+            return true;
+        }
+    }
+    ok = infanteryResetControls(bot, main->getPlayerInput(), true, false, false);
+    done = true;
+    return true;
 }
 
 
@@ -754,9 +987,91 @@ int EntryMoveToMediumSoldier::getTargetId()
     return 7;
 }
 
-bool EntryMoveToMediumSoldier::execute(BotScript *, Bot *, bool&, bool&)
+// 0x2cc400 (Ghidra). A step of a move to a position by hand: the soldier's matrix goes the distance
+// of this frame at its pose's speed, without physics. In the last half metre it steps on along its
+// facing.
+bool EntryMoveToMediumSoldier::execute(BotScript* script, Bot* bot, bool& ok, bool& done)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryMoveToMediumSoldier::execute");
+    BAPAMoveTo* const move = static_cast<BAPAMoveTo*>(script);
+    BotMain* const main = static_cast<BotMain*>(bot);
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+    {
+        done = true;
+        ok = false;
+        return true;
+    }
+    IAIObject* const object = equipment->getAIObject();
+    sleepPhysics(object);
+    if (move->isFinished(bot))
+    {
+        done = true;
+        ok = true;
+        return true;
+    }
+    done = false;
+    infanteryResetControls(bot, main->getPlayerInput(), true, false, false);
+    Vec3 position = object->getPosition();
+    Vec2 here;
+    here.x = 0.0f;
+    here.y = 0.0f;
+    vec3ToVec2XZ(position, here);
+    Vec2 point = here;
+    point.x = 0.0f;
+    point.y = 0.0f;
+    bool stopped = false;
+    ok = move->update(point, done, stopped, 0.0f);
+    if (!ok)
+    {
+        done = true;
+        return true;
+    }
+    if (done || stopped)
+        return true;
+    Vec2 to;
+    to.x = point.x - here.x;
+    to.y = point.y - here.y;
+    const float distance = std::sqrt(to.y * to.y + to.x * to.x);
+    IAIObjectMobile* const mobile = object->getMobile();
+    const float step = static_cast<float>(
+        static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getTimeIncrease());
+    float speed = mobile->getMaxSpeed();
+    bot->requestSoldierPose(SPStanding, false);
+    const int pose = equipment->getSoldierPose();
+    speed = poseSpeed(speed, pose);
+    Mat4 matrix = object->getTransformation();
+    Vec3 forward;
+    bool along = true;
+    float x = to.x;
+    float z = to.y;
+    if (step * speed <= distance)
+    {
+        if (9.9999997e-06f < distance)
+        {
+            to.x = to.x * (1.0f / distance);
+            to.y = (1.0f / distance) * to.y;
+        }
+        z = step * to.y * speed;
+        x = to.x * step * speed;
+    }
+    else if (distance <= 0.5f)
+    {
+        along = false;
+        forward.x = matrix.m[8];
+        forward.y = matrix.m[9];
+        forward.z = matrix.m[10];
+        x = matrix.m[8] * 0.5f;
+        z = 0.5f * matrix.m[10];
+    }
+    position.x = x + position.x;
+    position.z = z + position.z;
+    if (along)
+        vec2ToVec3XZ(to, forward);
+    normalizeOrZero(forward);
+    placeSoldier(object, mobile, matrix, position, forward, pose, equipment->getPosition().y, false, bot->getSide());
+    return true;
 }
 
 
@@ -811,9 +1126,79 @@ int EntryMoveToObjectMediumSoldier::getTargetId()
     return 9;
 }
 
-bool EntryMoveToObjectMediumSoldier::execute(BotScript *, Bot *, bool&, bool&)
+// 0x2cefe0 (Ghidra). A step of a move to an object by hand, as EntryMoveToMediumSoldier. At the point
+// (within 1 cm) the soldier stays where it is.
+bool EntryMoveToObjectMediumSoldier::execute(BotScript* script, Bot* bot, bool& ok, bool& done)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryMoveToObjectMediumSoldier::execute");
+    BAPAMoveTo* const move = static_cast<BAPAMoveTo*>(script);
+    BotMain* const main = static_cast<BotMain*>(bot);
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+    {
+        done = true;
+        ok = false;
+        return true;
+    }
+    IAIObject* const object = equipment->getAIObject();
+    IAIObjectMobile* const mobile = object->getMobile();
+    sleepPhysics(object);
+    infanteryResetControls(bot, main->getPlayerInput(), true, false, false);
+    if (!informationManager->getInformation(move->getObject()) || move->isFinished(bot))
+    {
+        done = true;
+        ok = true;
+        return true;
+    }
+    done = false;
+    Vec2 point;
+    point.x = 0.0f;
+    point.y = 0.0f;
+    bool stopped = false;
+    ok = move->update(point, done, stopped, 0.0f);
+    if (!ok)
+    {
+        done = true;
+        return true;
+    }
+    if (done || stopped)
+    {
+        done = false;
+        return true;
+    }
+    const Vec3& here = equipment->getPosition();
+    Vec2 to;
+    to.x = point.x - here.x;
+    to.y = point.y - here.z;
+    const float distance = std::sqrt(to.y * to.y + to.x * to.x);
+    if (distance <= 0.01f)
+    {
+        done = false;
+        return true;
+    }
+    Mat4 matrix = object->getTransformation();
+    const float step = static_cast<float>(
+        static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getTimeIncrease());
+    bot->requestSoldierPose(SPStanding, false);
+    const int pose = equipment->getSoldierPose();
+    const float speed = poseSpeed(mobile->getMaxSpeed(), pose);
+    Vec3 position = object->getPosition();
+    Vec3 forward;
+    forward.x = to.x / distance;
+    forward.y = 0.0f;
+    forward.z = to.y / distance;
+    float x = to.x;
+    float z = to.y;
+    if (step * speed <= distance)
+    {
+        z = step * forward.z * speed;
+        x = forward.x * step * speed;
+    }
+    position.x = position.x + x;
+    position.z = position.z + z;
+    placeSoldier(object, mobile, matrix, position, forward, pose, equipment->getPosition().y, true, bot->getSide());
+    return true;
 }
 
 

@@ -2,11 +2,15 @@
 
 #include "../AIBot/BotMain.h"
 #include "../AIBot/BotNavigation.h"
+#include "../AIBot/SquadMember.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIArmament.h"
 #include "../AIKnowledge/IPIMobile.h"
 #include "../AIKnowledge/IPIPhysical.h"
 #include "../AIKnowledge/IPIUnit.h"
+#include "../AIKnowledge/WeaponInfo.h"
+#include "../AIKnowledge/WeaponInfoManager.h"
 #include "../Main/AIDllFrontier.h"
 #include "../Main/IAIPathfinding.h"
 #include "../Main/IBotManager.h"
@@ -22,7 +26,7 @@ namespace ai {
 
 // The look group reads the equipment without a null guard: element 9 of its transformation (the
 // forward vector's y) is negated into the vertical look.
-void infanteryResetControls(Bot* bot, io::PlayerInput* input, bool movement, bool look, bool actions)
+bool infanteryResetControls(Bot* bot, io::PlayerInput* input, bool movement, bool look, bool actions)
 {
     if (movement)
     {
@@ -67,6 +71,59 @@ void infanteryResetControls(Bot* bot, io::PlayerInput* input, bool movement, boo
         input->setInput(io::PIUse, 0.0f);
         input->setInput(io::PIReload, 0.0f);
         input->setInput(io::PIFlareFire, 0.0f);
+    }
+    return true;
+}
+
+// 0x2db200 (Ghidra). Lets go of the zoom input; a zoomed weapon gets it pressed once to leave the
+// zoom. No null guard on the equipment, as shipped.
+void removeZoom(Bot* bot)
+{
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* const armament = equipment->getArmament();
+    if (!armament)
+        return;
+    armament->getWeapon(armament->getActiveWeapon());
+    WeaponInfo* const weapon =
+        WeaponInfoManager::m_instance->getInformation(armament->getWeapon(armament->getActiveWeapon()));
+    if (!weapon || weapon->getWeaponZoom() == io::PINone)
+        return;
+    io::PlayerInput* const input = static_cast<BotMain*>(bot)->getPlayerInput();
+    const io::PlayerInputMap zoom = static_cast<io::PlayerInputMap>(weapon->getWeaponZoom());
+    if (!weapon->isZoomed())
+        input->setInput(zoom, 0.0f);
+    else if (zoom < io::PINone && input->getInput(zoom) != 0.0f)
+        input->setInput(zoom, 0.0f);
+    else
+        input->setInput(zoom, 1.0f);
+}
+
+// 0x2db550 (Ghidra). Sprinting is full throttle (the sign of maxSpeed); walking is the throttle that
+// gives the squad member's speed. A bot simulating artillery only crouches, and makes no progress.
+void infanteryControlThrottle(Bot* bot, io::PlayerInput* input, IPIControlInfo*, float maxSpeed, bool sprint)
+{
+    BotMain* const main = static_cast<BotMain*>(bot);
+    if (main->getBotIsSimulatingArtillery())
+    {
+        main->getBotNavigation()->clearProgress();
+        bot->requestSoldierPose(SPCrouching, true);
+        return;
+    }
+    const float speed = bot->getSquadMember()->getMaxSpeed();
+    if (sprint)
+    {
+        float throttle = 1.0f;
+        if (maxSpeed <= 0.0f)
+            throttle = maxSpeed < 0.0f ? -1.0f : 0.0f;
+        input->setInput(io::PIThrottle, throttle);
+        input->setInput(io::PISprint, 1.0f);
+    }
+    else
+    {
+        input->setInput(io::PIThrottle, speed / maxSpeed);
+        input->setInput(io::PISprint, 0.0f);
     }
 }
 
