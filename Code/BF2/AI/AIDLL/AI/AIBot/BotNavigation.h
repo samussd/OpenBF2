@@ -76,6 +76,8 @@ public:
     bool getLargestAngleDiff(float& out);
     // [INFERRED] accessor for the +188 distance (BAPAMoveToFinding::getTargetDistance reads it inline).
     float getClosestDistance() const { return m_sentinel188; }
+    // [INFERRED] accessor; BAPAMoveToObjectFinding::initObjectFinding reads +204 inline after a trace.
+    unsigned int getTraceIsland() const { return static_cast<unsigned int>(m_int204); }
     // Where a trace on a map starts: the bot's last valid place there.
     void getTraceData(int map, unsigned int& polygon, unsigned int& island, Vec3& position);
     // [INFERRED] accessor; AIPathfinding::trace inlines the load.

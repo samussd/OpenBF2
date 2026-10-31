@@ -34,8 +34,8 @@ public:
     virtual float getControlThreshold() const;                              // +0x30
     virtual float getTimeDuration() const;                                  // +0x34
     virtual SoldierPose getCurrentPose() const;                             // +0x38
-    virtual SoldierPose computeCurrentPose(float a, float b, double time, Bot* bot,
-                                           const Vec3& position);           // +0x3C [FRONTIER]
+    virtual SoldierPose computeCurrentPose(float fire, float control, double time, Bot* bot,
+                                           const Vec3& position);           // +0x3C
 
 private:
     /* +0x04 */ SoldierPose m_normalPose;
@@ -46,7 +46,7 @@ private:
     /* +0x14 */ SoldierPose m_currentPose;          // = the normal pose
     /* +0x18 */ float m_controlThreshold;           // clamped to [-1, 1]
     /* +0x1C */ float m_timeDuration;
-    /* +0x20 */ double m_double20;                  // [UNRESOLVED] = -FLT_MAX
+    /* +0x20 */ double m_double20;                  // when the pose was last chosen; = -FLT_MAX
     // An information handle, or -1. While it names a soldier whose player has a soldier and that
     // soldier is not standing, the normal pose reads as crouching.
     /* +0x28 */ unsigned int m_target;

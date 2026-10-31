@@ -435,7 +435,7 @@ bool BotNavigation::checkProgress()
     }
     else
         m_lastInputTime = now;
-    const float near = m_isSoldier ? 2.0f : 4.0f;
+    const float reached = m_isSoldier ? 2.0f : 4.0f;
     // [PLATFORM] ELF captures the manager before the equipment callback.
     InformationManager* const manager = informationManager;
     Information* const equipment = manager->getInformation(m_bot->getCurrentEquipment());
@@ -443,7 +443,7 @@ bool BotNavigation::checkProgress()
     float dx = m_progressPosition.x - position.x;
     float dy = m_progressPosition.y - position.y;
     float dz = m_progressPosition.z - position.z;
-    if (dx * dx + dy * dy + dz * dz > near * near)
+    if (dx * dx + dy * dy + dz * dz > reached * reached)
     {
         m_progressPosition = position;
         m_progressTime = now;

@@ -2,13 +2,14 @@
 
 #include <cfloat>
 
+#include "../AIBot/BotMain.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
-#include "../Main/AIDllFrontier.h"
 #include "../Main/AIRandom.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
+#include "../../../AIInterface/BFKnowledge/BFTerrain.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 
 namespace dice {
@@ -122,10 +123,66 @@ SoldierPose BAPAComponentSoldierPose::getCurrentPose() const
     return m_currentPose;
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-SoldierPose BAPAComponentSoldierPose::computeCurrentPose(float, float, double, Bot*, const Vec3&)
+// 0x1e1940 (Ghidra). A swimmer stays one. At most once per m_timeDuration: crouches with a target
+// that is not standing; otherwise the incoming-fire pose above that threshold, the normal pose at or
+// above the control threshold and the danger pose below it. Only kits 1 and 3 lie down (the others
+// crouch). Over 0.4 m of water at the position the bot stands; in any water it does not lie down.
+SoldierPose BAPAComponentSoldierPose::computeCurrentPose(float fire, float control, double time, Bot* bot,
+                                                         const Vec3& position)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BAPAComponentSoldierPose::computeCurrentPose");
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+        return m_currentPose;
+    if (equipment->getSoldierPose() == SPSwimming)
+    {
+        m_currentPose = SPSwimming;
+        return SPSwimming;
+    }
+    if (time - m_double20 < m_timeDuration)
+        return m_currentPose;
+    m_double20 = time;
+    if (m_target != 0xFFFFFFFFu)
+    {
+        Information* const target = informationManager->getInformation(m_target);
+        if (target && (target->getObjectTypeFlags() & 0x200000u))
+        {
+            IAIObject* const object = target->getAIObject();
+            IAIPlayer* const player =
+                static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)
+                    ->getPlayerFromId(object->getPlayerId());
+            if (player && player->getSoldier() && object->getSoldierPose() != SPStanding)
+            {
+                m_currentPose = SPCrouching;
+                return SPCrouching;
+            }
+        }
+    }
+    SoldierPose pose;
+    if (fire > m_fireObjectsThreshold)
+        pose = m_incommingFirePose;
+    else if (m_controlThreshold <= control)
+        pose = m_normalPose;
+    else
+        pose = m_dangerPose;
+    if (pose == SPLying && equipment->getKitType() != 1 && equipment->getKitType() != 3)
+        pose = SPCrouching;
+    m_currentPose = pose;
+    const IAITerrain* const terrain = static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+    const float water = terrain->getWaterLevel(position.x, position.z);
+    const float depth = water - terrain->getHeight(position.x, position.z);
+    if (depth > 0.4f)
+    {
+        m_currentPose = SPStanding;
+        return SPStanding;
+    }
+    if (depth > 0.0f && m_currentPose == SPLying)
+    {
+        m_currentPose = SPCrouching;
+        return SPCrouching;
+    }
+    return m_currentPose;
 }
 
 } // namespace ai
