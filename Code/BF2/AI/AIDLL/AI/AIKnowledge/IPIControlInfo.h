@@ -30,6 +30,7 @@ public:
     virtual void setTime() {}
     virtual void setTime(double /*time*/) {}
 
+    unsigned long long getDriveControls() const;
     unsigned long long getLookControls() const;
     io::PlayerInputMap getLookVerticalControl() const;
     io::PlayerInputMap getLookHorizontalControl() const;

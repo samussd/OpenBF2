@@ -143,6 +143,8 @@ public:
     StatusMap::Status getStatus(int side) const { return m_status[side - 1]; }
     void resetStatus();      // both sides back to the statuses in m_status[2] and [3]
     int getIndex() const { return m_index; }
+    // A random point within the fraction of the side's extents; y is the object's height field.
+    void randomizePos(int side, float fraction, Vec3& out);
 
     // [CHOSEN, not recovered] Public fields allow manager access; the original may have
     // used friendship instead. Offsets document ELF layout and do not constrain modern STL sizes.

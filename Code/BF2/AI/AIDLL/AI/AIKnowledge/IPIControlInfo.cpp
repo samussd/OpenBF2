@@ -10,6 +10,11 @@ namespace dice {
 namespace hfe {
 namespace ai {
 
+unsigned long long IPIControlInfo::getDriveControls() const
+{
+    return m_information->getAIObject()->getControlInfo()->getDriveControls();
+}
+
 unsigned long long IPIControlInfo::getLookControls() const
 {
     return m_information->getAIObject()->getControlInfo()->getLookControls();

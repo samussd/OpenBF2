@@ -6,6 +6,7 @@
 #include "../AIStrategic/SAI.h"          // EnemyStatistics - the four objects the constructor makes
 #include "../Main/AIDllFrontier.h"
 #include "../Main/AIMain.h"
+#include "../Main/AIRandom.h"
 
 namespace dice {
 namespace hfe {
@@ -283,6 +284,16 @@ float AIStrategicObject::getXExtent(int side) const
 float AIStrategicObject::getZExtent(int side) const
 {
     return m_size[side] + m_size[side];
+}
+
+// 0x352b80 (Ghidra).
+void AIStrategicObject::randomizePos(int side, float fraction, Vec3& out)
+{
+    const float x = AIRandom::m_instance->nextFloat() * getXExtent(side) * fraction - getXExtent(side) * 0.5f;
+    const float z = AIRandom::m_instance->nextFloat() * getZExtent(side) * fraction - getZExtent(side) * 0.5f;
+    out.x = x + m_position[side - 1].x;
+    out.y = m_f148;
+    out.z = z + m_position[side - 1].y;
 }
 
 } // namespace ai
