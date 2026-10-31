@@ -26,7 +26,7 @@ void infanteryResetControls(Bot* bot, io::PlayerInput* input, bool movement, boo
 // the point (XZ) is inside the radius or more than 1.5 beyond it.
 bool needsUpdate(const Vec2& point, unsigned int obstacle, float radius);
 
-// [FRONTIER] Picks the obstacle on the way to `ahead` and how to pass it. True: it took the step.
+// Picks the obstacle on the way to `ahead` and how to pass it. True: this step is lost.
 bool updateInfantryMoveToPosWithObstacles(Bot* bot, const Vec2& ahead, const Vec3& coordinate,
                                           unsigned int object, Vec2& avoidPoint, unsigned int& obstacle,
                                           float& passDistance, Vec2& obstaclePosition,
