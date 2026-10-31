@@ -26,7 +26,9 @@ public:
     ClusterPortal() { m_position.x = 0.0f; m_position.y = 0.0f; m_position.z = 0.0f; }
 
     /* +0x00 */ Vec3          m_position;          // [INFERRED] name
-    /* +0x0C */ unsigned char m_unread0C[8];       // [UNRESOLVED] - see the note above
+    /* +0x0C */ unsigned short m_neighbour;        // the cluster it leads to (areNeighbours)
+    /* +0x0E */ unsigned char m_unread0E[2];       // [UNRESOLVED] - see the note above
+    /* +0x10 */ unsigned int m_int10;              // [UNRESOLVED] ClusterNodePath::getPoint hands it out
 };
 
 typedef char ClusterPortalIsTheFileRecord[sizeof(ClusterPortal) == 20 ? 1 : -1];
@@ -42,6 +44,11 @@ public:
 
     // [CHOSEN name] Returns the stored cluster count used by QuadTreeManager.
     unsigned int getNumberOfClusters() const { return m_numberOfClusters; }
+    // The portal at a row and column of a cluster's portals.
+    const ClusterPortal* getClusterPortal(unsigned short cluster, unsigned short row,
+                                          unsigned short column) const;
+    // Whether one of the first cluster's portals leads to the second.
+    bool areNeighbours(unsigned short cluster, unsigned short other) const;
 
 private:
     friend class QuadTree;

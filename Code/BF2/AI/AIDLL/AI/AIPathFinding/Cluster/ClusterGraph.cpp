@@ -94,6 +94,26 @@ void ClusterGraph::readFromFile(io::File& file)
     }
 }
 
+// 0x324e50 (Ghidra).
+const ClusterPortal* ClusterGraph::getClusterPortal(unsigned short cluster, unsigned short row,
+                                                    unsigned short column) const
+{
+    const Cluster& record = m_clusters[cluster];
+    return &m_portals[record.m_firstPortal + row * record.m_numberOfPortals + column];
+}
+
+// 0x32da70 (Ghidra).
+bool ClusterGraph::areNeighbours(unsigned short cluster, unsigned short other) const
+{
+    const Cluster& record = m_clusters[cluster];
+    for (unsigned short i = 0; i < record.m_numberOfPortals; ++i)
+    {
+        if (m_portals[record.m_firstPortal + i].m_neighbour == other)
+            return true;
+    }
+    return false;
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

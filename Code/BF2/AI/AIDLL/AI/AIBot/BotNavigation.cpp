@@ -12,10 +12,15 @@
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIMobile.h"
 #include "../AIKnowledge/IPIPhysical.h"
+#include "../AIKnowledge/IPIUnit.h"
 #include "../AIPathFinding/NavMesh/QuadTree.h"
 #include "../Main/IAIPathfinding.h"
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
+#include "../Main/AIPathfindingSearchTypes.h"
+#include "../../../../Core/Debug.h"
+
+#include <cmath>
 
 namespace dice {
 namespace hfe {
@@ -29,7 +34,7 @@ BotNavigation::BotNavigation(BotMain* owner)
     , m_int16(-1)
     , m_int20(-1)
     , m_int36(-1)
-    , m_flag40(false)
+    , m_targetMaterial(0)
     // the two paths, in the order the binary builds them: the fine one first.
     , m_polygonPath(checkPointer(new QTPath()))
     , m_polygonResource(0xFFFFFFFFu)
@@ -57,20 +62,20 @@ BotNavigation::BotNavigation(BotMain* owner)
 {
     for (int i = 0; i < 3; ++i)
     {
-        m_zero24[i]  = 0;
         m_zero176[i] = 0;
         m_zero216[i] = 0;
     }
-    m_searchTarget.x = 0.0f;
-    m_searchTarget.y = 0.0f;
-    m_searchTarget.z = 0.0f;
+    m_startPosition.x = 0.0f;
+    m_startPosition.y = 0.0f;
+    m_startPosition.z = 0.0f;
+    m_searchTarget = m_startPosition;
     m_grenadePosition.x = 0.0f;
     m_grenadePosition.y = 0.0f;
     m_grenadePosition.z = 0.0f;
     m_pathOwner = 0;                   // +60 - a pointer, see BotNavigation.h
     m_quadTree = 0;
-    m_zero308[0] = 0;
-    m_zero308[1] = 0;
+    m_zero308 = 0;
+    m_pathLength = 0.0f;
     for (int i = 0; i < 3; ++i)
         m_zero280[i] = 0;
     m_sideSpace[0] = 0.0f;
@@ -116,7 +121,7 @@ void BotNavigation::resetAll()
     m_grenadeFlag = false;
     // Not the constructor's 0.0 - see the block above.
     m_grenadeTime = -9999.0;
-    m_zero308[0] = 0;
+    m_zero308 = 0;
     m_double300 = -1.0;
 
     clearProgress();
@@ -303,9 +308,57 @@ void BotNavigation::updateNavPoints()
     BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateNavPoints");
 }
 
+// 0x1a46a0 (Ghidra). What is left of the way: to the current point, along the points (m_pathLength)
+// and on along the portals of the cluster path. As shipped the portals are read from the start of
+// the cluster path, however far it has been walked, and a missing portal counts as the last one.
 void BotNavigation::updateClosestDistance()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateClosestDistance");
+    if (m_points.empty())
+    {
+        m_sentinel188 = 0.0f;
+        return;
+    }
+    // no null guard, as shipped
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const Vec3& at = equipment->getPosition();
+    const Vec3& current = m_points[m_int116].m_position;
+    float dx = at.x - current.x;
+    float dy = at.y - current.y;
+    float dz = at.z - current.z;
+    float length = std::sqrt(dz * dz + dx * dx + dy * dy);
+    unsigned int point = static_cast<unsigned int>(m_int116) + 1;
+    for (; point < m_points.size(); ++point)
+    {
+        const Vec3& from = m_points[point - 1].m_position;
+        const Vec3& to = m_points[point].m_position;
+        dx = from.x - to.x;
+        dy = from.y - to.y;
+        dz = from.z - to.z;
+        length = std::sqrt(dz * dz + dx * dx + dy * dy) + length;
+    }
+    m_pathLength = length;
+    const ClusterNodePath* const path = m_clusterPath;
+    const unsigned int nodes = static_cast<unsigned int>(path->m_nodes.size());
+    if (static_cast<unsigned int>(path->m_i0) < nodes)
+    {
+        const unsigned int left = nodes - static_cast<unsigned int>(path->m_i0);
+        Vec3 last = m_points[point - 1].m_position;
+        Vec3 portal;
+        portal.x = 0.0f;
+        portal.y = 0.0f;
+        portal.z = 0.0f;
+        for (unsigned int node = 1; node < left; ++node)
+        {
+            unsigned int unused;
+            path->getPoint(portal, unused, node);
+            dx = last.x - portal.x;
+            dy = last.y - portal.y;
+            dz = last.z - portal.z;
+            length = std::sqrt(dx * dx + dy * dy + dz * dz) + length;
+            last = portal;
+        }
+    }
+    m_sentinel188 = length;
 }
 
 bool BotNavigation::checkProgress()
@@ -374,10 +427,239 @@ void BotNavigation::getFirstPointBeyondDist(const Vec2& from, float distance, Ve
     }
 }
 
-// [FRONTIER] 0x1a01b0 (Ghidra), 248 B: starts a search toward a position.
-bool BotNavigation::initPathfinding(const Vec3&, float, float)
+// 0x1a01b0 (Ghidra). A target off the mesh, or no equipment, starts nothing.
+bool BotNavigation::initPathfinding(const Vec3& to, float a, float b)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::initPathfinding");
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (equipment)
+    {
+        const int type = equipment->getUnit()->getEquipmentType();
+        const int vehicle = equipment->getMobile()->getVehicleNumber();
+        unsigned int polygon;
+        unsigned int quadTree;
+        if (IAIPathfinding::instance->getPolygon(to, vehicle, polygon, quadTree, type))
+            return initPathfinding(quadTree, polygon, to, a, b);
+    }
+    m_flag193 = false;
+    return false;
+}
+
+// 0x1a02b0 (Ghidra), read in the asm. The same target for the same vehicle while a search is on
+// keeps it: true at once with under two stages, or when the bot is on the current point's polygon
+// or still on the path; otherwise more than one point is retraced. Anything else starts over from
+// the bot's last valid place, which must be within 10 m of it and on the target's quadtree. True:
+// the search is on (the direct path may already have answered it).
+bool BotNavigation::initPathfinding(unsigned int quadTree, unsigned int polygon, const Vec3& to, float a, float b)
+{
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!equipment)
+    {
+        m_flag193 = false;
+        return false;
+    }
+    m_flag236 = (equipment->getObjectTypeFlags() & 0x200000) != 0;
+    if (!m_pathOwner)
+        m_pathOwner = IAIPathfinding::instance;
+    IPIMobile* const mobile = equipment->getMobile();
+    const IPIMobile::ValidPos& last = mobile->getLastValidPosition();
+    const bool sameTarget = std::fabs(to.x - m_searchTarget.x) <= 1.1920929e-07f
+        && std::fabs(to.y - m_searchTarget.y) <= 1.1920929e-07f
+        && std::fabs(to.z - m_searchTarget.z) <= 1.1920929e-07f;
+    if (!sameTarget)
+        clearProgress();
+    if (m_flag193 && sameTarget && m_vehicleNumber == mobile->getVehicleNumber()
+        && m_equipmentType == equipment->getUnit()->getEquipmentType())
+    {
+        if (static_cast<unsigned int>(m_int56) < 2)
+            return true;
+        if (!m_points.empty() && static_cast<unsigned int>(m_points[m_int116].m_index36) == last.polygon)
+            return true;
+        if (!m_points.empty() && stillOnPath())
+            return true;
+        if (m_points.size() > 1)
+        {
+            retrace();
+            return true;
+        }
+    }
+    if (quadTree != 0xFFFFFFFFu && polygon != 0xFFFFFFFFu)
+    {
+        m_int36 = static_cast<int>(polygon);
+        m_searchTarget = to;
+        if (last.quadTree != 0xFFFFFFFFu && last.polygon != 0xFFFFFFFFu)
+        {
+            const Vec3& at = equipment->getPosition();
+            const float dx = at.x - last.position.x;
+            const float dy = at.y - last.position.y;
+            const float dz = at.z - last.position.z;
+            if (!(dx * dx + dy * dy + dz * dz > 100.0f))
+            {
+                if (quadTree != last.quadTree)
+                {
+                    Debug(DebugTypeError, "AI/AIDLL/AI/AIBot/BotNavigation.cpp", 0xc4, "")
+                        << "Bot " << m_bot->getName()
+                        << " is ordered to go to an island that it is not on (" << quadTree << " != "
+                        << last.quadTree << ")";
+                    m_flag193 = false;
+                    return false;
+                }
+                m_flag68 = true;
+                m_flag120 = true;
+                m_flag192 = false;
+                m_int16 = static_cast<int>(last.quadTree);
+                m_startQuadTree = last.quadTree;
+                m_int20 = static_cast<int>(last.polygon);
+                m_startPosition = last.position;
+                m_float4 = a;
+                m_float8 = b;
+                m_float8Sqr = b * b;
+                m_vehicleNumber = mobile->getVehicleNumber();
+                const IPIMobile::ValidPos& vehiclePosition = mobile->getLastValidPosition(m_vehicleNumber);
+                m_int204 = static_cast<int>(vehiclePosition.quadTree);
+                m_int200 = static_cast<int>(vehiclePosition.polygon);
+                const IPIMobile::ValidPos& infantry = mobile->getLastValidInfantryPos();
+                m_int212 = static_cast<int>(infantry.quadTree);
+                m_int208 = static_cast<int>(infantry.polygon);
+                m_equipmentType = equipment->getUnit()->getEquipmentType();
+                m_flag195 = false;
+                m_int240 = 0;
+                reset();
+                m_flag193 = true;
+                m_smallestRadius = equipment->getPhysical()->getSmallestRadius();
+                m_pathOwner->getMaterial(m_vehicleNumber, quadTree, static_cast<unsigned int>(m_int36),
+                                         m_targetMaterial);
+                testDirectPath();
+                m_quadTree = static_cast<QuadTree*>(
+                    m_pathOwner->getQuadTree(m_vehicleNumber, static_cast<unsigned int>(m_int16)));
+                m_flag316 = true;
+                return true;
+            }
+        }
+    }
+    m_flag193 = false;
+    m_flag192 = true;
+    return false;
+}
+
+// 0x1a0da0 (Ghidra). A target within 200 m of the start that a straight trace reaches needs no
+// search: it becomes the last navigation point and the two stages are done.
+void BotNavigation::testDirectPath()
+{
+    static const float minDistSqr = 40000.0f;
+    const float dx = m_searchTarget.x - m_startPosition.x;
+    const float dy = m_searchTarget.y - m_startPosition.y;
+    const float dz = m_searchTarget.z - m_startPosition.z;
+    if (!(dx * dx + dy * dy + dz * dz < minDistSqr))
+        return;
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!equipment || !equipment->getMobile())
+        return;
+    Vec3 hit;
+    hit.x = 0.0f;
+    hit.y = 0.0f;
+    hit.z = 0.0f;
+    unsigned int polygon;
+    unsigned char material;
+    if (!m_pathOwner->trace(static_cast<unsigned int>(m_int20), m_startQuadTree, m_vehicleNumber,
+                            m_startPosition, m_searchTarget, hit, polygon, m_equipmentType, -1, 0.0f, 5,
+                            &material))
+        return;
+    const std::size_t index = m_points.size();
+    m_points.resize(index + 1);
+    NavigationPoint& point = m_points[index];
+    point.m_position = m_searchTarget;
+    point.m_index36 = static_cast<int>(polygon);
+    point.m_point0 = m_searchTarget;
+    point.m_point12 = m_searchTarget;
+    m_int36 = static_cast<int>(polygon);
+    m_targetMaterial = material;
+    m_flag68 = false;
+    m_flag120 = false;
+    m_int116 = 0;
+    m_int56 = 2;
+    updateClosestDistance();
+}
+
+// 0x1a10c0 (Ghidra). The bot left its points: they go, and the walk of the cluster path restarts at
+// the cluster the bot is in, or at a cluster next to it. Without either, or with under two nodes,
+// the search is off. No null guard on the equipment, as shipped.
+void BotNavigation::retrace()
+{
+    ClusterNodePath* const path = m_clusterPath;
+    const unsigned int nodes = static_cast<unsigned int>(path->m_nodes.size());
+    if (nodes >= 2)
+    {
+        path->m_i0 = 0;
+        m_points.clear();
+        Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+        const IPIMobile::ValidPos& last = equipment->getMobile()->getLastValidPosition();
+        m_int16 = static_cast<int>(last.quadTree);
+        m_int20 = static_cast<int>(last.polygon);
+        m_startPosition = last.position;
+        m_flag195 = true;
+        const unsigned short cluster = static_cast<unsigned short>(m_pathOwner->getClusterOfPolygon(
+            m_vehicleNumber, static_cast<unsigned int>(m_int16), last.polygon));
+        for (unsigned int i = 0; i + 1 < nodes; ++i)
+        {
+            unsigned short node = 0xFFFF;
+            if (path->m_i0 < static_cast<int>(path->m_nodes.size()))
+                node = path->m_nodes[path->m_i0].first;
+            if (cluster == node)
+                return;
+            ++path->m_i0;
+        }
+        path->m_i0 = 0;
+        for (unsigned int i = 0; i + 1 < nodes; ++i)
+        {
+            unsigned short node = 0xFFFF;
+            if (path->m_i0 < static_cast<int>(path->m_nodes.size()))
+                node = path->m_nodes[path->m_i0].first;
+            if (m_pathOwner->areNeighbouringClusters(m_vehicleNumber, static_cast<unsigned int>(m_int16),
+                                                     cluster, node))
+                return;
+            ++path->m_i0;
+        }
+    }
+    m_flag195 = false;
+    reset();
+}
+
+// 0x1a3ec0 (Ghidra). The bot's polygon is the current point's or the one before it, an earlier
+// point's, or one of the next 20 (the bot then skips ahead to it). No null guard on the equipment,
+// as shipped.
+bool BotNavigation::stillOnPath()
+{
+    if (m_points.size() < 2)
+        return false;
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const int polygon = static_cast<int>(equipment->getMobile()->getLastValidPosition().polygon);
+    if (polygon == -1)
+        return false;
+    const unsigned int current = static_cast<unsigned int>(m_int116);
+    const unsigned int size = static_cast<unsigned int>(m_points.size());
+    if (current >= size)
+        return false;
+    const int previous = current != 0 ? m_points[current - 1].m_index36 : -1;
+    if (polygon == previous || polygon == m_points[current].m_index36)
+        return true;
+    for (int i = static_cast<int>(current); i >= 0; --i)
+    {
+        if (m_points[i].m_index36 == polygon)
+            return true;
+    }
+    const unsigned int left = size - current;
+    const unsigned int end = current + (left < 20 ? left : 20);
+    for (unsigned int i = current; i < end; ++i)
+    {
+        if (m_points[i].m_index36 == polygon)
+        {
+            m_int116 = static_cast<int>(i);
+            const int rest = m_int240 - static_cast<int>(i - current);
+            m_int240 = rest > 0 ? rest : 0;
+            return true;
+        }
+    }
+    return false;
 }
 
 // [FRONTIER] 0x1a2200 (Ghidra), 1.4 KB: follows the found path one step.

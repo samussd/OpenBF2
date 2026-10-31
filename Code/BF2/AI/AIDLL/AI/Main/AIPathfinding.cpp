@@ -6,9 +6,11 @@
 #include <algorithm>     // std::remove - deleteMap uses the erase-remove idiom
 #include <cstddef>
 
+#include "../AIPathFinding/Cluster/ClusterGraph.h"         // getClusterOfPolygon's neighbours, the portals
 #include "../AIPathFinding/Cluster/ClusterNodeManager.h"   // init builds one per cluster search
 #include "../AIPathFinding/NavMesh/QuadTree.h"             // MapContainer polygon vertex query
 #include "../AIPathFinding/NavMesh/QTSearchNodeManager.h"  // init builds one per local search
+#include "../AIPathFinding/NavMesh/QuadTreeManager.h"      // getQuadTree, getClusterGraph
 #include "../AIStrategicEntity/AIStrategicObjectManager.h" // loadQuadTrees' tail calls initAreas
 #include "../AIUtils/checkPointer.h"
 #include "AIDllFrontier.h"
@@ -875,14 +877,16 @@ bool AIPathfinding::getMaterial(const Vec3&, int, int, unsigned char&) const
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getMaterial");
 }
 
-void* AIPathfinding::getQuadTree(int, unsigned int) const
+// 0x3b7df0 (Ghidra).
+void* AIPathfinding::getQuadTree(int map, unsigned int island) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getQuadTree");
+    return m_maps[map]->m_quadTreeManager->getIsland(island);
 }
 
-void* AIPathfinding::getClusterGraph(int, unsigned int) const
+// 0x3b7e30 (Ghidra).
+void* AIPathfinding::getClusterGraph(int map, unsigned int island) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getClusterGraph");
+    return m_maps[map]->m_quadTreeManager->getClusterGraph(island);
 }
 
 void AIPathfinding::getPolygonCentre(Vec3&, int, unsigned int, unsigned int) const
@@ -901,15 +905,32 @@ bool AIPathfinding::getLineIntersectionWithPolygon(Vec3&, int, unsigned int, uns
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getLineIntersectionWithPolygon");
 }
 
-int AIPathfinding::getClusterOfPolygon(int, unsigned int, unsigned int) const
+// 0x3b7f80 (Ghidra). No null guard on the polygon, as shipped.
+int AIPathfinding::getClusterOfPolygon(int map, unsigned int island, unsigned int polygon) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getClusterOfPolygon");
+    return m_maps[map]->m_quadTreeManager->getIsland(island)->getPolygon(polygon)->m_cluster;
 }
 
-bool AIPathfinding::areNeighbouringClusters(int, unsigned int, unsigned short,
-                                            unsigned short) const
+// 0x3b7fd0 (Ghidra).
+bool AIPathfinding::areNeighbouringClusters(int map, unsigned int island, unsigned short cluster,
+                                            unsigned short other) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::areNeighbouringClusters");
+    return m_maps[map]->m_quadTreeManager->getClusterGraph(island)->areNeighbours(cluster, other);
+}
+
+// 0x332000 (Ghidra).
+bool ClusterNodePath::getPoint(Vec3& position, unsigned int& out, unsigned int index) const
+{
+    if (index >= m_nodes.size() || m_nodes[index].second == 0xFFFF)
+        return false;
+    const ClusterGraph* const graph =
+        static_cast<const ClusterGraph*>(IAIPathfinding::instance->getClusterGraph(m_map, m_island));
+    const std::pair<unsigned short, unsigned short>& node = m_nodes[index];
+    const ClusterPortal* const portal =
+        graph->getClusterPortal(node.first, static_cast<unsigned short>(m_row), node.second);
+    position = portal->m_position;
+    out = portal->m_int10;
+    return true;
 }
 
 void AIPathfinding::updateClusterPortalCosts(unsigned int&,

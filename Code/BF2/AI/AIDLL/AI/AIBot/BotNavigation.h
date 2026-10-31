@@ -36,12 +36,12 @@ public:
     void updateClosestDistance();
 
     bool initPathfinding(const Vec3& to, float a, float b);
-    void initPathfinding(unsigned int a, unsigned int b, const Vec3& to, float c, float d);
+    bool initPathfinding(unsigned int quadTree, unsigned int polygon, const Vec3& to, float a, float b);
     bool doPolygonSearch(bool& a, bool* b);
     bool doClusterSearch(bool& a, bool* b);
     void calculatePoints();
     void optimizePoints();
-    bool testDirectPath();
+    void testDirectPath();
     void retrace();
 
     bool stillOnPath();
@@ -101,28 +101,31 @@ public:
         NavigationPoint()
             : m_index36(-1)
         {
-            for (int i = 0; i < 24; ++i)
-                m_bytes[i] = 0;
-            m_position.x = 0.0f;
-            m_position.y = 0.0f;
-            m_position.z = 0.0f;
+            m_point0.x = 0.0f;
+            m_point0.y = 0.0f;
+            m_point0.z = 0.0f;
+            m_point12 = m_point0;
+            m_position = m_point0;
         }
 
-        char m_bytes[24];       // [UNRESOLVED]
+        Vec3 m_point0;          // [UNRESOLVED] testDirectPath: the target, as the next two
+        Vec3 m_point12;         // [UNRESOLVED]
         Vec3 m_position;        // +24; getFirstPointBeyondDist reads its x and z
-        int  m_index36;         // = -1; the polygon (hasIllegalPath)
+        int  m_index36;         // = -1; the polygon (hasIllegalPath, stillOnPath)
     };
 
 private:
     /*   0 */ BotMain* m_bot;              // the ctor argument, and the first store
-    /*   4 */ float m_float4;              // = 2.0f [UNRESOLVED]
-    /*   8 */ float m_float8;              // = 2.0f [UNRESOLVED]
-    /*  12 */ char  m_gap12[4];            // [UNRESOLVED] - never written
-    /*  16 */ int   m_int16;               // = -1
-    /*  20 */ int   m_int20;               // = -1
-    /*  24 */ int   m_zero24[3];           // +24..+32, all 0
-    /*  36 */ int   m_int36;               // = -1
-    /*  40 */ bool  m_flag40;              // = false
+    // initPathfinding's a and b, [UNRESOLVED] roles (a move passes 0 and its radius).
+    /*   4 */ float m_float4;              // = 2.0f
+    /*   8 */ float m_float8;              // = 2.0f
+    /*  12 */ float m_float8Sqr;           // initPathfinding; the constructor leaves it
+    // Where the search starts: the bot's last valid place on the mesh.
+    /*  16 */ int   m_int16;               // = -1; its quadtree (island)
+    /*  20 */ int   m_int20;               // = -1; its polygon
+    /*  24 */ Vec3  m_startPosition;       // = 0
+    /*  36 */ int   m_int36;               // = -1; the target's polygon
+    /*  40 */ unsigned char m_targetMaterial;  // = 0; the material of that polygon
     /*  41 */ char  m_pad41[3];
     // [INFERRED] the position the search goes toward (BAPAMoveToFinding::update compares its
     // target with it). = 0.
@@ -139,12 +142,12 @@ private:
     // the pathfinding resource held for the polygon search, -1 for none (released in reset)
     /*  76 */ unsigned int m_polygonResource;   // = -1
     /*  80 */ int   m_vehicleNumber;       // reset: the equipment's IPIMobile::getVehicleNumber
-    /*  84 */ char  m_gap84[4];            // [UNRESOLVED] - never written
+    /*  84 */ int   m_equipmentType;       // initPathfinding; the constructor leaves it
     // objects within 50 m to steer around (updateObstacles)
     /*  88 */ std::vector<unsigned int> m_obstacles;
     // the walkable result - see the header note. The constructor's dead resize targets this.
     /* 100 */ std::vector<NavigationPoint> m_points;
-    /* 112 */ char  m_gap112[4];           // [UNRESOLVED] - never written
+    /* 112 */ unsigned int m_startQuadTree;  // initPathfinding, as m_int16; the constructor leaves it
     /* 116 */ int   m_int116;              // = 0
     /* 120 */ bool  m_flag120;
     /* 121 */ char  m_pad121[3];
@@ -172,7 +175,8 @@ private:
     /* 208 */ int   m_int208;              // = -1
     /* 212 */ int   m_int212;              // = -1
     /* 216 */ int   m_zero216[3];          // +216, +220, +224
-    /* 228 */ char  m_gap228[8];           // [UNRESOLVED] - never written by the constructor
+    /* 228 */ char  m_gap228[4];           // [UNRESOLVED] - never written by the constructor
+    /* 232 */ float m_smallestRadius;      // initPathfinding: the equipment's physical
     /* 236 */ bool  m_flag236;             // updateOccationally: measure the room beside the bot
     /* 237 */ char  m_pad237[3];
     /* 240 */ int   m_int240;              // = 0
@@ -188,7 +192,8 @@ private:
     // [INFERRED] Room beside the bot, 0 to 1, on avoid side 1 and side 2 (updateSpaceLeftAndRight).
     /* 292 */ float m_sideSpace[2];        // reset: 0
     /* 300 */ double m_double300;          // Initially -1.0; independent of the distance sentinel.
-    /* 308 */ int   m_zero308[2];          // +308, +312
+    /* 308 */ int   m_zero308;
+    /* 312 */ float m_pathLength;          // updateClosestDistance: along the navigation points
     // `reset`'s first statement clears the byte here.
     /* 316 */ bool  m_flag316;             // reset: false
     /* 317 */ char  m_pad317[3];

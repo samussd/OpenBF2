@@ -47,8 +47,15 @@ public:
         // m_gap4 deliberately not initialised - the binary steps over it. See above.
     }
 
-    /*  +0 */ int m_i0;                                       // = 0 [UNRESOLVED]
-    /*  +4 */ char m_gap4[12];                                // never written
+    // The portal of a node's cluster (a path index, not relative to m_i0): its position and +0x10.
+    // False past the end and for a node without a next cluster.
+    bool getPoint(Vec3& position, unsigned int& out, unsigned int index) const;
+
+    /*  +0 */ int m_i0;                                       // = 0; the node being walked
+    // The constructor steps over the next three; setVehicle writes the first two ([INFERRED] names).
+    /*  +4 */ int m_map;
+    /*  +8 */ int m_row;                                      // a portal row of the cluster graph
+    /* +12 */ unsigned int m_island;
     /* +16 */ std::vector<std::pair<unsigned short, unsigned short> > m_nodes;
 };
 
