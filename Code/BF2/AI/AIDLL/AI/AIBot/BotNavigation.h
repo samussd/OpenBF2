@@ -23,9 +23,8 @@ class BotNavigation
 {
 public:
     explicit BotNavigation(BotMain* owner);
-    ~BotNavigation();                           // [FRONTIER]
+    ~BotNavigation();
 
-    // [FRONTIER] Navigation methods below remain incomplete unless implemented explicitly.
     bool update(bool& a, bool* b);
     void updateOccationally();                  // dice's spelling - "Occationally"
     // One step along the path: true with the point to head for. waiting: nothing to head for yet.
@@ -65,6 +64,7 @@ public:
     bool isRunning();
     // [INFERRED] accessor; BotMain::postPlanExecution inlines the loads.
     float getSideSpace(int side) const { return m_sideSpace[side]; }
+    // False once the bot has got nowhere for too long.
     bool checkProgress();
     void clearProgress();
     bool checkArrivedAtPoint(float distance);
@@ -162,11 +162,11 @@ private:
     // so the value type is four bytes - a set of pointers or handles. Which is [UNRESOLVED];
     // `void*` holds the width and claims nothing.
     /* 132 */ std::set<unsigned short> m_allowedClusters;   // doPolygonSearch: where the stage may go
-    /* 144 */ double m_double144;          // = 0.0
-    /* 152 */ double m_double152;          // = 0.0
+    /* 144 */ double m_progressTime;       // = 0.0; when the bot last got anywhere
+    /* 152 */ double m_lastInputTime;      // = 0.0; when it last pressed to move
     /* 160 */ double m_double160;          // = 0.0
-    /* 168 */ double m_double168;          // = 0.0
-    /* 176 */ int   m_zero176[3];          // +176, +180, +184
+    /* 168 */ double m_jumpTime;           // = 0.0; -666: jump on the next step (updatePath)
+    /* 176 */ Vec3  m_stillPosition;       // where checkProgress last looked for a jump
     // is 9,999,999.0f - a "no distance yet" sentinel, and a third kind after the
     // DBL_MAX timestamps and -9999.0 magnitudes BotMain uses. Do not normalise them together.
     /* 188 */ float m_sentinel188;         // = 9999999.0f
@@ -183,7 +183,7 @@ private:
     /* 216 */ Vec3  m_tracePosition;       // = 0
     /* 228 */ int   m_traceMap;            // the constructor leaves it
     /* 232 */ float m_smallestRadius;      // initPathfinding: the equipment's physical
-    /* 236 */ bool  m_flag236;             // updateOccationally: measure the room beside the bot
+    /* 236 */ bool  m_isSoldier;           // initPathfinding: the equipment is a soldier
     /* 237 */ char  m_pad237[3];
     /* 240 */ int   m_int240;              // = 0
     // [INFERRED] name: isActive holds for three seconds after it.
@@ -194,11 +194,11 @@ private:
     /* 268 */ double m_grenadeTime;        // = 0.0; resetAll: -9999.0
     /* 276 */ bool  m_grenadeFlag;         // = false [UNRESOLVED] meaning; BBRandom reacts only to it
     /* 277 */ char  m_pad277[3];
-    /* 280 */ int   m_zero280[3];          // +280..+288
-    // [INFERRED] Room beside the bot, 0 to 1, on avoid side 1 and side 2 (updateSpaceLeftAndRight).
+    /* 280 */ Vec3  m_progressPosition;    // where the bot last got to
+    // Room beside the bot, up to 2 m: to its left and its right (updateSpaceLeftAndRight).
     /* 292 */ float m_sideSpace[2];        // reset: 0
-    /* 300 */ double m_double300;          // Initially -1.0; independent of the distance sentinel.
-    /* 308 */ int   m_zero308;
+    /* 300 */ double m_largestAngleTime;   // Initially -1.0; independent of the distance sentinel.
+    /* 308 */ float m_largestAngle;        // getLargestAngleDiff's last answer
     /* 312 */ float m_pathLength;          // updateClosestDistance: along the navigation points
     // `reset`'s first statement clears the byte here.
     /* 316 */ bool  m_flag316;             // reset: false

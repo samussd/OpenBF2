@@ -420,6 +420,12 @@ public:
             mappingFlags &= ~(1ULL << shift);
     }
 
+    // [INFERRED] name; BotNavigation::checkProgress inlines it. 0 for an unmapped input.
+    float getInput(T index) const
+    {
+        return ((mappingFlags >> static_cast<unsigned int>(index)) & 1ULL) != 0 ? inputs[index] : 0.0f;
+    }
+
     void setInput(T index, float value);            // Input.h:191
     void setInput(T index, bool value);             // Input.h:203
 };

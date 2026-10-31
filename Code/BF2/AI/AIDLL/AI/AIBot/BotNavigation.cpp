@@ -5,6 +5,7 @@
 
 #include "BotMain.h"                       // getBotId / getCurrentEquipment - vtable +0xE8, +0xD8
 #include "../Main/CommonSingletonServer.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"   // IBFTimer::getGameTime
 #include "../AIKnowledge/AIInformationGrid.h"       // the obstacle predicate's base
 #include "../AIKnowledge/BFInformationEnvironment.h"
@@ -20,6 +21,7 @@
 #include "../Main/AIPathfindingSearchTypes.h"
 #include "../../../../Core/Debug.h"
 #include "../../../../IO/Input/PlayerInput.h"
+#include "../../../../Math/Mat4.h"
 
 #include <cmath>
 
@@ -42,10 +44,10 @@ BotNavigation::BotNavigation(BotMain* owner)
     , m_int116(0)
     , m_clusterPath(checkPointer(new ClusterNodePath()))
     , m_clusterResource(0xFFFFFFFFu)
-    , m_double144(0.0)
-    , m_double152(0.0)
+    , m_progressTime(0.0)
+    , m_lastInputTime(0.0)
     , m_double160(0.0)
-    , m_double168(0.0)
+    , m_jumpTime(0.0)
     // 9,999,999.0f - a distance sentinel, not a time and not a magnitude. See above.
     , m_sentinel188(9999999.0f)
     , m_flag192(false)
@@ -59,15 +61,12 @@ BotNavigation::BotNavigation(BotMain* owner)
     , m_grenadeTime(0.0)
     , m_grenadeFlag(false)
     // Independent sentinel, initialized to -1.0.
-    , m_double300(-1.0)
+    , m_largestAngleTime(-1.0)
 {
-    for (int i = 0; i < 3; ++i)
-    {
-        m_zero176[i] = 0;
-    }
     m_startPosition.x = 0.0f;
     m_startPosition.y = 0.0f;
     m_startPosition.z = 0.0f;
+    m_stillPosition = m_startPosition;
     m_searchTarget = m_startPosition;
     m_tracePosition = m_startPosition;
     m_grenadePosition.x = 0.0f;
@@ -75,10 +74,9 @@ BotNavigation::BotNavigation(BotMain* owner)
     m_grenadePosition.z = 0.0f;
     m_pathOwner = 0;                   // +60 - a pointer, see BotNavigation.h
     m_quadTree = 0;
-    m_zero308 = 0;
+    m_largestAngle = 0.0f;
     m_pathLength = 0.0f;
-    for (int i = 0; i < 3; ++i)
-        m_zero280[i] = 0;
+    m_progressPosition = m_startPosition;
     m_sideSpace[0] = 0.0f;
     m_sideSpace[1] = 0.0f;
     m_stageFrom = m_startPosition;
@@ -88,12 +86,12 @@ BotNavigation::BotNavigation(BotMain* owner)
     m_points.resize(0);
 }
 
-// [FRONTIER] Remaining navigation operations stop until implemented.
-// [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
-
+// 0x19ff30 (Ghidra).
 BotNavigation::~BotNavigation()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::~BotNavigation");
+    reset();
+    delete m_polygonPath;
+    delete m_clusterPath;
 }
 
 // 0x1a5280 (Ghidra). The shipped body also reads the game time and drops it.
@@ -122,8 +120,8 @@ void BotNavigation::resetAll()
     m_grenadeFlag = false;
     // Not the constructor's 0.0 - see the block above.
     m_grenadeTime = -9999.0;
-    m_zero308 = 0;
-    m_double300 = -1.0;
+    m_largestAngle = 0.0f;
+    m_largestAngleTime = -1.0;
 
     clearProgress();
 }
@@ -194,20 +192,20 @@ void BotNavigation::reset()
 // Paused game time does not accumulate lack of progress.
 void BotNavigation::clearProgress()
 {
-    m_zero176[0] = 0;                      // +176
+    m_stillPosition.x = 0.0f;
 
     // the one non-zero store. See the block above.
-    m_double144 =
+    m_progressTime =
         static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
 
-    m_double168 = 0.0;
-    m_zero176[1] = 0;                      // +180
-    m_zero176[2] = 0;                      // +184
-    m_double152 = 0.0;
+    m_jumpTime = 0.0;
+    m_stillPosition.y = 0.0f;
+    m_stillPosition.z = 0.0f;
+    m_lastInputTime = 0.0;
     m_flag192 = false;
-    m_zero280[0] = 0;                      // +280
-    m_zero280[1] = 0;                      // +284
-    m_zero280[2] = 0;                      // +288
+    m_progressPosition.x = 0.0f;
+    m_progressPosition.y = 0.0f;
+    m_progressPosition.z = 0.0f;
 }
 
 namespace {
@@ -286,7 +284,7 @@ void BotNavigation::updateOccationally()
         else if (!checkProgress())
             m_flag192 = true;
     }
-    if (m_flag236)
+    if (m_isSoldier)
         updateSpaceLeftAndRight();
 }
 
@@ -319,7 +317,7 @@ void BotNavigation::updateNavPoints()
     hit.y = 0.0f;
     hit.z = 0.0f;
     const Vec3& at = equipment->getPosition();
-    const bool soldier = m_flag236;
+    const bool soldier = m_isSoldier;
     const int depth = soldier ? 8 : 30;
     const float range = soldier ? 10.0f : 20.0f;
     const float clearance = soldier ? minClearanceSoldier : minClearanceVehicle;
@@ -405,14 +403,137 @@ void BotNavigation::updateClosestDistance()
     m_sentinel188 = length;
 }
 
+// 0x1a1bf0 (Ghidra). Lets go of a jump after a second. With a path, false once the bot has stayed
+// within 4 m of where it last got to for 20 s (a soldier: 2 m, 10 s); one that presses nothing for
+// half a second (a soldier: 0.1 s) means to stand there, which restarts the clock. A soldier 2 s
+// in, on the very spot of the last look and 3 s since a jump, asks for another. No null guard on
+// the equipment, as shipped.
 bool BotNavigation::checkProgress()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::checkProgress");
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (1.0f < now - m_jumpTime)
+        m_bot->getPlayerInput()->setInput(io::PIAction, 0.0f);
+    if (m_points.empty() || m_int56 != 2)
+        return true;
+    const io::PlayerInput* const input = m_bot->getPlayerInput();
+    float pressed = input->getInput(io::PISprint);
+    const float throttle = input->getInput(io::PIThrottle);
+    if (pressed <= throttle)
+        pressed = throttle;
+    const float yaw = input->getInput(io::PIYaw);
+    if (pressed <= yaw)
+        pressed = yaw;
+    const double idle = m_isSoldier ? 0.1 : 0.5;
+    if (!(std::fabs(pressed) > 0.1f))
+    {
+        if (idle < now - m_lastInputTime)
+        {
+            m_progressTime = now;
+            m_flag192 = false;
+            return true;
+        }
+    }
+    else
+        m_lastInputTime = now;
+    const float near = m_isSoldier ? 2.0f : 4.0f;
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(m_bot->getCurrentEquipment());
+    const Vec3& position = equipment->getPosition();
+    float dx = m_progressPosition.x - position.x;
+    float dy = m_progressPosition.y - position.y;
+    float dz = m_progressPosition.z - position.z;
+    if (dx * dx + dy * dy + dz * dz > near * near)
+    {
+        m_progressPosition = position;
+        m_progressTime = now;
+        m_flag192 = false;
+        return true;
+    }
+    const double limit = m_isSoldier ? 10.0 : 20.0;
+    const double since = now - m_progressTime;
+    if (m_isSoldier && since > 2.0f && now - m_jumpTime > 3.0f)
+    {
+        const Vec3& here = equipment->getPosition();
+        dx = m_stillPosition.x - here.x;
+        dy = m_stillPosition.y - here.y;
+        dz = m_stillPosition.z - here.z;
+        if (dx * dx + dy * dy + dz * dz < 0.001f)
+            m_jumpTime = -666.0f;
+        m_stillPosition = equipment->getPosition();
+    }
+    return since < limit;
 }
 
+// 0x1a20a0 (Ghidra). Past the last cluster, with no search to come: the last point moves to the
+// object's place when that is on the path's quadtree.
+void BotNavigation::updateLastPoint(Information* info)
+{
+    const ClusterNodePath* const path = m_clusterPath;
+    if (path->m_nodes.size() > static_cast<unsigned int>(path->m_i0) || m_flag120 || m_flag68
+        || m_points.empty())
+        return;
+    const IPIMobile::ValidPos& place = info->getMobile()->getLastValidPosition(m_vehicleNumber);
+    if (m_startQuadTree == place.quadTree)
+    {
+        NavigationPoint& last = m_points[m_points.size() - 1];
+        last.m_position = place.position;
+        last.m_index36 = static_cast<int>(place.polygon);
+    }
+}
+
+// 0x1a21b0 (Ghidra). A parachuting bot is never stuck.
+void BotNavigation::setIsStuck(bool stuck)
+{
+    m_flag192 = m_bot->getPlayer()->isParachuting() ? false : stuck;
+}
+
+// 0x1a28b0 (Ghidra). Traces 2 m to the right and to the left of the bot's last valid place; a trace
+// that gets through leaves the full 2 m. Only with a path, and only from a place on the mesh.
 void BotNavigation::updateSpaceLeftAndRight()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateSpaceLeftAndRight");
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(m_bot->getCurrentEquipment());
+    if (!equipment || !equipment->getMobile() || m_int56 != 2)
+        return;
+    const IPIMobile::ValidPos& place = equipment->getMobile()->getLastValidPosition();
+    if (place.polygon == 0xFFFFFFFFu)
+        return;
+    Vec3 hit;
+    hit.x = 0.0f;
+    hit.y = 0.0f;
+    hit.z = 0.0f;
+    const Mat4& transformation = equipment->getTransformation();
+    const float x = transformation.m[0] * 2.0f;
+    const float y = transformation.m[1] * 2.0f;
+    const float z = transformation.m[2] * 2.0f;
+    Vec3 to;
+    to.x = x + place.position.x;
+    to.y = y + place.position.y;
+    to.z = z + place.position.z;
+    unsigned int last = 0;
+    float room = 2.0f;
+    if (!m_pathOwner->trace(this, false, to, hit, last, m_equipmentType, -1, 0.0f, 5, 0))
+    {
+        const float dx = hit.x - place.position.x;
+        const float dy = hit.y - place.position.y;
+        const float dz = hit.z - place.position.z;
+        room = std::sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    m_sideSpace[1] = room;
+    to.x = to.x - x * 2.0f;
+    to.y = to.y - y * 2.0f;
+    to.z = to.z - z * 2.0f;
+    room = 2.0f;
+    if (!m_pathOwner->trace(this, false, to, hit, last, m_equipmentType, -1, 0.0f, 5, 0))
+    {
+        const float dx = hit.x - place.position.x;
+        const float dy = hit.y - place.position.y;
+        const float dz = hit.z - place.position.z;
+        room = std::sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    m_sideSpace[0] = room;
 }
 
 // 0x1a14b0 (Ghidra). The fine search, a stage at a time: from the end of the points to the portal
@@ -747,7 +868,7 @@ bool BotNavigation::initPathfinding(unsigned int quadTree, unsigned int polygon,
         m_flag193 = false;
         return false;
     }
-    m_flag236 = (equipment->getObjectTypeFlags() & 0x200000) != 0;
+    m_isSoldier = (equipment->getObjectTypeFlags() & 0x200000) != 0;
     if (!m_pathOwner)
         m_pathOwner = IAIPathfinding::instance;
     IPIMobile* const mobile = equipment->getMobile();
@@ -977,7 +1098,7 @@ bool BotNavigation::updatePath(Vec2& point, bool& arrived, bool& waiting, float 
         return true;
     }
     Information* const target = informationManager->getInformation(m_bot->getFiringTarget());
-    if (!m_points.empty() && m_flag236 && m_bot->isFiring() && target
+    if (!m_points.empty() && m_isSoldier && m_bot->isFiring() && target
         && target->getSide() != m_bot->getSide())
     {
         const int polygon = m_points.size() < 2 ? m_int36 : m_points[m_int116].m_index36;
@@ -991,10 +1112,11 @@ bool BotNavigation::updatePath(Vec2& point, bool& arrived, bool& waiting, float 
             return true;
         }
     }
-    if (m_double168 == -666.0f)
+    // checkProgress asks for the jump
+    if (m_jumpTime == -666.0f)
     {
         m_bot->getPlayerInput()->setInput(io::PIAction, 1.0f);
-        m_double168 = now;
+        m_jumpTime = now;
     }
     if (checkArrivedAtPoint(distance))
     {
@@ -1039,12 +1161,12 @@ bool BotNavigation::updatePath(Vec2& point, bool& arrived, bool& waiting, float 
         stillOnPath();
         if (!m_flag194)
             m_double160 = now;
-        else if (now - m_double160 > (m_flag236 ? 2.0f : 0.5f))
+        else if (now - m_double160 > (m_isSoldier ? 2.0f : 0.5f))
         {
             m_flag194 = false;
             // A local static of the binary with no writer: always false.
             static const bool useSkipTrace = false;
-            m_int240 = (useSkipTrace && m_flag236) ? 1 : 0;
+            m_int240 = (useSkipTrace && m_isSoldier) ? 1 : 0;
             retrace();
         }
     }
@@ -1067,7 +1189,7 @@ bool BotNavigation::checkArrivedAtPoint(float)
     if (std::fabs(at.y - point.y) > 3.0f)
         return false;
     float radius = soldierMinDist;
-    if (!m_flag236)
+    if (!m_isSoldier)
     {
         radius = m_float4 <= 1.0f ? 1.0f : m_float4;
         if (m_int116 == static_cast<int>(m_points.size()) - 1)
@@ -1091,10 +1213,74 @@ bool BotNavigation::getSecondPoint(Vec2& out)
     return true;
 }
 
-// [FRONTIER] 0x1a4120 (Ghidra), 1.4 KB.
-bool BotNavigation::getLargestAngleDiff(float&)
+// 0x1a4120 (Ghidra). The largest turn in radians from the bot's facing to the path's legs, over what
+// it covers in 2 s and at least 3 m; asked again within half a second, the last answer. Always true.
+// No null guard on the equipment, and the current point is read unchecked, as shipped.
+bool BotNavigation::getLargestAngleDiff(float& out)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::getLargestAngleDiff");
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (!(0.5f <= now - m_largestAngleTime))
+    {
+        out = m_largestAngle;
+        return true;
+    }
+    m_largestAngleTime = now;
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const Vec3& position = equipment->getPosition();
+    unsigned int index = static_cast<unsigned int>(m_int116);
+    // [PLATFORM] data(): the shipped read past an empty list is not a bounds failure.
+    const NavigationPoint* const points = m_points.data();
+    const Vec3& current = points[index].m_position;
+    const float x = position.x - current.x;
+    const float y = position.y - current.y;
+    const float z = position.z - current.z;
+    float distance = std::sqrt(z * z + x * x + y * y);
+    Vec2 facing;
+    facing.x = 0.0f;
+    facing.y = 0.0f;
+    const Vec3 faceing = equipment->getFaceing();
+    vec3ToVec2XZ(faceing, facing);
+    out = 0.0f;
+    float reach = equipment->getMobile()->getSpeedMagnitude() * 2.0f;
+    if (reach <= 3.0f)
+        reach = 3.0f;
+    for (; distance < reach && index < m_points.size(); ++index)
+    {
+        const Vec3 from = index == 0 ? equipment->getPosition() : points[index - 1].m_position;
+        const Vec3& to = points[index].m_position;
+        const float dx = from.x - to.x;
+        const float dy = from.y - to.y;
+        const float dz = from.z - to.z;
+        distance = std::sqrt(dx * dx + dy * dy + dz * dz) + distance;
+        Vec3 leg;
+        leg.x = to.x - from.x;
+        leg.y = to.y - from.y;
+        leg.z = to.z - from.z;
+        Vec2 direction;
+        direction.x = 0.0f;
+        direction.y = 0.0f;
+        vec3ToVec2XZ(leg, direction);
+        const float length2 = direction.x * direction.x + direction.y * direction.y;
+        if (!(std::fabs(length2 - 1.0f) < 1.1920929e-07f))
+        {
+            if (1.4210855e-14f <= std::fabs(length2))
+            {
+                const float inverse = 1.0f / std::sqrt(length2);
+                direction.x = direction.x * inverse;
+                direction.y = inverse * direction.y;
+            }
+            else
+            {
+                direction.x = 0.0f;
+                direction.y = 0.0f;
+            }
+        }
+        const float angle = std::fabs(getSignedDiffAngleToDir(facing, direction));
+        if (out < angle)
+            out = angle;
+    }
+    m_largestAngle = out;
+    return true;
 }
 
 // 0x1a4f10 (Ghidra). Asks the mobile while the bot moves and caches the place for the bot's own map

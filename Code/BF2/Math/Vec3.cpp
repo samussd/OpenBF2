@@ -180,6 +180,26 @@ void getNormal(const Vec2& in, Vec2& out)
     out.y = -x;
 }
 
+// libaidll 0x37c470 (Ghidra). The arcsine of `to` along the normal, folded when it points back.
+float getSignedDiffAngleToDir(const Vec2& from, const Vec2& to)
+{
+    Vec2 normal;
+    normal.x = 0.0f;
+    normal.y = 0.0f;
+    getNormal(from, normal);
+    float side = to.x * normal.x + to.y * normal.y;
+    if (-1.0f > side)
+        side = -1.0f;
+    if (side > 1.0f)
+        side = 1.0f;
+    const float angle = 1.5707964f - std::acos(side);
+    if (0.0f <= to.x * from.x + to.y * from.y)
+        return angle;
+    if (angle > 0.0f)
+        return 3.1415927f - angle;
+    return (angle < 0.0f ? -1.0f : 0.0f) * 3.1415927f - angle;
+}
+
 // libaidll 0x37c2e0 (Ghidra), bf2 0x083fb520.
 bool lineIntersect(const Vec2& a, const Vec2& b, const Vec2& c, const Vec2& d, float& t, float& u)
 {
