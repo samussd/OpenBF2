@@ -114,9 +114,12 @@ BBFire::BBFire(unsigned char behaviourId, unsigned char mode, BBPFire* generator
     m_curve = new CustomCurve(CustomCurve::modifiedSoftStepFunc, 0.0f, 1.0f, 0.03f);
 }
 
+// The target records stay allocated: the map only drops its nodes.
 BBFire::~BBFire()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBFire::~BBFire");
+    delete[] m_targets;
+    delete[] m_weapons;
+    delete m_curve;
 }
 
 // 0x218040 (Ghidra). The refresh pass keeps the urgency while the target lives. The full pass

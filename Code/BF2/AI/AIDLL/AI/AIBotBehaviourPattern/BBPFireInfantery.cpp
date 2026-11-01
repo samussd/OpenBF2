@@ -49,7 +49,8 @@ BBPFireInfantery::BBPFireInfantery(int behaviourId)
 
 BBPFireInfantery::~BBPFireInfantery()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::~BBPFireInfantery");
+    delete[] m_firingStates;
+    delete[] m_data;
 }
 
 BotScript* BBPFireInfantery::createPlan(Bot*)

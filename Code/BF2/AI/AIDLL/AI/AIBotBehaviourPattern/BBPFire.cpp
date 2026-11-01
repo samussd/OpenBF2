@@ -1,7 +1,5 @@
 #include "BBPFire.h"
 
-#include "../Main/AIDllFrontier.h"
-
 namespace dice {
 namespace hfe {
 namespace ai {
@@ -30,7 +28,11 @@ BBPFire::BBPFire()
 
 BBPFire::~BBPFire()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPFire::~BBPFire");
+    delete[] m_targets;
+    delete[] m_changedTarget;
+    delete[] m_weapons;
+    delete[] m_positionTargets;
+    delete[] m_positions;
 }
 
 int BBPFire::getImplementationType()
