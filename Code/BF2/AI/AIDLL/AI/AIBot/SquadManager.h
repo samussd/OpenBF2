@@ -45,6 +45,8 @@ public:
     SquadMember* getSquadMember(int playerId, int side);
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
     SquadCoordinator* getSquadFromId(int squadId, int side);      // one-based, unchecked
+    // An order that reached a player's squad: type 3 is a repair, the others its mission.
+    void setSquadReceivedOrder(int type, int playerId, bool fromCommander);
     // The same for the player occupying the unit behind an information handle, if any.
     SquadMember* getSquadMember(unsigned int handle, int side);
     SquadCoordinator* getSquadFromPlayer(unsigned int handle, int side);

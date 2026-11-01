@@ -128,11 +128,11 @@ public:
     virtual bool ownAllTakeableCps(int side) = 0;                             // +31
     // Full released-squad count: ELF callers add EAX; PE +0x7C forwards that count.
     virtual int releaseSquadsFromObject(int a, int b) = 0;                    // +32
-    virtual void releaseUnitFromObject(int a, std::map<int, int>::iterator& it, int b) = 0;  // +33
-    virtual void foundDeadBot(int botId) = 0;                                 // +34
+    virtual int releaseUnitFromObject(int object, std::set<int>::iterator& it) = 0;  // +33
+    virtual bool foundDeadBot(int botId) = 0;                                 // +34
     virtual bool hasChangedEquipment(int botId) = 0;                          // +35
     virtual void equipmentChangedFinished(int botId) = 0;                     // +36
-    virtual void assignBot(std::map<int, int>::iterator& it, int a, int b, bool c) = 0;      // +37
+    virtual int assignBot(std::set<int>::iterator& it, int object, int botId, bool attacker) = 0;      // +37
     virtual bool strategicObjectsHasChanged() = 0;                            // +38
     virtual void registerTeleporter(int id) = 0;                              // +39
     virtual float getStrategyHeat(unsigned int index) = 0;                    // +40
@@ -162,7 +162,12 @@ public:
     struct BotInfo
     {
         explicit BotInfo(Bot* bot);
-        void remove(SAI* sai); // named removal frontier
+        void remove(SAI* sai);
+        // A dead bot has no objects.
+        void setAsDead();
+        // Sends the bot to the object, out of the available units of the one it occupies at the
+        // cursor; the order time is now.
+        void assignToObject(std::set<int>::iterator& it, AIStrategicObject* object, bool attacker, SAI* sai);
         // Return the bot to the side's free bots. The first form takes it out of the object's
         // available attackers or defenders and advances the cursor; the second, only when
         // unregister is set, out of the object it occupies, attackers first. Either way it leaves
@@ -247,11 +252,11 @@ public:
     virtual bool haveAnyOwnedAndTakeableCps(int side);
     virtual bool ownAllTakeableCps(int side);
     virtual int releaseSquadsFromObject(int objectIndex, int side);
-    virtual void releaseUnitFromObject(int a, std::map<int, int>::iterator& it, int b);
-    virtual void foundDeadBot(int botId);
+    virtual int releaseUnitFromObject(int object, std::set<int>::iterator& it);
+    virtual bool foundDeadBot(int botId);
     virtual bool hasChangedEquipment(int botId);
     virtual void equipmentChangedFinished(int botId);
-    virtual void assignBot(std::map<int, int>::iterator& it, int a, int b, bool c);
+    virtual int assignBot(std::set<int>::iterator& it, int object, int botId, bool attacker);
     virtual bool strategicObjectsHasChanged();
     virtual void registerTeleporter(int id);
     virtual float getStrategyHeat(unsigned int index);
@@ -298,6 +303,8 @@ public:
     // strategy's attacks, and fills up to one more than its attacks with squads.
     void categoryDistributeAttack(const std::vector<AIStrategicObject*>& objects);
     void distributeWithNoAreas();
+    void categoryDistributeWithNoAreas(const std::vector<AIStrategicObject*>& objects);
+    void handleDeadBot(int botId);
     void distributeArtillery();                     // genuinely empty, PE update elides it
 
 private:

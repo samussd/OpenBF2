@@ -29,6 +29,8 @@ public:
     };
 
     explicit BotSquad(BotMain* owner);
+    // [INFERRED] accessor; CommanderInterface reads the field inline. One-based.
+    int getSquadId() const { return m_squadId; }
     ~BotSquad();                             // - empty, and that is a finding
     void reset();                            // - empty, see the header
 

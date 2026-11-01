@@ -199,19 +199,22 @@ void AIEventCourier::event_requestNewOrders(int, int)
     BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_requestNewOrders");
 }
 
-void AIEventCourier::event_recievedAttackCommanderOrder(int)
+void AIEventCourier::event_recievedAttackCommanderOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_recievedAttackCommanderOrder");
+    if (SquadManager::m_instance)
+        SquadManager::m_instance->setSquadReceivedOrder(0, playerId, true);
 }
 
-void AIEventCourier::event_recievedDefendCommanderOrder(int)
+void AIEventCourier::event_recievedDefendCommanderOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_recievedDefendCommanderOrder");
+    if (SquadManager::m_instance)
+        SquadManager::m_instance->setSquadReceivedOrder(1, playerId, true);
 }
 
-void AIEventCourier::event_recievedMoveCommanderOrder(int)
+void AIEventCourier::event_recievedMoveCommanderOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_recievedMoveCommanderOrder");
+    if (SquadManager::m_instance)
+        SquadManager::m_instance->setSquadReceivedOrder(2, playerId, true);
 }
 
 void AIEventCourier::event_incomingArtillery(int, Vec2)
@@ -292,19 +295,22 @@ void AIEventCourier::event_removedFromSquad(int playerId, int squadId, int side)
         SquadManager::m_instance->playerRemovedFromSquad(playerId, squadId, side);
 }
 
-void AIEventCourier::event_recievedAttackSquadOrder(int)
+void AIEventCourier::event_recievedAttackSquadOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_recievedAttackSquadOrder");
+    if (SquadManager::m_instance)
+        SquadManager::m_instance->setSquadReceivedOrder(0, playerId, false);
 }
 
-void AIEventCourier::event_recievedDefendSquadOrder(int)
+void AIEventCourier::event_recievedDefendSquadOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_recievedDefendSquadOrder");
+    if (SquadManager::m_instance)
+        SquadManager::m_instance->setSquadReceivedOrder(1, playerId, false);
 }
 
-void AIEventCourier::event_recievedMoveSquadOrder(int)
+void AIEventCourier::event_recievedMoveSquadOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_recievedMoveSquadOrder");
+    if (SquadManager::m_instance)
+        SquadManager::m_instance->setSquadReceivedOrder(2, playerId, false);
 }
 
 void AIEventCourier::event_receivedRepairSquadOrder(int)

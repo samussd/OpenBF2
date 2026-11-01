@@ -21,6 +21,7 @@
 #include "../AIBot/BotCallBack.h"
 #include "../AIBot/BotMain.h"
 #include "../AIBot/BotSquad.h"
+#include "../AIBot/SquadCoordinator.h"
 #include "../AIBot/SquadManager.h"
 #include "../AIBot/SquadMember.h"                        // setBotHasChangedEquipment: setHavePath
 #include "../AIStrategicEntity/AIStrategicObject.h"
@@ -198,34 +199,40 @@ CommanderInterface::~CommanderInterface()
 }
 
 
-void CommanderInterface::giveAttackOrder(const Vec3&, SquadCoordinator*)
+void CommanderInterface::giveAttackOrder(const Vec3& position, SquadCoordinator* squad)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommanderInterface::giveAttackOrder (SquadCoordinator)");
+    static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander)
+        ->giveAttackOrder(position, squad->getSquadId() + 1, squad->getSide() + 1, 0);
 }
 
-void CommanderInterface::giveMoveOrder(const Vec3&, SquadCoordinator*)
+void CommanderInterface::giveMoveOrder(const Vec3& position, SquadCoordinator* squad)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommanderInterface::giveMoveOrder (SquadCoordinator)");
+    static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander)
+        ->giveMoveOrder(position, squad->getSquadId() + 1, squad->getSide() + 1, 0);
 }
 
-void CommanderInterface::giveDefendOrder(const Vec3&, SquadCoordinator*)
+void CommanderInterface::giveDefendOrder(const Vec3& position, SquadCoordinator* squad)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommanderInterface::giveDefendOrder (SquadCoordinator)");
+    static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander)
+        ->giveDefendOrder(position, squad->getSquadId() + 1, squad->getSide() + 1, 0);
 }
 
-void CommanderInterface::giveAttackOrder(const Vec3&, Bot*)
+void CommanderInterface::giveAttackOrder(const Vec3& position, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommanderInterface::giveAttackOrder (Bot)");
+    static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander)
+        ->giveAttackOrder(position, bot->getBotSquad()->getSquadId(), bot->getSide(), 0);
 }
 
-void CommanderInterface::giveMoveOrder(const Vec3&, Bot*)
+void CommanderInterface::giveMoveOrder(const Vec3& position, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommanderInterface::giveMoveOrder (Bot)");
+    static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander)
+        ->giveMoveOrder(position, bot->getBotSquad()->getSquadId(), bot->getSide(), 0);
 }
 
-void CommanderInterface::giveDefendOrder(const Vec3&, Bot*)
+void CommanderInterface::giveDefendOrder(const Vec3& position, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommanderInterface::giveDefendOrder (Bot)");
+    static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander)
+        ->giveDefendOrder(position, bot->getBotSquad()->getSquadId(), bot->getSide(), 0);
 }
 
 
@@ -617,19 +624,68 @@ void SAI::addBot(Bot* bot)
     bot->setSpawnCallBack(checkPointer(new SAIBotSCB(bot, this)));
 }
 
-void SAI::setBotIsDead(int)
+void SAI::setBotIsDead(int botId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::setBotIsDead");
+    handleDeadBot(botId);
 }
 
-void SAI::setBotIsAlive(int)
+// 0x338db0 (Ghidra). The bot's object and kit wait for its respawn; no spawn group is chosen.
+void SAI::handleDeadBot(int botId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::setBotIsAlive");
+    BotInfo* const info = m_botInfo[botId];
+    if (!info)
+        return;
+    const int kit = info->m_bot->getSpawnKit();
+    const int object = info->m_assignedObject;
+    info->remove(this);
+    m_map5C.insert(std::make_pair(botId, std::make_pair(object, kit)));
+    info->m_bot->getPlayer()->setSpawnGroup(0);
+    info->setAsDead();
 }
 
-void SAI::removeBot(Bot*)
+// 0x338ae0 (Ghidra). A live bot on a unit joins the closest strategic object. The first spawn of the
+// round resets the bridges.
+void SAI::setBotIsAlive(int botId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::removeBot");
+    BotInfo* const info = m_botInfo[botId];
+    if (!info)
+        return;
+    if (m_flagAC)
+    {
+        AIStrategicObjectManager::getInstance()->resetBridges();
+        m_flagAC = false;
+    }
+    Bot* const bot = info->m_bot;
+    if (bot->isDead())
+        return;
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(bot->getCurrentEquipment());
+    if (!equipment || !equipment->getUnit())
+        return;
+    int map = -1;
+    if (equipment->getMobile())
+        map = equipment->getMobile()->getVehicleNumber();
+    const int type = equipment->getUnit()->getEquipmentType();
+    AIStrategicObject* const closest =
+        AIStrategicObjectManager::getInstance()->getClosestObject(equipment->getPosition(), type, map, m_side);
+    info->respawn(closest, this);
+    m_map5C.erase(botId);
+}
+
+// 0x339300 (Ghidra). A dead bot only leaves the waiting list.
+void SAI::removeBot(Bot* bot)
+{
+    const int botId = bot->getBotId();
+    if (!m_botInfo[botId])
+        return;
+    const std::map<int, std::pair<int, int> >::iterator waiting = m_map5C.find(botId);
+    if (waiting == m_map5C.end())
+        m_botInfo[botId]->remove(this);
+    else
+        m_map5C.erase(waiting);
+    delete m_botInfo[botId];
+    m_botInfo[botId] = 0;
 }
 
 // Both test the requested bit; x86 masks shift count.
@@ -897,29 +953,41 @@ int SAI::releaseSquadsFromObject(int objectIndex, int side)
     return SquadManager::m_instance->unAssignSquads(object->getIndex(), side);
 }
 
-void SAI::releaseUnitFromObject(int, std::map<int, int>::iterator&, int)
+// 0x33d6d0 (Ghidra). The cursor names the bot. Always 1.
+int SAI::releaseUnitFromObject(int object, std::set<int>::iterator& it)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::releaseUnitFromObject");
+    AIStrategicObject* const strategic = AIStrategicObjectManager::getInstance()->getStrategicObject(object);
+    BotInfo* const info = m_botInfo[*it];
+    info->removeAssigned(strategic, it, true, this);
+    info->free(false, this);
+    return 1;
 }
 
-void SAI::foundDeadBot(int)
+// 0x339250 (Ghidra).
+bool SAI::foundDeadBot(int botId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::foundDeadBot");
+    return m_setF0.erase(botId) != 0;
 }
 
-bool SAI::hasChangedEquipment(int)
+// 0x33d770 (Ghidra).
+bool SAI::hasChangedEquipment(int botId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::hasChangedEquipment");
+    return m_setB0.find(botId) != m_setB0.end();
 }
 
-void SAI::equipmentChangedFinished(int)
+// 0x33d7d0 (Ghidra).
+void SAI::equipmentChangedFinished(int botId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::equipmentChangedFinished");
+    m_setB0.erase(botId);
 }
 
-void SAI::assignBot(std::map<int, int>::iterator&, int, int, bool)
+// 0x33d870 (Ghidra). Answers the object the bot occupied.
+int SAI::assignBot(std::set<int>::iterator& it, int object, int botId, bool attacker)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::assignBot");
+    const int occupied = m_botInfo[botId]->m_occupiedObject;
+    m_botInfo[botId]->assignToObject(it, AIStrategicObjectManager::getInstance()->getStrategicObject(object), attacker,
+                                     this);
+    return occupied;
 }
 
 bool SAI::strategicObjectsHasChanged()
@@ -1283,9 +1351,45 @@ void SAI::clearSpawnsToPoints()
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
 // BotInfo::remove: / , paired callers discard
 // the result and neither body materializes a return. Assigned/free/present-unit removal is absent.
-void SAI::BotInfo::remove(SAI*)
+// 0x33f3d0 (Ghidra). Out of the object it was sent to or the one it occupies, and of the free bots.
+void SAI::BotInfo::remove(SAI* sai)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::BotInfo::remove");
+    const int botId = m_bot->getBotId();
+    AIStrategicObjectManager* const objects = AIStrategicObjectManager::getInstance();
+    AIStrategicObject* const occupied = objects->getStrategicObject(m_occupiedObject);
+    AIStrategicObject* const assigned = objects->getStrategicObject(m_assignedObject);
+    if (assigned)
+        removeAssigned(assigned, true, sai);
+    if (assigned || occupied)
+    {
+        if (!assigned && sai->m_setFC.find(botId) != sai->m_setFC.end())
+            free(true, sai);
+        occupied->removeAsPresentUnit(botId, sai->m_side);
+    }
+    sai->m_set44.erase(botId);
+}
+
+// 0x33ff30 (Ghidra).
+void SAI::BotInfo::setAsDead()
+{
+    m_assignedObject = -1;
+    m_lastOrderedSquare = -1;
+    m_occupiedObject = -1;
+    m_float10 = 0.0f;
+}
+
+// 0x33f950 (Ghidra).
+void SAI::BotInfo::assignToObject(std::set<int>::iterator& it, AIStrategicObject* object, bool attacker, SAI* sai)
+{
+    m_assignedObject = object->getIndex();
+    m_lastOrderedSquare = object->getIndex();
+    m_lastOrderTime = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    AIStrategicObject* const occupied = AIStrategicObjectManager::getInstance()->getStrategicObject(m_occupiedObject);
+    if (attacker)
+        occupied->unregisterAvailableAttacker(it, sai->m_side);
+    else
+        occupied->unregisterAvailableDefender(it, sai->m_side);
+    object->getAssignedUnits(sai->m_side).insert(m_bot->getBotId());
 }
 
 // 0x33f290 (Ghidra). The shipped body also looks the bot up in m_setFC and drops the result.
@@ -2185,9 +2289,35 @@ void SAI::categoryDistributeAttack(const std::vector<AIStrategicObject*>& object
     }
 }
 
+// 0x33b6e0 (Ghidra).
 void SAI::distributeWithNoAreas()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::distributeWithNoAreas");
+    AIStrategicObjectManager* const objects = AIStrategicObjectManager::getInstance();
+    if (objects->getNumberOfCategories() == 0)
+    {
+        categoryDistributeWithNoAreas(objects->getStrategicObjects());
+        return;
+    }
+    for (int i = 0; i < objects->getNumberOfCategories(); ++i)
+        categoryDistributeWithNoAreas(objects->getStrategicObjectsOfCategory(i));
+}
+
+// 0x33b770 (Ghidra). Every object is attacked or defended as the side holds it, with two more squads.
+void SAI::categoryDistributeWithNoAreas(const std::vector<AIStrategicObject*>& objects)
+{
+    std::list<int> indices;
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end(); ++it)
+        if (*it)
+            indices.push_back((*it)->getIndex());
+    for (std::list<int>::const_iterator it = indices.begin(); it != indices.end(); ++it)
+    {
+        AIStrategicObject* const object = AIStrategicObjectManager::getInstance()->getStrategicObject(*it);
+        if (object)
+        {
+            object->setAttack(object->getStatus(m_side) != 0, m_side);
+            object->collectAdditionalSquadResources(2, m_side, this);
+        }
+    }
 }
 
 // Recovered empty helper: , (frame prologue/epilogue and return only).

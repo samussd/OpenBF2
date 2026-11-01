@@ -27,6 +27,7 @@
 #include "IAIPathfinding.h"                  // actionPathfinding hands the searcher its share
 #include "../../../AIInterface/BFKnowledge/BFObjectEnvironment.h"   // actionHearing's object list
 #include "../AIKnowledge/IPIPhysical.h"
+#include "../AIBot/BotSquad.h"
 #include "../AIBot/BotCallBack.h"         // setBotIsDead / setBotIsAlive report
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"   // setBotChangedVehicle
@@ -1092,34 +1093,40 @@ void BotManager::setBotReceivedRadioMessage(const AIRadioMessageSettings&, int, 
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotReceivedRadioMessage");
 }
 
-void BotManager::setBotRecievedAttackCommanderOrder(int)
+void BotManager::setBotRecievedAttackCommanderOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedAttackCommanderOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveAttackCommanderOrder();
 }
 
-void BotManager::setBotRecievedDefendCommanderOrder(int)
+void BotManager::setBotRecievedDefendCommanderOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedDefendCommanderOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveDefendCommanderOrder();
 }
 
-void BotManager::setBotRecievedMoveCommanderOrder(int)
+void BotManager::setBotRecievedMoveCommanderOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedMoveCommanderOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveMoveCommanderOrder();
 }
 
-void BotManager::setBotRecievedAttackSquadOrder(int)
+void BotManager::setBotRecievedAttackSquadOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedAttackSquadOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveAttackSquadOrder();
 }
 
-void BotManager::setBotRecievedDefendSquadOrder(int)
+void BotManager::setBotRecievedDefendSquadOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedDefendSquadOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveDefendSquadOrder();
 }
 
-void BotManager::setBotRecievedMoveSquadOrder(int)
+void BotManager::setBotRecievedMoveSquadOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedMoveSquadOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveMoveSquadOrder();
 }
 
 // The killer, when it is a bot, says so on the radio. The victim is not used.

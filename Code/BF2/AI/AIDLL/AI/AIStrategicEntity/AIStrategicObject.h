@@ -134,6 +134,7 @@ public:
     std::pair<std::set<int>::iterator, bool> setAsPresentUnit(int botId, int side);
     // Erases the bot and advances the cursor.
     void removeAsPresentUnit(std::set<int>::iterator& it, int side);
+    void removeAsPresentUnit(int botId, int side);
     // Bit tests on the vehicle groups allowed here and the equipment types sent away.
     bool isAllowedVehicleGroup(int group) const;
     bool isExpelledUnit(int equipmentType) const;

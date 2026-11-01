@@ -199,6 +199,12 @@ void AIStrategicObject::removeAsPresentUnit(std::set<int>::iterator& it, int sid
     it = m_set92[side - 1].erase(it);
 }
 
+// 0x3524c0 (Ghidra).
+void AIStrategicObject::removeAsPresentUnit(int botId, int side)
+{
+    m_set92[side - 1].erase(botId);
+}
+
 // 0x352e80 and 0x352ef0 (Ghidra).
 bool AIStrategicObject::isAllowedVehicleGroup(int group) const
 {

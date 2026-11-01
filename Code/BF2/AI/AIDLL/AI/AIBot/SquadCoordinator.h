@@ -113,6 +113,7 @@ public:
     // A commander's order waits for acceptMission; a squad leader's only moves the leader's goal.
     void requestMission(int type, const Vec3& position, int target, bool fromCommander);
     bool acceptMission(SquadMember* member);
+    void requestRepair(const Vec3& position);    // stands for 60 s
     AIStrategicArea* getSquadStrategicAreaAssignment(); // borrowed
     void resetNeedOrderMessageTimer(double now);
 

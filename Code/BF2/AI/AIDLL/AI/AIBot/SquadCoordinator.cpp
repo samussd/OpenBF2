@@ -1229,6 +1229,15 @@ bool SquadCoordinator::getValidSaPos(SquadMember* member, AIStrategicArea* area,
     return true;
 }
 
+// 0x1b4950 (Ghidra).
+void SquadCoordinator::requestRepair(const Vec3& position)
+{
+    m_b172 = true;
+    m_v176 = position;
+    m_b196 = false;
+    m_d188 = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime() + 60.0f;
+}
+
 // 0x1b69c0 (Ghidra).
 bool SquadCoordinator::isSameMission(int type, const Vec3& position, int target)
 {

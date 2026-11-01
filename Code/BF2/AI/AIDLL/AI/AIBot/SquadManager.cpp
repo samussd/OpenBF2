@@ -772,6 +772,33 @@ void SquadManager::setValidArtilleryFleePos(SquadMember* member, const Vec3& pos
     }
 }
 
+// 0x1bf860 (Ghidra). The squad on side 1, else on side 2.
+void SquadManager::setSquadReceivedOrder(int type, int playerId, bool fromCommander)
+{
+    int side = 1;
+    SquadCoordinator* squad = getSquadFromPlayer(playerId, 1);
+    if (!squad)
+    {
+        squad = getSquadFromPlayer(playerId, 2);
+        side = 2;
+    }
+    if (!squad)
+        return;
+    Vec3 position;
+    position.x = 0.0f;
+    position.y = 0.0f;
+    position.z = 0.0f;
+    IBFSquad* const adapter = static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad);
+    if (fromCommander)
+        adapter->getCommanderOrder(side, squad->getSquadId() + 1, position, 0);
+    else
+        adapter->getSquadOrder(side, squad->getSquadId() + 1, position, 0);
+    if (type == 3)
+        squad->requestRepair(position);
+    else
+        squad->requestMission(type, position, 0, fromCommander);
+}
+
 // 0x1bf720 (Ghidra).
 SquadCoordinator* SquadManager::getSquadFromId(int squadId, int side)
 {
