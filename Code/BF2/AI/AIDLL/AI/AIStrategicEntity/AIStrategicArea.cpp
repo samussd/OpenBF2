@@ -9,13 +9,21 @@
 #include "../Main/AISettingsInterfaces.h"                  // IAISettings::getNumberOfVehicleGroups
 #include "../Main/CommonSingletonServer.h"
 #include "../Main/IAIPathfinding.h"
+#include "../Main/IBotManager.h"
+#include "../Main/AIRandom.h"
+#include "AIStrategicObjectManager.h"
+#include "SAWayPoint.h"
+#include "../AIBot/BotMain.h"
 #include "../AIBot/SquadManager.h"
+#include "../AIBot/SquadMember.h"
+#include "../AIBot/WPMoveTo.h"
 #include "../AIBotBehaviour/CustomCurve.h"
 #include "../AIStrategic/SAI.h"
 #include "../AIStrategic/Strategy.h"                      // updateTemperature's modifiers
 #include "../AIKnowledge/BFInformationEnvironment.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/IPIMobile.h"
 #include "../AIKnowledge/IPIPhysical.h"
 #include "../AIKnowledge/IPIUnit.h"
 #include "../../../AIInterface/BFKnowledge/BFGame.h"       // IAIGame - the control-point queries
@@ -715,9 +723,9 @@ bool AIStrategicArea::hasNeighbouringObjectWithStatus(StatusMap::Status status, 
     return false;
 }
 
-bool AIStrategicArea::hasObjectTypeFlags(int) const
+bool AIStrategicArea::hasObjectTypeFlags(int flags) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::hasObjectTypeFlags");
+    return (m_objectTypeFlags & flags) != 0;
 }
 
 int AIStrategicArea::getTacticalStatus(int) const
@@ -966,9 +974,12 @@ float AIStrategicArea::gravity(const Vec2& position, int side)
     return gravity(static_cast<float>(distance), side);
 }
 
-bool AIStrategicArea::retainBot(int, int, ISAI*)
+// 0x34efa0 (Ghidra). As shipped it orders nothing: a mobile unit is simply retained.
+bool AIStrategicArea::retainBot(int, int botId, ISAI*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::retainBot");
+    Bot* const bot = IBotManager::instance->getBot(botId);
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    return equipment && equipment->getMobile() && equipment->getUnit();
 }
 
 // Marks the side's distances and every vehicle group stale. Without groups only the one flag
@@ -989,9 +1000,16 @@ void AIStrategicArea::setAsDirty(int side)
     }
 }
 
-int AIStrategicArea::orderBot(int, const std::list<AIStrategicObject*>&, int, ISAI*)
+// 0x34c340 (Ghidra).
+int AIStrategicArea::orderBot(int side, const std::list<AIStrategicObject*>& route, int botId, ISAI* sai)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::orderBot");
+    Bot* const bot = IBotManager::instance->getBot(botId);
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if ((equipment->getObjectTypeFlags() & 0x10) == 0)
+        orderNormalBot(side, route, botId, sai);
+    else
+        orderAirBot(side, route, botId, sai);
+    return 0;
 }
 
 // The size uses side, unlike the
@@ -1015,10 +1033,289 @@ bool AIStrategicArea::getRouteList(int side, AIStrategicObject* from, std::list<
     return true;
 }
 
-// [FRONTIER] 0x34c940 (Ghidra), 9.8 KB: the bot's waypoints along a route of strategic objects.
-void AIStrategicArea::orderNormalBot(int, std::list<AIStrategicObject*>&, int, ISAI*)
+// [FRONTIER] 0x34c430 (Ghidra), 1.3 KB.
+void AIStrategicArea::orderAirBot(int, const std::list<AIStrategicObject*>&, int, ISAI*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::orderNormalBot");
+    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::orderAirBot");
+}
+
+// 0x349ab0 (Ghidra). With the control point active, within 0.8 of its radius; otherwise within twice
+// the distance from the area's centre to its corner. Twenty random tries around the point, then the
+// object's order position.
+void AIStrategicArea::getControlpointPos(AIStrategicObject* object, int side, int map, int type,
+                                         const Vec3& position, Vec3& out)
+{
+    IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+    bool active = true;
+    float radius = 1.0f;
+    Vec3 point;
+    point.x = 0.0f;
+    point.y = 0.0f;
+    point.z = 0.0f;
+    static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)->getControlPointInfo(m_controlPointId, point, radius, active);
+    float reach;
+    float fraction;
+    float within;
+    if (!active)
+    {
+        const Vec2& flat = getPosition(side);
+        const float x = flat.x - m_centre.x;
+        const float y = flat.y - m_centre.y;
+        const float length = std::sqrt(y * y + x * x);
+        reach = length + length;
+        fraction = 1.0f;
+        within = reach;
+    }
+    else
+    {
+        reach = radius;
+        fraction = 0.8f;
+        within = 0.8f * radius;
+    }
+    const float dx = point.x - position.x;
+    const float dy = point.y - position.y;
+    const float dz = point.z - position.z;
+    const unsigned int island = m_mapData[map].m_island;
+    if (std::sqrt(dx * dx + dy * dy + dz * dz) < within && pathfinding->isValidPosition(map, type, position, island, true))
+    {
+        out = position;
+        return;
+    }
+    out.x = point.x;
+    out.y = m_f148;
+    out.z = point.z;
+    object->randomizeControlpointPos(fraction, reach, out);
+    for (int i = 0; i < 20; ++i)
+    {
+        if (pathfinding->isValidPosition(map, type, out, island, true))
+            return;
+        out.x = point.x;
+        out.y = m_f148;
+        out.z = point.z;
+        object->randomizeControlpointPos(fraction, reach, out);
+    }
+    out = object->getOrderPos(map, side);
+}
+
+namespace {
+
+// In front of the bot on the way to the goal and closer to it than the bot.
+bool onTheWay(const Vec3& point, const Vec3& position, const Vec3& goal, float distanceSqr)
+{
+    const float x = point.x - position.x;
+    const float y = point.y - position.y;
+    const float z = point.z - position.z;
+    if (!(0.0f < y * (goal.y - position.y) + x * (goal.x - position.x) + z * (goal.z - position.z)))
+        return false;
+    const float gx = point.x - goal.x;
+    const float gy = point.y - goal.y;
+    const float gz = point.z - goal.z;
+    return gz * gz + gx * gx + gy * gy < distanceSqr;
+}
+
+// A place in the object: a valid random point in 80 % of it, in twenty tries, or its order position.
+Vec3 pickPlace(AIStrategicObject* object, int side, int map, int type, unsigned int island)
+{
+    Vec3 pick;
+    pick.x = 0.0f;
+    pick.y = 0.0f;
+    pick.z = 0.0f;
+    object->randomizePos(side, 0.8f, pick);
+    for (int i = 0; i < 20; ++i)
+    {
+        if (IAIPathfinding::instance->isValidPosition(map, type, pick, island, true))
+            return pick;
+        object->randomizePos(side, 0.8f, pick);
+    }
+    return object->getOrderPos(map, side);
+}
+
+// The waypoint of the bot's route between two objects: the one it already has if that still leads
+// on, otherwise a random one in up to three tries. No waypoints forget the assigned areas.
+bool pickWaypoint(BotMain* bot, const std::vector<SAWayPoint*>& waypoints, const Vec3& position, const Vec3& goal,
+                  float distanceSqr, int map, bool frontOnly, bool firstLeg, std::list<std::pair<Vec3, int> >& points)
+{
+    bool picked = false;
+    if (firstLeg && bot->hasSameAssignedAreas(map))
+    {
+        const Vec3 current = bot->getCurrentWaypoint();
+        if (onTheWay(current, position, goal, distanceSqr))
+        {
+            bot->setCurrentWaypoint(current, map);
+            points.push_back(std::make_pair(bot->getCurrentWaypoint(), -1));
+            picked = true;
+        }
+    }
+    if (firstLeg)
+        bot->copyAssignedAreas();
+    if (waypoints.empty())
+    {
+        bot->resetAssignedAreas();
+        return picked;
+    }
+    if (picked)
+        return true;
+    for (int tries = 0; tries < 3; ++tries)
+    {
+        const int index = static_cast<int>(AIRandom::m_instance->nextFloat() * static_cast<float>(waypoints.size()));
+        const SAWayPoint* const waypoint = waypoints[index];
+        const Vec3& at = waypoint->getPosition();
+        if (frontOnly)
+        {
+            const float x = at.x - position.x;
+            const float y = at.y - position.y;
+            const float z = at.z - position.z;
+            if (!(0.0f < x * (goal.x - position.x) + y * (goal.y - position.y) + z * (goal.z - position.z)))
+                continue;
+        }
+        const float gx = at.x - goal.x;
+        const float gy = at.y - goal.y;
+        const float gz = at.z - goal.z;
+        if (waypoint->getPolygon() == 0xFFFFFFFFu || distanceSqr <= gx * gx + gy * gy + gz * gz)
+            continue;
+        points.push_back(std::make_pair(at, -1));
+        if (firstLeg)
+            bot->setCurrentWaypoint(at, map);
+        return true;
+    }
+    if (firstLeg)
+        bot->resetAssignedAreas();
+    return false;
+}
+
+// With one object the bot either keeps the waypoint it has, while that leads on, or draws one that
+// does; the assigned areas are copied last.
+void pickOnlyWaypoint(BotMain* bot, const std::vector<SAWayPoint*>& waypoints, const Vec3& position, const Vec3& goal,
+                      float distanceSqr, int map, std::list<std::pair<Vec3, int> >& points)
+{
+    if (bot->hasSameAssignedAreas(map))
+    {
+        const Vec3 current = bot->getCurrentWaypoint();
+        if (onTheWay(current, position, goal, distanceSqr))
+        {
+            bot->setCurrentWaypoint(current, map);
+            points.push_back(std::make_pair(bot->getCurrentWaypoint(), -1));
+        }
+        bot->copyAssignedAreas();
+        return;
+    }
+    bool picked = false;
+    for (int tries = 0; tries < 3 && !waypoints.empty(); ++tries)
+    {
+        const int index = static_cast<int>(AIRandom::m_instance->nextFloat() * static_cast<float>(waypoints.size()));
+        const SAWayPoint* const waypoint = waypoints[index];
+        if (onTheWay(waypoint->getPosition(), position, goal, distanceSqr) && waypoint->getPolygon() != 0xFFFFFFFFu)
+        {
+            points.push_back(std::make_pair(waypoint->getPosition(), -1));
+            bot->setCurrentWaypoint(waypoint->getPosition(), map);
+            picked = true;
+            break;
+        }
+    }
+    if (!picked)
+        bot->resetAssignedAreas();
+    bot->copyAssignedAreas();
+}
+
+} // namespace
+
+// 0x34c940 (Ghidra), read in the asm for the calls the decompiler dropped. The route's objects in
+// order, each reached through a waypoint of the leg to it and a place in it; the last object's
+// radius ends the move, 0 at a control point. A control point of this area, not held by the side,
+// is the place when the area has flag 0x10. An empty route: this area, the bot staying where it is
+// when it is already inside and on the mesh. A route equal to the bot's stays.
+void AIStrategicArea::orderNormalBot(int side, const std::list<AIStrategicObject*>& route, int botId, ISAI* sai)
+{
+    BotMain* const bot = static_cast<BotMain*>(IBotManager::instance->getBot(botId));
+    // [PLATFORM] ELF captures the manager before the equipment callback.
+    InformationManager* const manager = informationManager;
+    Information* const equipment = manager->getInformation(bot->getCurrentEquipment());
+    IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+    const float reach = equipment->getPhysical()->getRadius();
+    const float wide = reach + reach;
+    const int map = equipment->getMobile()->getVehicleNumber();
+    const int type = equipment->getUnit()->getEquipmentType();
+    const Vec3& position = equipment->getPosition();
+    Vec2 here;
+    here.x = 0.0f;
+    here.y = 0.0f;
+    vec3ToVec2XZ(position, here);
+    const unsigned int island = m_mapData[map].m_island;
+    const bool attackPoint = hasObjectTypeFlags(0x10) && static_cast<int>(m_controlPointId) != -1 && getStatus(side) != 0;
+    std::list<std::pair<Vec3, int> > points;
+    float radius = 0.0f;
+    if (route.empty())
+    {
+        if (attackPoint)
+        {
+            Vec3 place;
+            getControlpointPos(this, side, map, type, position, place);
+            points.push_back(std::make_pair(place, m_index));
+        }
+        else
+        {
+            Vec3 place;
+            if (isInside(here) && pathfinding->isValidPosition(map, type, equipment->getPosition(), island, true))
+                place = equipment->getPosition();
+            else
+                place = pickPlace(this, side, map, type, island);
+            points.push_back(std::make_pair(place, m_index));
+            radius = 0.25f * m_size[side] + wide;
+        }
+    }
+    else
+    {
+        int from = sai->getBotCurrentPos(botId);
+        const bool single = route.size() == 1;
+        bool firstLeg = true;
+        bool legDone = false;
+        AIStrategicObjectManager* const objects = AIStrategicObjectManager::getInstance();
+        for (std::list<AIStrategicObject*>::const_iterator it = route.begin(); it != route.end(); ++it)
+        {
+            AIStrategicObject* const object = *it;
+            const int index = object->getIndex();
+            if (from != -1 && from != index)
+            {
+                Vec3 goal;
+                goal.x = 0.0f;
+                goal.y = 0.0f;
+                goal.z = 0.0f;
+                vec2ToVec3XZ(single ? getPosition(side) : object->getPosition(side), goal);
+                goal.y = single ? m_f148 : object->m_f148;
+                const std::vector<SAWayPoint*>& waypoints = objects->getWaypoints(map, from, index);
+                const float x = goal.x - position.x;
+                const float y = goal.y - position.y;
+                const float z = goal.z - position.z;
+                const float distanceSqr = y * y + x * x + z * z;
+                if (!legDone)
+                    bot->setNewAssignedAreas(from, index);
+                if (single)
+                    pickOnlyWaypoint(bot, waypoints, position, goal, distanceSqr, map, points);
+                else
+                    pickWaypoint(bot, waypoints, position, goal, distanceSqr, map, firstLeg, !legDone, points);
+                legDone = true;
+            }
+            firstLeg = false;
+            if (object == this && attackPoint)
+            {
+                Vec3 place;
+                getControlpointPos(this, side, map, type, position, place);
+                points.push_back(std::make_pair(place, m_index));
+                radius = 0.0f;
+            }
+            else
+            {
+                points.push_back(std::make_pair(pickPlace(object, side, map, type, island), single ? m_index : index));
+                radius = object->m_size[side] * 0.25f + wide;
+            }
+            from = index;
+        }
+    }
+    WPMoveTo* const move = checkPointer(new WPMoveTo(radius, 60.0f, 2, points));
+    if (bot->getSquadMember()->isSameWaypointList(bot->getWaypoints(), move))
+        delete move;
+    else
+        bot->setWaypoints(move);
 }
 
 } // namespace ai

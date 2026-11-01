@@ -121,7 +121,11 @@ public:
     bool isInside(const Vec3& point) const;
     // The way to this area from an object for the side; false when none is stored.
     bool getRouteList(int side, AIStrategicObject* from, std::list<AIStrategicObject*>& route) const;
-    void orderNormalBot(int side, std::list<AIStrategicObject*>& route, int botId, ISAI* sai);    // [FRONTIER]
+    // Gives a ground bot its route: waypoints between the objects and a place at each.
+    void orderNormalBot(int side, const std::list<AIStrategicObject*>& route, int botId, ISAI* sai);
+    void orderAirBot(int side, const std::list<AIStrategicObject*>& route, int botId, ISAI* sai);    // [FRONTIER]
+    // A place near the control point: the position itself when it is close and valid.
+    void getControlpointPos(AIStrategicObject* object, int side, int map, int type, const Vec3& position, Vec3& out);
     // 0x3496e0 (Ghidra): the side-one position.
     const Vec2& getCenterPosition() const { return m_position[0]; }
 

@@ -22,6 +22,10 @@ public:
     // [INFERRED] Initializes the waypoint polygon; no result is returned to its caller.
     void init();
 
+    // [INFERRED] accessors; AIStrategicArea::orderNormalBot reads the fields inline.
+    const Vec3& getPosition() const { return m_position; }
+    unsigned int getPolygon() const { return m_polygon; }
+
     void draw() const;                           // [FRONTIER]
     void undraw() const;
 

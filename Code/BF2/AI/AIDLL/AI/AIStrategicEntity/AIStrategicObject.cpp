@@ -3,6 +3,8 @@
 
 #include "AIStrategicObject.h"
 
+#include <cmath>
+
 #include "../AIStrategic/SAI.h"          // EnemyStatistics - the four objects the constructor makes
 #include "../Main/AIDllFrontier.h"
 #include "../Main/AIMain.h"
@@ -294,6 +296,17 @@ void AIStrategicObject::randomizePos(int side, float fraction, Vec3& out)
     out.x = x + m_position[side - 1].x;
     out.y = m_f148;
     out.z = z + m_position[side - 1].y;
+}
+
+// 0x352990 (Ghidra).
+void AIStrategicObject::randomizeControlpointPos(float fraction, float radius, Vec3& out)
+{
+    float draw = AIRandom::m_instance->nextFloat();
+    const float angle = (draw + draw) * 3.1415927f;
+    draw = AIRandom::m_instance->nextFloat();
+    const float length = (0.5f + (radius - 0.5f) * draw) * fraction;
+    out.x = std::sin(angle) * length + out.x;
+    out.z = std::cos(angle) * length + out.z;
 }
 
 } // namespace ai

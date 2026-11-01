@@ -566,10 +566,8 @@ private:
     /* 381 */ char         m_pad381[3];
     // four, and the second pair is A copy of the first - see copyAssignedAreas.
     /* 384 */ int          m_assignedAreas[4];      // +384..+396, all = -1
-    /* 400 */ void*        m_ptr400;                // = 0
-    /* 404 */ void*        m_ptr404;                // = 0
-    /* 408 */ void*        m_ptr408;                // = 0
-    /* 412 */ int          m_int412;                // = -1
+    /* 400 */ Vec3         m_currentWaypoint;       // = 0; the route's waypoint between two objects
+    /* 412 */ int          m_int412;                // = -1; the map it was picked for
     // [INFERRED] Consecutive plan-executor skips, cleared when execution resumes.
     // A signed comparison against 15 decides when a stalled bot stops coasting.
     /* 416 */ int          m_stalledPlanTicks;      // = 0

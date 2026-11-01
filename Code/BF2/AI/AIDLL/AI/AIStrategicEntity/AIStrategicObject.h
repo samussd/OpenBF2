@@ -145,6 +145,8 @@ public:
     int getIndex() const { return m_index; }
     // A random point within the fraction of the side's extents; y is the object's height field.
     void randomizePos(int side, float fraction, Vec3& out);
+    // Moves the point in a random direction, between half a metre and the radius, times the fraction.
+    void randomizeControlpointPos(float fraction, float radius, Vec3& out);
 
     // [CHOSEN, not recovered] Public fields allow manager access; the original may have
     // used friendship instead. Offsets document ELF layout and do not constrain modern STL sizes.
