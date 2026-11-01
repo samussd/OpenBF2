@@ -29,7 +29,7 @@ public:
 
 private:
     /* +0x10 */ float m_radius;                      // reaching the last point
-    /* +0x14 */ float m_passRadius;                  // passing any other, at least 2
+    /* +0x14 */ float m_passRadius;                  // passing any other; floored by the constructors
     /* +0x18 */ unsigned int m_count;                // [UNRESOLVED] 1 from the console, 2 from a squad
     /* +0x1C */ std::list<std::pair<Vec3, int> > m_points;
     /* +0x20 */ bool m_flag20;                       // [UNRESOLVED] = false

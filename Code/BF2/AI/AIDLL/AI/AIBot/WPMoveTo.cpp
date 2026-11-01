@@ -40,11 +40,11 @@ WPMoveTo::WPMoveTo(float radius, float passRadius, unsigned int count, const std
         m_points.back().second = area;
 }
 
-// 0x1b96c0 (ELF).
+// 0x1c97e0 (Ghidra). Unlike the other constructor, the pass radius is at least 1.
 WPMoveTo::WPMoveTo(float radius, float passRadius, unsigned int count,
                    const std::list<std::pair<Vec3, int> >& points)
     : m_radius(radius)
-    , m_passRadius(atLeast(passRadius, 2.0f))
+    , m_passRadius(atLeast(passRadius, 1.0f))
     , m_count(count)
     , m_points(points)
     , m_flag20(false)
