@@ -132,6 +132,21 @@ bool CommunicationAgent::receivedMessageExists(AIRadioMessageType type, int play
     return false;
 }
 
+bool CommunicationAgent::confirmReceivedMessage(AIRadioMessageType type, int playerId)
+{
+    bool confirmed = false;
+    std::list<AIRadioMessageInfo>& messages = m_receivedMessages[type];
+    for (std::list<AIRadioMessageInfo>::iterator it = messages.begin(); it != messages.end(); ++it)
+    {
+        if (it->m_senderPlayerId == playerId && !it->m_bool16 && !it->m_bool17)
+        {
+            it->m_bool16 = true;
+            confirmed = true;
+        }
+    }
+    return confirmed;
+}
+
 // Services one bot's radio on the BotManager communication tick: old messages go every tick,
 // and at most once a second the bot speaks.
 void CommunicationAgent::update()

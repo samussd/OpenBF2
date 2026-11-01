@@ -226,7 +226,7 @@ IAIObject* AIPlayer::getSoldier()
 
 IAIObject* AIPlayer::getDefaultVehicle()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::getDefaultVehicle");
+    return static_cast<IAIObject*>(m_player->getDefaultVehicle()->getAIComponent());
 }
 
 IAIObject* AIPlayer::getCurrentVehicle()
