@@ -50,6 +50,48 @@ AIStrategicObject* AIStrategicObjectManager::getClosestObject(
     return closest;
 }
 
+// The strongest gravity among the objects the side owns, or among those it does not.
+AIStrategicObject* AIStrategicObjectManager::getClosestObject(
+    const Vec3& position, int side, bool owned) const
+{
+    AIStrategicObject* closest = 0;
+    float best = -1.0f;
+    for (std::vector<AIStrategicObject*>::const_iterator it = m_strategicObjects.begin();
+         it != m_strategicObjects.end(); ++it)
+    {
+        const double gravity = (*it)->gravity(position, side);
+        if (((*it)->getStatus(side) == StatusMap::Owned) == owned && gravity > best)
+        {
+            best = static_cast<float>(gravity);
+            closest = *it;
+        }
+    }
+    return closest;
+}
+
+// The object at the index, when it exists and is an area.
+AIStrategicArea* AIStrategicObjectManager::getStrategicArea(int index) const
+{
+    if (index < 0 || index >= static_cast<int>(m_strategicObjects.size()))
+        return 0;
+    AIStrategicObject* const object = m_strategicObjects[index];
+    return object->getType() == 0 ? static_cast<AIStrategicArea*>(object) : 0;
+}
+
+// Selects the named area, or none.
+void AIStrategicObjectManager::setActive(std::string name)
+{
+    m_activeArea = m_strategicAreas.find(name);
+}
+
+// A route between two areas, in either order. Retail does not check that the pair exists.
+const std::vector<SAWayPoint*>& AIStrategicObjectManager::getWaypoints(int type, int first,
+                                                                       int second) const
+{
+    const std::pair<int, int> key(first < second ? first : second, first < second ? second : first);
+    return m_wayPoints.find(key)->second.getWayPoints(type);
+}
+
 // 0x354f30 (Ghidra). The strongest gravity above zero among the objects that accept the
 // equipment's vehicle group and do not expel it. An area must also not list the vehicle number
 // as a landing-zone user, unless the number is -1.

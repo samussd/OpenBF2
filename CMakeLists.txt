@@ -1387,6 +1387,7 @@ add_library(bf2_aidll SHARED EXCLUDE_FROM_ALL
     "${BF2_ROOT}/AI/AIInterface/BFKnowledge/PlanePolygon.cpp" # physical-cover fallback dependency
     "${BF2_ROOT}/Math/Plane3.cpp"            # Frustum pulls Plane3::transform + intersect
     "${BF2_ROOT}/Math/Vec3.cpp"              # Vec3::getZero - BotMain's constructor
+    "${BF2_ROOT}/Math/Mat4.cpp"              # the identity and setRotateYDeg - SensingAgent
     "${BF2_ROOT}/Core/Debug.cpp"              # 0x487C30.. - Debug ctor/dtor, reached by checkPointer
     "${BF2_ROOT}/Core/StringUtil.cpp"         # 0x487AF0   - calcStringHashValueNoCase, for StringHashFunc
     # Kept in step with Code/Build/aidll.cmd (2026-09-28): File.cpp joined that manifest on

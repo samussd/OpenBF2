@@ -1559,6 +1559,11 @@ int BotMain::getSpawnKit() const
     return m_player->getSpawnKit();
 }
 
+double BotMain::getTimeOfLastFire() const
+{
+    return m_double172;
+}
+
 // +0x108
 void BotMain::getSpawnTarget(int& a, int& b) const
 {
