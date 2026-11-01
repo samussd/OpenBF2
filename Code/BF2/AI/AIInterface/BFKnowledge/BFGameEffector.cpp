@@ -13,6 +13,9 @@
 #include "../../../Core/ClassManager.h"
 #include "../../../Core/Ids.h"                          // IID_IGameServer
 #include "../../../Game/IGame.h"                        // the `game` global
+#include "../../../Game/IGameLogic.h"                   // the `gameLogic` global
+#include "IAIObject.h"
+#include "AIPlayer.h"
 #include "../../../Game/IGameServer.h"                  // createPlayer, slot +0x20
 #include "../../../Scene/Object/PlayerManager.h"        // the `playerManager` global
 
@@ -60,12 +63,16 @@ int BFGameEffector::exitVehicle(IAIPlayer* player)
 // Includes the overload arguments in the terminatePlayer frontier diagnostic.
 int BFGameEffector::terminatePlayer(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFGameEffector::terminatePlayer(int)");
+    world::IPlayer* const player = world::playerManager->getPlayerFromId(playerId);
+    static_cast<IGameServer*>(game ? game->queryInterface(IID_IGameServer) : 0)->destroyPlayer(player);
+    return 0;   // [CHOSEN, not recovered] no caller reads it
 }
 
 int BFGameEffector::terminatePlayer(IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFGameEffector::terminatePlayer(IAIPlayer*)");
+    world::IPlayer* const engine = player->getPlayer();
+    static_cast<IGameServer*>(game ? game->queryInterface(IID_IGameServer) : 0)->destroyPlayer(engine);
+    return 0;   // [CHOSEN, not recovered] no caller reads it
 }
 
 // Creates an AI player through the game server and returns its player ID.
@@ -101,7 +108,8 @@ int BFGameEffector::addBot(int& a, int& b, std::string& name)
 
 int BFGameEffector::respawnBot(IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFGameEffector::respawnBot");
+    gameLogic->reSpawnPlayer(player->getPlayer());
+    return 0;   // [CHOSEN, not recovered] no caller reads it
 }
 
 void BFGameEffector::forceSpawnBot(IAIPlayer* player, const Vec3& position, const Vec3& rotation)
@@ -111,7 +119,11 @@ void BFGameEffector::forceSpawnBot(IAIPlayer* player, const Vec3& position, cons
 
 int BFGameEffector::giveDamage(IAIObject* target, world::IPlayer* from, int type, float amount)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFGameEffector::giveDamage");
+    const Vec3 position = { 0.0f, 0.0f, 0.0f };
+    const Vec3 normal = { 0.0f, 1.0f, 0.0f };
+    gameLogic->giveDamage(target->getObject(), amount, from, 0, 0, type, 0, 0, position, normal, -1,
+                          false, true, false);
+    return 0;   // [CHOSEN, not recovered] no caller reads it
 }
 
 int BFGameEffector::playEffect(const Vec3& position, int a, int b)
@@ -122,12 +134,14 @@ int BFGameEffector::playEffect(const Vec3& position, int a, int b)
 // 5 bytes - A bare ret. dice's own empty body, not a gap.
 void BFGameEffector::playSoundEffects(double dt)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFGameEffector::playSoundEffects");
 }
 
+// More damage than anything can take.
 int BFGameEffector::suicide(IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFGameEffector::suicide");
+    const int side = player->getSide();
+    world::IPlayer* const engine = player->getPlayer();
+    return giveDamage(player->getSoldier(), engine, side, 100000000.0f);
 }
 
 } // namespace ai
