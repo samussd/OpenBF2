@@ -1928,8 +1928,11 @@ void ServerGameLogic::spawnPlayer(world::IPlayer* playerArg, std::pair<Vec3, Vec
         return;
 
     // UseAI restricts bots only in the first spawn wave, before ticket updates begin.
+    // [TEMP] [RETIRE-WHEN: aidll-02-skeleton] BF2_AI_SPAWN_ALONE is not retail: it lets the
+    // coop probe watch live bots with no human on the server.
+    static const bool botsSpawnAlone = std::getenv("BF2_AI_SPAWN_ALONE") != 0;
     bool refuseBecauseAI = false;
-    if (!m_shouldUpdateTicketSystem)                                    // +0x28C
+    if (!m_shouldUpdateTicketSystem && !botsSpawnAlone)                 // +0x28C
     {
         if (settings->boolGet(std::string("UseAI"), false) == 1)
             refuseBecauseAI = (player->getIsAIPlayer() == 1);           // +0x64

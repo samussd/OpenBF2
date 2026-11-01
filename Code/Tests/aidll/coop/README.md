@@ -51,6 +51,11 @@ LAN, the bots stayed unspawned while the player sat on the spawn screen, and all
 0.1 seconds of the player's first spawn. Spawning, movement and combat therefore need a player who
 has spawned, or a scripted scenario.
 
+The reason is in `ServerGameLogic::spawnPlayer`: it refuses bots until the first spawn of a player
+who is not a bot. `--bots-alone` lifts that refusal on the rebuilt server, through the temporary
+`BF2_AI_SPAWN_ALONE` variable, so the tick can be watched with no human. The original server
+ignores it.
+
 To take part, start the run with a long `--seconds`, then join "OpenBF2 AI probe" from the LAN
 list with an offline profile. End a run early by ending the `bf2_w32ded.exe` process, not the
 console: run.py then removes its files and still writes the summary.

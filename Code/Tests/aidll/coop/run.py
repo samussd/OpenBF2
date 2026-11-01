@@ -9,6 +9,7 @@ from pathlib import Path
 import argparse
 import json
 import math
+import os
 import shutil
 import subprocess
 import sys
@@ -72,6 +73,8 @@ def parse_args():
     parser.add_argument('--interval', type=float, default=5.0, help='seconds between player samples')
     parser.add_argument('--port', type=int, default=16600, help='game port; 16567 is refused')
     parser.add_argument('--record', action='store_true', help='let the server record a demo (sv.autoRecord)')
+    parser.add_argument('--bots-alone', action='store_true',
+                        help='rebuilt server only: let bots spawn with no human (BF2_AI_SPAWN_ALONE)')
     parser.add_argument('--no-redirect', action='store_true',
                         help='run in a hidden console instead of capturing stdout/stderr '
                              '(the original server stalls when its output is redirected)')
@@ -111,17 +114,20 @@ def run_server(game, args, out):
                '+config', 'mods/bf2/Settings/%s_settings.con' % PRIVATE,
                '+mapList', 'mods/bf2/Settings/%s_maplist.con' % PRIVATE,
                '+noStatusMonitor', '1']
+    env = dict(os.environ)
+    if args.bots_alone:
+        env['BF2_AI_SPAWN_ALONE'] = '1'
     if args.no_redirect:
         info = subprocess.STARTUPINFO()
         info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         info.wShowWindow = 0
-        process = subprocess.Popen(command, cwd=str(game), startupinfo=info,
+        process = subprocess.Popen(command, cwd=str(game), env=env, startupinfo=info,
                                    creationflags=subprocess.CREATE_NEW_CONSOLE)
         streams = []
     else:
         stdout = open(out / 'stdout.txt', 'wb')
         stderr = open(out / 'stderr.txt', 'wb')
-        process = subprocess.Popen(command, cwd=str(game), stdout=stdout, stderr=stderr)
+        process = subprocess.Popen(command, cwd=str(game), env=env, stdout=stdout, stderr=stderr)
         streams = [stdout, stderr]
     start = time.time()
     exited = None
