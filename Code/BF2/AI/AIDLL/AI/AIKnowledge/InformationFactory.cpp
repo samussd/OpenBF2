@@ -6,14 +6,18 @@
 
 #include "Information.h"
 #include "InformationManager.h"
+#include "InformationKnown.h"
 #include "InformationReal.h"
+#include "IPIArmamentKnown.h"
 #include "IPIArmamentReal.h"
 #include "IPIControlInfo.h"
 #include "IPICover.h"
 #include "IPIMobileKnown.h"
 #include "IPIMobileReal.h"
+#include "IPIPhysicalKnown.h"
 #include "IPIPhysicalReal.h"
 #include "IPIUnit.h"
+#include "WeaponInfoKnown.h"
 #include "WeaponInfoReal.h"
 #include "WeaponInfoManager.h"
 #include "../AIUtils/checkPointer.h"
@@ -96,11 +100,14 @@ unsigned int InformationFactory::requestInformationReal(unsigned int handle, IAI
 // The same with an InformationKnown
 // (ELF , PE ; , / , `(object, types, time
 // degeneration, basicTemp, allowedTimeDiff, side)`), registered through the same vtable slot.
-// [FRONTIER] InformationKnown is not written.
-unsigned int InformationFactory::requestInformationKnown(unsigned int, IAIObject*, unsigned int,
-                                                         double, float, float, float, int) const
+unsigned int InformationFactory::requestInformationKnown(unsigned int handle, IAIObject* object,
+                                                         unsigned int types, double time,
+                                                         float degeneration, float basicTemp,
+                                                         float allowedTimeDiff, int side) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::InformationFactory::requestInformationKnown [InformationKnown]");
+    return registerInformation(handle, checkPointer(new InformationKnown(object, types, time,
+                                                                         degeneration, basicTemp,
+                                                                         allowedTimeDiff, side)));
 }
 
 // the plug-in halves
@@ -123,11 +130,10 @@ bool InformationFactory::requestInformationPlugin(unsigned int sourceHandle,
     {
     case 0:     // armament - IPIArmamentReal (ELF / PE ) or IPIArmamentKnown (32 / 36)
         if (real)
-        {
             target->setArmament(checkPointer(new IPIArmamentReal(source)));
-            return true;
-        }
-        BF2_AI_FRONTIER("dice::hfe::ai::InformationFactory::requestInformationPlugin [IPIArmamentKnown]");
+        else
+            target->setArmament(checkPointer(new IPIArmamentKnown(source)));
+        return true;
 
     case 1:     // control info - , built inline in both images, the same for real and known
         target->setControlInfo(checkPointer(new IPIControlInfo(source)));
@@ -146,11 +152,10 @@ bool InformationFactory::requestInformationPlugin(unsigned int sourceHandle,
 
     case 4:     // physical - IPIPhysicalReal or IPIPhysicalKnown
         if (real)
-        {
             target->setPhysical(checkPointer(new IPIPhysicalReal(source)));
-            return true;
-        }
-        BF2_AI_FRONTIER("dice::hfe::ai::InformationFactory::requestInformationPlugin [IPIPhysicalKnown]");
+        else
+            target->setPhysical(checkPointer(new IPIPhysicalKnown(source)));
+        return true;
 
     case 5:     // unit - IPIUnit , the same for real and known; `real` is ignored
         target->setUnit(checkPointer(new IPIUnit(source)));
@@ -179,13 +184,13 @@ bool InformationFactory::updateInformationPlugin(unsigned int handle, int type) 
 
 // A WeaponInfoReal for the owning
 // side, else a WeaponInfoKnown (ELF / PE ), each built on the IWeapon and registered through
-// the vtable (registerWeapon, ELF +0x3C / PE +0x38). The Real arm is written; Known remains named.
+// the vtable (registerWeapon, ELF +0x3C / PE +0x38).
 unsigned int InformationFactory::requestWeaponInfo(unsigned int handle, IWeapon* weapon,
                                                    bool real) const
 {
     if (real)
         return registerWeapon(handle, checkPointer(new WeaponInfoReal(weapon)));
-    BF2_AI_FRONTIER("dice::hfe::ai::InformationFactory::requestWeaponInfo [WeaponInfoKnown]");
+    return registerWeapon(handle, checkPointer(new WeaponInfoKnown(weapon)));
 }
 
 // lookups
