@@ -915,9 +915,29 @@ bool SAI::hostileTakeoveInProgress(AIStrategicObject*& object, Vec2& position)
     return found;
 }
 
-bool SAI::isPosInsideOwnedControlPoint(AIStrategicObject*&, Vec3, float)
+// Whether the position lies in the control point of the closest object, if the side owns it. A
+// positive radius can only widen the point's own.
+bool SAI::isPosInsideOwnedControlPoint(AIStrategicObject*& object, Vec3 position, float radius)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::isPosInsideOwnedControlPoint");
+    AIStrategicObject* const closest =
+        AIStrategicObjectManager::getInstance()->getClosestObject(position, m_side);
+    if (!closest->hasObjectTypeFlag(AIStrategicObject::ControlPoint)
+        || closest->getStatus(m_side) != StatusMap::Owned)
+        return false;
+
+    Vec3 centre = {};
+    float pointRadius = 0.0f;
+    bool active;
+    static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)->getControlPointInfo(
+        static_cast<AIStrategicArea*>(closest)->m_controlPointId, centre, pointRadius, active);
+    const float reach = radius > 0.0f && radius > pointRadius ? radius : pointRadius;
+    const float dx = position.x - centre.x;
+    const float dy = position.y - centre.y;
+    const float dz = position.z - centre.z;
+    if (!active || !(dx * dx + dy * dy + dz * dz < reach * reach))
+        return false;
+    object = closest;
+    return true;
 }
 
 // 0x338590 (Ghidra). Any strategic object the side owns, whatever its type.
@@ -934,14 +954,32 @@ bool SAI::haveAnyOwnedCps(int side)
     return false;
 }
 
-bool SAI::haveAnyOwnedAndTakeableCps(int)
+bool SAI::haveAnyOwnedAndTakeableCps(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::haveAnyOwnedAndTakeableCps");
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (*it && (*it)->getStatus(side) == StatusMap::Owned
+            && static_cast<AIStrategicArea*>(*it)->isAreaTakeable())
+            return true;
+    }
+    return false;
 }
 
-bool SAI::ownAllTakeableCps(int)
+bool SAI::ownAllTakeableCps(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::ownAllTakeableCps");
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (*it && (*it)->getStatus(side) != StatusMap::Owned
+            && static_cast<AIStrategicArea*>(*it)->isAreaTakeable())
+            return false;
+    }
+    return true;
 }
 
 // Returns the squad manager's count of freed squads. The object is looked up by index only to
