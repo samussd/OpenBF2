@@ -2,7 +2,15 @@
 
 #include "CommunicationHub.h"
 
+#include <cmath>
+
 #include "AIDllFrontier.h"
+#include "IBotManager.h"
+#include "../AIBot/BotMain.h"
+#include "../AIBot/CommunicationAgent.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
+#include "../../../AIInterface/BFKnowledge/BFRadioComm.h"
+#include "../../../AIInterface/Module/BFConsole.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
 #include "../../../AIInterface/BFKnowledge/BFGame.h"
@@ -131,22 +139,108 @@ void CommunicationHub::enemySpottedByAI(IAIPlayer* player, IAIObject* object, in
     }
 }
 
-void CommunicationHub::enemySpottedByHuman(IAIObject*, unsigned char) const
+// Refreshes what the side knows about an object a human spotted.
+void CommunicationHub::enemySpottedByHuman(IAIObject* object, unsigned char side) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommunicationHub::enemySpottedByHuman");
+    Information* information = informationManager->getInformation(object->getInformation(side));
+    if (!information)
+        information = informationManager->getInformation(object->forceGetInformation(side, true));
+    information->setTime(static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime());
 }
 
-void CommunicationHub::filterAndSendAIRadioMessage(BotMain*, int, ChannelMessageType,
-                                                   AIRadioChannelType, AIRadioMessageType,
-                                                   unsigned char, int, unsigned char,
-                                                   unsigned char)
+// Type 2 goes on the air once in twenty seconds per side; in between it only reaches the bot it
+// names, and only that bot's own ears.
+void CommunicationHub::filterAndSendAIRadioMessage(BotMain*, int playerId,
+                                                   ChannelMessageType messageChannel,
+                                                   AIRadioChannelType channel,
+                                                   AIRadioMessageType type,
+                                                   unsigned char voice, int senderId,
+                                                   unsigned char side, unsigned char value)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommunicationHub::filterAndSendAIRadioMessage");
+    const IBFTimer* const timer = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+    if (static_cast<int>(type) == 2)
+    {
+        double* const lastSent = &m_time4 + (side - 1);
+        if (timer->getGameTime() - *lastSent < 20.0)
+        {
+            IAIPlayer* const player =
+                static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)
+                    ->getPlayerFromId(value);
+            if (!player || !player->getIsAIPlayer())
+                return;
+            IBFModuleCourier* const courier =
+                static_cast<IBFModuleCourier*>(CommonSingletonServer::m_iBFModuleCourier);
+            int sameVoice;
+            AIRadioMessageSettings settings;
+            courier->getVoiceFromAiMessageType(static_cast<AIRadioMessageType>(2), sameVoice);
+            courier->getAIMessageSettings(sameVoice, settings);
+            filterAndReceiveAIRadioMessage(settings, senderId, value, true);
+            return;
+        }
+        *lastSent = timer->getGameTime();
+    }
+    static_cast<IBFRadioComm*>(CommonSingletonServer::m_iBFRadioComm)
+        ->sendAIRadioMessage(playerId, messageChannel, channel, voice, senderId, side, value);
 }
 
-void CommunicationHub::filterAndReceiveAIRadioMessage(const AIRadioMessageSettings&, int, int, bool)
+// A bot does not hear itself. A human's types 0 and 1 close or open the vehicle under them to
+// bots, and type 2 reaches the bot only if the human is looking its way.
+void CommunicationHub::filterAndReceiveAIRadioMessage(const AIRadioMessageSettings& settings,
+                                                      int senderId, int receiverId, bool self)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommunicationHub::filterAndReceiveAIRadioMessage");
+    Bot* const bot = IBotManager::instance->getBotFromPlayerId(receiverId);
+    if (senderId == bot->getPlayerId())
+        return;
+
+    if (settings.m_type >= 0 && settings.m_type <= 2)
+    {
+        IAIPlayer* const sender = static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)
+                                      ->getPlayerFromId(senderId);
+        if (sender && !sender->getIsAIPlayer())
+        {
+            if (settings.m_type == 2)
+            {
+                const float* const camera = static_cast<const float*>(sender->getCameraTransformation());
+                const Vec3& position = informationManager->getInformation(bot->getCurrentEquipment())
+                                           ->getPosition();
+                float x = position.x - camera[12];
+                float y = position.y - camera[13];
+                float z = position.z - camera[14];
+                const float lengthSq = x * x + y * y + z * z;
+                if (std::fabs(lengthSq - 1.0f) >= 1.1920929e-07f)
+                {
+                    if (std::fabs(lengthSq) >= 1.1920929e-07f)
+                    {
+                        const float scale = 1.0f / std::sqrt(lengthSq);
+                        x *= scale;
+                        y *= scale;
+                        z *= scale;
+                    }
+                    else
+                    {
+                        x = 0.0f;
+                        y = 0.0f;
+                        z = 0.0f;
+                    }
+                }
+                float dot = camera[8] * x + camera[9] * y + camera[10] * z;
+                if (dot < -1.0f)
+                    dot = -1.0f;
+                else if (dot > 1.0f)
+                    dot = 1.0f;
+                if (std::acos(dot) > 1.5707964f)
+                    return;
+            }
+            else
+            {
+                IAIObject* const primary = sender->getCurrentVehicle()->getPrimaryObject();
+                if (primary)
+                    primary->setIsAllowedByBots(settings.m_type == 1);
+            }
+        }
+    }
+
+    bot->getCommunicationAgent()->receiveRadioMessage(settings, senderId, self);
 }
 
 } // namespace ai

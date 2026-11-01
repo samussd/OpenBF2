@@ -5,6 +5,14 @@
 #include "CommunicationAgent.h"
 #include "BotMain.h"
 #include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIArmament.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../AIKnowledge/WeaponInfo.h"
+#include "../AIKnowledge/WeaponInfoManager.h"
+
+#include "../../../../IO/Input/PlayerInput.h"
 
 #include "../Main/AIDllFrontier.h"
 #include "../Main/CommonSingletonServer.h"
@@ -124,15 +132,190 @@ bool CommunicationAgent::receivedMessageExists(AIRadioMessageType type, int play
     return false;
 }
 
-// [FRONTIER] Remaining message operations require implementation.
-// [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
-
-// [FRONTIER] Services one bot's radio on the BotManager communication tick.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace the stop when radio update behavior is recovered.
+// Services one bot's radio on the BotManager communication tick: old messages go every tick,
+// and at most once a second the bot speaks.
 void CommunicationAgent::update()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommunicationAgent::update");
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    clearOutOldMessages(now);
+    if (now < m_double60)
+        m_double60 = now;
+    if (now - m_double60 > 1.0)
+    {
+        m_double60 = now;
+        pollForRadioMessage(now);
+    }
+}
+
+// Lifts the send limits that have passed and drops what has outlived its time to live. Each
+// inbox is newest first, so everything from the first expired message on goes.
+void CommunicationAgent::clearOutOldMessages(double time)
+{
+    for (unsigned int type = 0; type <= 17; ++type)
+    {
+        if (m_lastSentTime[type] < time)
+            m_lastSentTime[type] = 0.0;
+
+        std::list<AIRadioMessageInfo>& messages = m_receivedMessages[type];
+        std::list<AIRadioMessageInfo>::iterator it = messages.begin();
+        while (it != messages.end()
+               && time < it->m_double8 + static_cast<double>(m_receiveTimeToLive[type]))
+            ++it;
+        messages.erase(it, messages.end());
+    }
+}
+
+void CommunicationAgent::pollForRadioMessage(double time)
+{
+    sendCommunicationAgentMessages(time);
+
+    CAPrioMessage message;
+    while (peekRadioMessage(message) && !waitWithSendingMessage(message, time))
+    {
+        postEvent(message);
+        dequeueRadioMessage(message);
+    }
+}
+
+void CommunicationAgent::sendCommunicationAgentMessages(double)
+{
+    Information* const information = informationManager->getInformation(m_bot->getCurrentEquipment());
+    sendCallForMedic(information);
+    shutOffHorn(information);
+}
+
+// A hurt soldier or a damaged vehicle, standing still, calls for help unless it carries what
+// would fix it. The vehicle-free soldier asks for a medic below half health.
+void CommunicationAgent::sendCallForMedic(Information* information)
+{
+    const int side = m_bot->getSide();
+    Information* const primary = informationManager->getInformation(information->getPrimaryObject(side));
+    IPIMobile* const mobile = primary->getMobile();
+    const bool moving = m_bot->isAirBorn()
+        || (primary && (primary->getObjectTypeFlags() & 0x10u) && mobile
+            && mobile->getSpeedMagnitude() > 3.0f);
+    if (!information->isPrimary() || moving)
+        return;
+
+    const float health = information->getPhysical()->getHealth();
+    const int strengthType = information->getPhysical()->getStrengthType();
+    const float limit = strengthType == 0 ? 0.5f : 0.75f;
+    if (!(health > 0.0f) || !(health < limit))
+        return;
+
+    if (information->getArmament())
+    {
+        const std::vector<unsigned int>& weapons = information->getArmament()->getWeapons();
+        for (unsigned int i = 0; i < weapons.size(); ++i)
+        {
+            WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+            if (weapon && (weapon->getWeaponType() == 1 || weapon->getWeaponType() == 3)
+                && static_cast<float>(weapon->getStrength(strengthType)) > 0.0f)
+                return;
+        }
+    }
+
+    if (strengthType == 0)
+        enqueueRadioMessage(static_cast<AIRadioMessageType>(3), static_cast<AIRadioChannelType>(0),
+                            5, 0.0f, -1);
+    else
+        enqueueRadioMessage(static_cast<AIRadioMessageType>(4), static_cast<AIRadioChannelType>(6),
+                            5, 0.0f, 0);
+}
+
+// A horn is the vehicle's fire input; it stops two seconds after the last honk.
+void CommunicationAgent::shutOffHorn(Information* information)
+{
+    if ((information->getObjectTypeFlags() & 0x04000000u) == 0)
+        return;
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (now - m_lastHonkTime > 2.0)
+        m_bot->getPlayerInput()->setInput(io::PIFire, false);
+}
+
+bool CommunicationAgent::peekRadioMessage(CAPrioMessage& message)
+{
+    if (m_queue.empty())
+        return false;
+    message = m_queue.top();
+    return true;
+}
+
+bool CommunicationAgent::dequeueRadioMessage(CAPrioMessage& message)
+{
+    if (m_queue.empty())
+        return false;
+    message = m_queue.top();
+    m_queuedTypes.erase(message.m_type);
+    m_queue.pop();
+    return true;
+}
+
+// Waits until the message's time has come and the last one heard of its type has had its say.
+bool CommunicationAgent::waitWithSendingMessage(const CAPrioMessage& message, double time)
+{
+    if (message.m_time > time)
+        return true;
+    const std::list<AIRadioMessageInfo>& messages = getReceivedMessages(message.m_type);
+    if (messages.empty())
+        return false;
+    const AIRadioMessageInfo& last = messages.front();
+    return time - last.m_double8 < static_cast<double>(m_maxSendPeriod[last.m_type]);
+}
+
+void CommunicationAgent::postEvent(const CAPrioMessage& message)
+{
+    const unsigned char playerId = static_cast<unsigned char>(m_bot->getPlayerId());
+    const unsigned char side = static_cast<unsigned char>(m_bot->getSide());
+    const unsigned char value = static_cast<unsigned char>(message.m_int12);
+    int voice;
+    if (static_cast<IBFModuleCourier*>(CommonSingletonServer::m_iBFModuleCourier)
+            ->getVoiceFromAiMessageType(message.m_type, voice))
+    {
+        m_hub->filterAndSendAIRadioMessage(m_bot, playerId, static_cast<ChannelMessageType>(3),
+                                           message.m_channel, message.m_type,
+                                           static_cast<unsigned char>(voice), playerId, side, value);
+    }
+}
+
+void CommunicationAgent::receiveRadioMessage(const AIRadioMessageSettings& settings, int senderId,
+                                             bool self)
+{
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+
+    AIRadioMessageInfo message;
+    message.m_float0 = settings.m_modifier;
+    message.m_senderPlayerId = senderId;
+    message.m_double8 = now;
+    message.m_bool16 = false;
+    message.m_bool17 = self;
+    message.m_type = settings.m_type;
+
+    if (settings.m_type == 0 || settings.m_type == 1)
+    {
+        std::list<AIRadioMessageInfo>& opposite = m_receivedMessages[1 - settings.m_type];
+        for (std::list<AIRadioMessageInfo>::iterator it = opposite.begin(); it != opposite.end(); ++it)
+        {
+            if (it->m_senderPlayerId == senderId)
+            {
+                opposite.erase(it, opposite.end());
+                break;
+            }
+        }
+    }
+
+    std::list<AIRadioMessageInfo>& inbox = m_receivedMessages[settings.m_type];
+    for (std::list<AIRadioMessageInfo>::iterator it = inbox.begin(); it != inbox.end(); ++it)
+    {
+        if (it->m_senderPlayerId == senderId)
+        {
+            it->m_float0 = settings.m_modifier;
+            it->m_bool16 = false;
+            it->m_double8 = now;
+            return;
+        }
+    }
+    inbox.push_front(message);
 }
 
 // 0x1d5460 (Ghidra). The hub may report the sighting.

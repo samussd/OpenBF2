@@ -13,6 +13,7 @@
 #include "../BFKnowledge/AIPlayerFactory.h"         // IAIPlayerFactory, isOccupiedObject
 #include "../BFKnowledge/IAIObject.h"               // the vehicle arms' object slots
 #include "../BFKnowledge/IAIObjectPlugIn.h"         // IAIObjectUnit / IAIObjectPhysical
+#include "../Module/BFConsole.h"                    // the radio arm's message settings
 #include "../../AIDLL/AI/AIKnowledge/BFInformationCourier.h"  // IAIInformationCourier
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../AIDLL/AI/Main/AIEventCourier.h"     // IAIEventCourier - 55 named slots
@@ -424,8 +425,13 @@ void AIEventListener::handleEvent(EventCategory category,
             return;
 
         case 0xAu:
-            unwrittenArm("category 3 id 10 - radio message (needs BFConsole::getAIMessageSettings,"
-                         " itself a frontier)", (int)category, id);
+            {
+                // The voice id, then the sender's and the hearing player's ids.
+                const int* const p = static_cast<const int*>(userData);
+                AIRadioMessageSettings settings;
+                if (BFConsole::m_instance->getAIMessageSettings(p[0], settings))
+                    courier->eventRadioMessage(settings, p[1], p[2]);
+            }
             return;
         case 0xEu:
             {

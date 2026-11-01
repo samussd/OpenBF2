@@ -3891,16 +3891,26 @@ void GameServer::handleRadioMessageReceivedEvent(RadioMessageReceivedEvent* even
     event->m_connectionId = connectionId;
 }
 
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: gameserver-radio-ai-courier]
-// The no-bot production path above never enters this arm. Keeping a fail-loud callable boundary
-// prevents a bots-enabled server from silently dropping radio commands while the 309-byte courier
-// body and its AI-event payload remain unrecovered.
-void GameServer::sendRadioMessageToAI(IEventWrapper&, int)
+// Tells every living bot that may hear it about a radio message from a living player.
+void GameServer::sendRadioMessageToAI(IEventWrapper& message, int messageId)
 {
-    std::fprintf(stderr,
-                 "[FRONTIER] dice::hfe::GameServer::sendRadioMessageToAI reached\n");
-    std::fflush(stderr);
-    std::abort();
+    world::IPlayer* const sender = message.getSenderId() == -1
+        ? world::playerManager->getLocalHumanPlayer()
+        : world::playerManager->getPlayerFromId(message.getSenderId());
+    if (!sender || !sender->getIsAlive())
+        return;
+
+    const std::list<world::IPlayer*>& players = world::playerManager->getPlayers();
+    for (std::list<world::IPlayer*>::const_iterator it = players.begin(); it != players.end(); ++it)
+    {
+        world::IPlayer* const listener = *it;
+        if (listener && listener->getIsAlive() && listener->getIsAIPlayer()
+            && filterMessage(message, sender, listener))
+        {
+            int payload[3] = { messageId, sender->getId(), listener->getId() };
+            eventManager->postEvent(ECAI, 10, payload, 0.0f);
+        }
+    }
 }
 
 // Forwards chat to player/admin and server-console listeners, temporarily hiding

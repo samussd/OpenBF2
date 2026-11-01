@@ -17,6 +17,7 @@ namespace ai {
 class BotMain;
 class CommunicationHub;
 class Information;
+struct AIRadioMessageSettings;
 
 // Both opaque, and declared this way elsewhere in the tree too - see BFConsole.h for why no
 // enumerator name is recoverable from either binary.
@@ -63,7 +64,7 @@ public:
     // The implicit destructor releases member containers; no custom cleanup is required.
 
     void reset();
-    void update();                                 // - [FRONTIER]
+    void update();
     void enqueueRadioMessage(AIRadioMessageType type, AIRadioChannelType channel,
                              unsigned int priority, float delay, int value);
 
@@ -78,8 +79,20 @@ public:
     bool receivedMessageExists(AIRadioMessageType type, int playerId);
     // The bot saw an enemy it was not in contact with (BotSenses::event_seenObject).
     void setSeenNewEnemy(Information* information);
+    // Files a message from a player. Types 0 and 1 cancel each other's earlier messages.
+    void receiveRadioMessage(const AIRadioMessageSettings& settings, int senderId, bool self);
 
 private:
+    void clearOutOldMessages(double time);
+    void pollForRadioMessage(double time);
+    void sendCommunicationAgentMessages(double time);
+    void sendCallForMedic(Information* information);
+    void shutOffHorn(Information* information);
+    bool peekRadioMessage(CAPrioMessage& message);
+    bool dequeueRadioMessage(CAPrioMessage& message);
+    bool waitWithSendingMessage(const CAPrioMessage& message, double time);
+    void postEvent(const CAPrioMessage& message);
+
     typedef std::priority_queue<CAPrioMessage, std::vector<CAPrioMessage>,
                                 std::less<CAPrioMessage> > MessageQueue;
 
@@ -96,7 +109,7 @@ private:
     // Eighteen doubles, one per type, zeroed by `reset` and paired with the max-send-period cache
     // below. [INFERRED] that these are the per-type last-sent timestamps.
     /*  48 */ std::vector<double> m_lastSentTime;
-    /*  60 */ double m_double60;               // reset: 0.0
+    /*  60 */ double m_double60;               // reset: 0.0; the last poll
     // the two cached columns of `AIRadioMessages.ai`. Filled once, in the constructor.
     /*  68 */ std::vector<float> m_receiveTimeToLive;
     /*  80 */ std::vector<float> m_maxSendPeriod;

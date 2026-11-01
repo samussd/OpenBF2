@@ -25,7 +25,7 @@ public:
     IBFRadioComm();
     virtual ~IBFRadioComm();
 
-    virtual int sendAIRadioMessage(int playerId, ChannelMessageType channel, AIRadioChannelType type, unsigned char a, int b, unsigned char c, unsigned char d) = 0;
+    virtual int sendAIRadioMessage(int playerId, ChannelMessageType channel, AIRadioChannelType type, unsigned char voice, int senderId, unsigned char side, unsigned char value) = 0;
 };
 
 class BFRadioComm : public IBFRadioComm
@@ -34,7 +34,7 @@ public:
     BFRadioComm();
     virtual ~BFRadioComm();
 
-    virtual int sendAIRadioMessage(int playerId, ChannelMessageType channel, AIRadioChannelType type, unsigned char a, int b, unsigned char c, unsigned char d);
+    virtual int sendAIRadioMessage(int playerId, ChannelMessageType channel, AIRadioChannelType type, unsigned char voice, int senderId, unsigned char side, unsigned char value);
 };
 
 } // namespace ai

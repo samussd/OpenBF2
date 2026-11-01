@@ -10,6 +10,8 @@
 
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../../Core/ClassManager.h"
+#include "../../../Core/EventManager.h"
+#include "../../../Game/GameEvents/RadioMessageEvent.h"
 
 namespace dice {
 namespace hfe {
@@ -39,10 +41,20 @@ BFRadioComm::~BFRadioComm()
 {
 }
 
-// - the single virtual, and the AI's only way to speak.
-int BFRadioComm::sendAIRadioMessage(int playerId, ChannelMessageType channel, AIRadioChannelType type, unsigned char a, int b, unsigned char c, unsigned char d)
+// The AI's only way to speak: a local radio delivery, on the engine's channel for the AI channel.
+int BFRadioComm::sendAIRadioMessage(int playerId, ChannelMessageType channel, AIRadioChannelType type,
+                                    unsigned char voice, int senderId, unsigned char side,
+                                    unsigned char value)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFRadioComm::sendAIRadioMessage");
+    static const int channels[] = { 6, 7, 8, 3, 2, 4, 10, 11, 14 };
+    const unsigned int index = static_cast<unsigned int>(type);
+    const int target = index < 9 ? channels[index] : 0x13;
+    EventNode* const node = createRadioMessageReceivedEvent(playerId, voice,
+                                                            static_cast<unsigned char>(senderId),
+                                                            side, value, target,
+                                                            static_cast<int>(channel));
+    eventManager->postEvent(ECNetwork, node, 0.0f);
+    return 0;   // [CHOSEN, not recovered] the caller discards it
 }
 
 } // namespace ai

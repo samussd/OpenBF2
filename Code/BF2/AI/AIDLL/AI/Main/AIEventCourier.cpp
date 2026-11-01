@@ -171,9 +171,11 @@ int AIEventCourier::eventRevived(int playerId, IAIObject* soldier)
     return 0;
 }
 
-int AIEventCourier::eventRadioMessage(const AIRadioMessageSettings&, int, int)
+int AIEventCourier::eventRadioMessage(const AIRadioMessageSettings& settings, int senderId,
+                                      int receiverId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventRadioMessage");
+    CommunicationHub::m_instance->filterAndReceiveAIRadioMessage(settings, senderId, receiverId, false);
+    return 0;   // [CHOSEN, not recovered] the caller discards it
 }
 
 int AIEventCourier::event_mineRemoved(unsigned int mineId)

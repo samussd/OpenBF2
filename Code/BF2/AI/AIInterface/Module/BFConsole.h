@@ -24,7 +24,7 @@ enum AIRadioMessageType : int;
 // Settings for an AI radio message; preserve the field order used by the courier.
 struct AIRadioMessageSettings
 {
-    /*  0 */ unsigned char m_opaque0[4];    // [UNRESOLVED]
+    /*  0 */ int m_type;                    // the inbox it lands in; 0, 1 and 2 act on arrival
     /*  4 */ float m_modifier;              // AIRadioMessages.ai column 1
     /*  8 */ float m_maxSendPeriod;         // AIRadioMessages.ai column 2
     /* 12 */ float m_receiveTimeToLive;     // AIRadioMessages.ai column 3
