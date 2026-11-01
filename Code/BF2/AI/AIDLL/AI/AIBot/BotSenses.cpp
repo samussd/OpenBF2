@@ -1,5 +1,4 @@
-// A bot's perception: hearing, sight and the shots it noticed. forgetObject (473 B) is not
-// recovered: nothing calls it yet.
+// A bot's perception: hearing, sight and the shots it noticed.
 
 #include "BotSenses.h"
 
@@ -166,6 +165,39 @@ BotSenses::BotSenses(BotMain* owner)
 
 // Clears sensed-object records and resets per-life sensing state.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
+// 0x1add70 (Ghidra). Stops seeing the object; one the bot also hears stays known. The cursor check
+// on end() is ours: retail reads the list's sentinel there.
+void BotSenses::forgetObject(unsigned int handle)
+{
+    Information* const information = informationManager->getInformation(handle);
+    if (!information)
+        return;
+    const unsigned int primaryHandle = information->getPrimaryObject(m_bot->getSide());
+    Information* const primary = informationManager->getInformation(primaryHandle);
+
+    std::map<unsigned int, TimedList::iterator>::iterator node = m_seenNodes.find(primaryHandle);
+    if (node == m_seenNodes.end())
+        return;
+    SensedObject* const sensed = node->second->second;
+    if (m_seenCursor != m_seen.end() && m_seenCursor->second == sensed)
+        m_seenCursor = m_seen.end();
+    m_seen.erase(node->second);
+    m_seenNodes.erase(node);
+
+    if (sensed->m_flag100)
+    {
+        primary->removeContact();
+        sensed->m_flag100 = false;
+    }
+    const unsigned int flags = sensed->m_flags;
+    sensed->m_flags = flags & ~static_cast<unsigned int>(SensedObject::kSeen);
+    if ((flags & SensedObject::kFlag1) == 0)
+    {
+        m_sensedObjects.erase(sensed->m_handle);
+        delete sensed;
+    }
+}
+
 void BotSenses::reset()
 {
     for (SensedObjectMap::iterator it = m_sensedObjects.begin(); it != m_sensedObjects.end(); )

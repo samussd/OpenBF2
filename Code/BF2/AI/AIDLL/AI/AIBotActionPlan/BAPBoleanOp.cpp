@@ -39,6 +39,56 @@ void BAPConNot::addCondition(BAPCondition* condition)
     m_conditions.push_back(condition);
 }
 
+BAPConAnd::~BAPConAnd()
+{
+    for (std::list<BAPCondition*>::iterator it = m_conditions.begin(); it != m_conditions.end(); ++it)
+    {
+        if (*it)
+            delete *it;
+    }
+}
+
+bool BAPConAnd::evaluate(Bot* bot)
+{
+    for (std::list<BAPCondition*>::iterator it = m_conditions.begin(); it != m_conditions.end(); ++it)
+    {
+        if (!(*it)->evaluate(bot))
+            return false;
+    }
+    return true;
+}
+
+void BAPConAnd::addCondition(BAPCondition* condition)
+{
+    condition->m_owner = this;
+    m_conditions.push_back(condition);
+}
+
+BAPConOr::~BAPConOr()
+{
+    for (std::list<BAPCondition*>::iterator it = m_conditions.begin(); it != m_conditions.end(); ++it)
+    {
+        if (*it)
+            delete *it;
+    }
+}
+
+bool BAPConOr::evaluate(Bot* bot)
+{
+    for (std::list<BAPCondition*>::iterator it = m_conditions.begin(); it != m_conditions.end(); ++it)
+    {
+        if ((*it)->evaluate(bot))
+            return true;
+    }
+    return false;
+}
+
+void BAPConOr::addCondition(BAPCondition* condition)
+{
+    condition->m_owner = this;
+    m_conditions.push_back(condition);
+}
+
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton] Debugger output only.
 void BAPConNot::streamSelf(std::ostream&) const
 {

@@ -31,6 +31,7 @@ public:
     explicit BotSenses(BotMain* owner);
     ~BotSenses();
     void reset();                            // - (two arms frontier)
+    void forgetObject(unsigned int handle);
     // Sight, in phases over the ticks (see the .cpp).
     void see(const double& budget);
     // Hearing, the shots on record and sight, within the tick's budget.

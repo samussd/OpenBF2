@@ -23,6 +23,8 @@ public:
     BAPContext();
     ~BAPContext();                      // - , and it leaks; see above
     void clear();
+    // [INFERRED] name: every plan generator inlines the insertion at the front.
+    void addVariable(BotScriptVariable* variable) { m_variables.push_front(variable); }
 
 private:
     /* 0 */ std::list<BotScriptVariable*> m_variables;   // the whole object
