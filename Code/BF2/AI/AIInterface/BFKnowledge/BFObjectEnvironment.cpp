@@ -229,7 +229,9 @@ void BFObjectEnvironment::getAllDestroyableObjects(std::vector<DestroyableObject
 
 void BFObjectEnvironment::getWorldPlayerIds(std::vector<int>& out) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getWorldPlayerIds");
+    const std::list<world::IPlayer*>& players = world::playerManager->getPlayers();
+    for (std::list<world::IPlayer*>::const_iterator it = players.begin(); it != players.end(); ++it)
+        out.push_back((*it)->getId());
 }
 
 // bf2 0x08401700. The objects living players stand or ride in, as in the version with ids, but each
