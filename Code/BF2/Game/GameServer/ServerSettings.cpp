@@ -330,12 +330,9 @@ float ServerSettings::getManDownTime() const
     return m_manDownTime;               // +0x6C
 }
 
-// [CHOSEN, not recovered] getNumPlayersNeededToStart currently returns 2 before
-// its original ranked/configured logic. The following getters retain fixed ranked
-// overrides for unlocks, coop settings, and team ratio.
+// The following getters retain fixed ranked overrides for unlocks, coop settings, and team ratio.
 int ServerSettings::getNumPlayersNeededToStart() const
 {
-    return 2;
     if (m_ranked)                       // +0xF5
         return (getMaxPlayers() >= 33 ? 1 : 0) * 2 + 6;
     return m_playersNeededToStart;      // +0x58
