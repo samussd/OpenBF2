@@ -23,6 +23,7 @@
 #include "../AIStrategicEntity/AIStrategicObject.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../../../AIInterface/BFKnowledge/BFGame.h"
 #include "../../../AIInterface/BFKnowledge/KitTemplateManager.h"
 #include "../../../AIInterface/BFKnowledge/KitTemplate.h"
@@ -358,7 +359,6 @@ KitType BotSpawner::GetRandomKit(SquadMember*)
 
 // Chooses a kit from squad needs and nearby equipment. Always consumes the initial
 // random-kit selection; only nonleaders can take the medic early return.
-// Assigned-squad equipment remains an unimplemented boundary.
 int BotSpawner::findSuitableKit(const float*, const float*, const float*, const float*,
     AIStrategicObject* object, int side, Bot* bot)
 {
@@ -553,10 +553,77 @@ int BotSpawner::findSuitableKit(const float*, const float*, const float*, const 
         }
         if (squad->isSquadAssignedToAnyArea())
         {
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered]
-            // [RETIRE-WHEN: aidll-02-skeleton] Recover the assigned squad's
-            // equipment scan, area geometry and scoring (the kitCounts consumer).
-            BF2_AI_FRONTIER("dice::hfe::ai::BotSpawner::findSuitableKit [assigned-squad equipment]");
+            // What the squad brings against what stands in and around its area.
+            int friendlyInfantry = 0, friendlyVehicles = 0, damagedFriendlyVehicles = 0;
+            for (int i = 0; i < members; ++i)
+            {
+                IAIObject* const vehicle = squad->getSquadMember(i)->getPlayer()->getCurrentVehicle();
+                if (!vehicle)
+                    continue;
+                Information* const entry =
+                    informationManager->getInformation(vehicle->getInformation(side));
+                if (!entry || !entry->getUnit())
+                    continue;
+                IPIPhysical* const physical = entry->getPhysical();
+                switch (physical->getStrengthType())
+                {
+                case 0:
+                    ++friendlyInfantry;
+                    physical->getHealth(); // shipped discarded call
+                    break;
+                case 1: case 2: case 4:
+                    ++friendlyVehicles;
+                    if (physical->getHealth() < 0.5f)
+                        ++damagedFriendlyVehicles;
+                    break;
+                }
+            }
+
+            AIStrategicObject* const area = AIStrategicObjectManager::getInstance()->getStrategicObject(
+                squad->getSquadStrategicAreaAssignment()->getIndex());
+            Vec2 minimum = static_cast<AIStrategicArea*>(area)->m_centre;
+            const Vec2 position = area->getPosition(side);
+            const float dx = (position.x - minimum.x) * 2.0f;
+            const float dy = (position.y - minimum.y) * 2.0f;
+            minimum.x -= dx;
+            minimum.y -= dy;
+            Vec2 maximum = {};
+            maximum = getBoxMaxCorner(minimum, position, maximum);
+            static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment)
+                ->getObjectsWithinRectangle(information, minimum, maximum, side, true, 0);
+
+            const int enemySide = (side == 1) + 1;
+            int enemyInfantry = 0, enemyVehicles = 0;
+            for (std::vector<unsigned int>::const_iterator it = information.begin();
+                 it != information.end(); ++it)
+            {
+                Information* const entry = informationManager->getInformation(*it);
+                if (!entry || !vehicleOccupied(*it, side) || entry->getSide() != enemySide)
+                    continue;
+                switch (entry->getPhysical()->getStrengthType())
+                {
+                case 0: ++enemyInfantry; break;
+                case 1: case 2: case 4: ++enemyVehicles; break;
+                }
+            }
+
+            if (enemyVehicles > friendlyVehicles + kitCounts[6] && templates[6])
+                return 6;
+            bool repairs = true;
+            if (enemyInfantry > friendlyInfantry)
+            {
+                const float draw = AIRandom::m_instance->nextFloat();
+                if (draw > 0.85f && templates[0])
+                    return 0;
+                if (draw > 0.55f && templates[2])
+                    return 2;
+                if (draw > 0.25f && templates[3])
+                    return 3;
+            }
+            else
+                repairs = damagedFriendlyVehicles + friendlyVehicles > kitCounts[4] * 2;
+            if (repairs && templates[4])
+                return 4;
         }
     }
 

@@ -43,22 +43,23 @@ BFPathfindingCourier::~BFPathfindingCourier()
 
 int BFPathfindingCourier::getNumberOfVehicles() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFPathfindingCourier::getNumberOfVehicles");
+    return IAIPathfinding::instance->getNumberOfMaps();
 }
 
-bool BFPathfindingCourier::isVehicleUsed(unsigned int) const
+bool BFPathfindingCourier::isVehicleUsed(unsigned int map) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFPathfindingCourier::isVehicleUsed");
+    return IAIPathfinding::instance->isMapUsed(map);
 }
 
-bool BFPathfindingCourier::isValidPosition(int, int, const Vec3&) const
+bool BFPathfindingCourier::isValidPosition(int map, int vehicleId, const Vec3& position) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFPathfindingCourier::isValidPosition");
+    return IAIPathfinding::instance->isValidPosition(map, vehicleId, position, true);
 }
 
-bool BFPathfindingCourier::isValidPosition(const Vec3&) const
+bool BFPathfindingCourier::isValidPosition(const Vec3& position) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFPathfindingCourier::isValidPosition");
+    IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+    return pathfinding->isValidPosition(pathfinding->getTraceMapIndex(), 1, position, true);
 }
 
 void BFPathfindingCourier::getLastValidSquadleaderPosition(const Vec3&) const
