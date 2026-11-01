@@ -28,6 +28,8 @@
 #include <utility>                                                // the per-bot pair series
 #include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"     // getPlayerFromId, the id sweep
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"             // action's three timer methods
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"
 #include "../../../AIInterface/BFKnowledge/BFCollisionHandler.h"  // updateBotProjectiles
 #include "../AIBot/SquadManager.h"                                // update(double)
 #include "AIMineManager.h"                                       // IAIMineManager::update
@@ -523,14 +525,30 @@ double AIMain::getAISystemQuotient() const
     BF2_AI_FRONTIER("dice::hfe::ai::AIMain::getAISystemQuotient");
 }
 
-void AIMain::setPlayerExitedVehicle(IAIObject* /*o*/, int /*a*/)
+// A human left the vehicle: it remembers when, and bots may use it again.
+void AIMain::setPlayerExitedVehicle(IAIObject* vehicle, int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::setPlayerExitedVehicle");
+    IAIPlayer* const player =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(playerId);
+    if (!vehicle || !vehicle->isUnit() || !player || player->getIsAIPlayer())
+        return;
+    vehicle->getUnit()->setLastPlayerPossesionTime(
+        static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime());
+    vehicle->getPrimaryObject()->setIsAllowedByBots(true);
 }
 
-void AIMain::setPlayerEnteredVehicle(IAIObject* /*o*/, IAIObject* /*v*/, int /*a*/)
+// A human moved between two vehicles: the old one forgets the possession.
+void AIMain::setPlayerEnteredVehicle(IAIObject* vehicle, IAIObject* entered, int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::setPlayerEnteredVehicle");
+    IAIPlayer* const player =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(playerId);
+    if (!entered || !entered->isUnit() || !vehicle || !vehicle->isUnit() || !player
+        || player->getIsAIPlayer())
+        return;
+    IAIObject* const enteredPrimary = entered->getPrimaryObject();
+    IAIObject* const primary = vehicle->getPrimaryObject();
+    if (enteredPrimary && primary && enteredPrimary != primary)
+        vehicle->getUnit()->setLastPlayerPossesionTime(-1000.0);
 }
 
 // Initializes the AI synchronously from the level script and returns a status message.
