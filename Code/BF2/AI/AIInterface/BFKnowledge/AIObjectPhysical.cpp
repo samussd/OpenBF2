@@ -27,6 +27,7 @@
 #include "../../../Physics/IPhysicsNode.h"
 #include "../../../Physics/IResponsePhysics.h"
 #include "../../../Physics/PhysicsUtil.h"                    // hfe::resetPhysics
+#include "../../../Physics/SoldierResponse.h"                // isInAir's ground flag
 #include "../../../Scene/Object/ObjectTypes/Game/IPlayerControlObject.h"
 
 namespace dice {
@@ -217,12 +218,17 @@ bool AIObjectPhysical::isTouchingTerrain(Vec3& out) const
     return responsePhysics(m_object->getObject())->getIsIntersectingTerrain(out);   // +0x7C
 }
 
-// false while the physics node sleeps; a soldier answers the negation of a raw
-// byte at +0xFA of its response physics (the soldier physics' ground flag - no class for it in this
-// tree); anything else asks the node's getIsInAir (+0x1B0).
+// false while the physics node sleeps; a soldier answers from its response physics' ground flag,
+// anything else asks the node's getIsInAir (+0x1B0).
 bool AIObjectPhysical::isInAir() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIObjectPhysical::isInAir (soldier response physics +0xFA)");
+    world::IObject* const object = m_object->getObject();
+    const bool soldier = object->queryInterface(world::IID_ISoldier) != 0;
+    if (m_physicsNode->getIsSleeping())
+        return false;
+    if (soldier)
+        return !static_cast<world::SoldierResponsePhysics*>(responsePhysics(object))->getIsOnGround();
+    return m_physicsNode->getIsInAir();
 }
 
 // strictly above zero (`setnbe` after fucomip - unordered is false).

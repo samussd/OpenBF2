@@ -28,6 +28,9 @@ public:
     virtual void* queryInterface(unsigned int) const;
 
     virtual void  reset();                           // 122 B - see the header
+
+    // [INFERRED] name. AIObjectPhysical::isInAir reads the raw byte at +0xFA.
+    bool getIsOnGround() const { return m_byteFA; }
     virtual unsigned int getClassID() const;         // CID_SoldierResponsePhysics
     virtual void  checkObjectVsObject(IObject*, IObject*, float, bool);
     virtual void  checkVsTerrain(float dt);          // -> internal_checkVsTerrain(dt, 1.0f)
