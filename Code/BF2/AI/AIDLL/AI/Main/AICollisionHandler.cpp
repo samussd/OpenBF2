@@ -7,6 +7,9 @@
 #include "../../../../Core/ClassManager.h"
 #include "CommonSingletonServer.h"
 #include "AIDllFrontier.h"
+#include "IBotManager.h"
+#include "../AIBot/BotMain.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 
 namespace dice {
 namespace hfe {
@@ -54,9 +57,13 @@ int AICollisionHandler::handleIndirectProjectileHit(int, IAIObject *, const Vec3
     BF2_AI_FRONTIER("dice::hfe::ai::AICollisionHandler::handleIndirectProjectileHit");
 }
 
-int AICollisionHandler::handleProjectileDamage(IAIObject *, IAIObject *, const int&, int)
+// Only a bot's own hits matter. The lookup's answer is discarded, as shipped.
+int AICollisionHandler::handleProjectileDamage(IAIObject* shooter, IAIObject* victim, const int&, int)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AICollisionHandler::handleProjectileDamage");
+    Bot* const bot = IBotManager::instance->getBot(shooter);
+    if (bot && !bot->isDeactivated())
+        bot->getSensedObjectFromHandle(victim->getInformation(bot->getSide()));
+    return 0;   // [CHOSEN, not recovered] the caller discards it
 }
 
 int AICollisionHandler::handleProjectileMiss(IAIObject *, int, int, const Vec3&)

@@ -150,6 +150,9 @@ public:
         m_treeCollisionDiameter = (value >= 0.0f) ? value : 0.0f;
     }
 
+    // [INFERRED] name. The AI's weapon template for this object; BFCollisionHandler reads +296.
+    const std::string& getAiTemplate() const { return m_aiTemplate; }
+
 protected:
     friend struct BaseTemplateConsoleAccess;      // recovered direct-field console executors
     friend class SimpleObject;

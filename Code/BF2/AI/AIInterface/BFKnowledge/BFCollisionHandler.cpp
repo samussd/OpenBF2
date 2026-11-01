@@ -13,6 +13,17 @@
 #include "../../../Core/ClassManager.h"
 #include "../SingletonServer.h"   // BFSingletonServer::updateStaticMethods
 #include "../../AIDLL/AI/AIUtils/checkPointer.h"
+#include "../../AIDLL/AI/Main/AICollisionHandler.h"
+#include "../../../Core/Ids.h"
+#include "../../../Game/Objects/Base/SimpleObjectTemplate.h"
+#include "../../../Game/Objects/IObjectTemplate.h"
+#include "../../../Game/Objects/IPlayer.h"
+#include "../../../Scene/Object/ObjectTypes/Base/ObjectTemplateManager.h"
+#include "../../../Scene/Object/PlayerManager.h"
+#include "IAIObject.h"
+#include "IAIObjectPlugIn.h"
+#include "WeaponTemplate.h"
+#include "WeaponTemplateManager.h"
 #include "../../AIDLL/AI/Main/AISettingsInterfaces.h"   // IAISettings::getMaxNBots - slot +0
 
 namespace dice {
@@ -104,6 +115,44 @@ void BFCollisionHandler::removeAllProjectiles()
     }
 }
 
+namespace {
+
+// Tells the AI that a player's weapon hurt an object, when the weapon has an AI template and both
+// sides have an AI object. The strength is the weapon's against the target's kind of armour.
+void reportDamage(world::IObject* target, int playerId, unsigned int weaponId)
+{
+    if (weaponId == 0xFFFFFFFFu)
+        return;
+    world::IObjectTemplate* const base = world::objectTemplateManager->getTemplate(weaponId);
+    if (!base)
+        return;
+    world::SimpleObjectTemplate* const simple = static_cast<world::SimpleObjectTemplate*>(
+        base->queryImplementation(world::CID_SimpleObjectTemplate));
+    if (!simple)
+        return;
+    WeaponTemplate* const weapon = WeaponTemplateManager::m_instance->getTemplate(simple->getAiTemplate());
+    if (!weapon)
+        return;
+    world::IPlayer* const player = world::playerManager->getPlayerFromId(playerId);
+    if (!player || !player->getVehicle())
+        return;
+    IAIObject* const shooter = static_cast<IAIObject*>(player->getVehicle()->getAIComponent());
+    if (!shooter || !shooter->getArmament())
+        return;
+    IAIObject* const victim = static_cast<IAIObject*>(target->getAIComponent());
+    if (!victim || !victim->getPhysical())
+        return;
+    const int slot = shooter->getArmament()->getWeaponIdFromActivationId(weapon->m_weaponActivate,
+                                                                         weapon->m_weaponFire);
+    if (slot == -1)
+        return;
+    const int strength = weapon->m_strengths[victim->getPhysical()->getStrType()];
+    checkPointer(static_cast<IAICollisionHandler*>(CommonSingletonServer::m_iAICollisionHandler))
+        ->handleProjectileDamage(shooter, victim, strength, slot);
+}
+
+} // anonymous namespace
+
 void BFCollisionHandler::handleCollision(world::IObject* a, world::IObject* b, const Vec3& at)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BFCollisionHandler::handleCollision");
@@ -126,12 +175,12 @@ void BFCollisionHandler::handleProjectileFire(world::IProjectileObject* projecti
 
 void BFCollisionHandler::handleProjectileDamage(world::IObject* target, float amount, int type, unsigned int id, Vec3 at)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCollisionHandler::handleProjectileDamage");
+    reportDamage(target, type, id);
 }
 
 void BFCollisionHandler::handleExplosionDamage(world::IObject* target, float amount, int type, unsigned int id, Vec3 at)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCollisionHandler::handleExplosionDamage");
+    reportDamage(target, type, id);
 }
 
 int BFCollisionHandler::handleIndirectProjectileHit(world::IPlayer* player, IAIObject* object, const Vec3& at, int a)
