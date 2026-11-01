@@ -100,7 +100,7 @@ public:
     std::string list() const;
 
     // neighbours
-    void addNeighbour(std::string);
+    bool addNeighbour(std::string);
     void addTwoWayNeighbour(std::string, std::string);
     void removeAllNeighbours();
     std::string getNeighbours();
@@ -112,7 +112,7 @@ public:
     void createNewCategory(const std::string&);
 
     // object type flags
-    void addObjectTypeFlag(int);
+    int addObjectTypeFlag(int);
     void removeObjectTypeFlag(int);
     void setObjectTypeFlags(int);
     int getObjectTypeFlags();

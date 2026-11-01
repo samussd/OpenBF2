@@ -4,6 +4,8 @@
 
 #include <cmath>
 
+#include "../AIUtils/AIStreamOperators.h"             // aiStrategicArea.addObjectTypeFlag's argument
+#include "../Main/IAIPathfinding.h"                   // map names
 #include "AIStrategicArea.h"                          // createFromControlPoint constructs one
 #include "SAWayPoint.h"                               // the destructor and postLoadInitAreas own them
 #include "../AIKnowledge/Information.h"                  // resetBridges' segment positions
@@ -620,8 +622,111 @@ bool AIStrategicObjectManager::createFromControlPoint(const std::string& name,
     return true;
 }
 
+// Fails on a taken name, leaving no area active.
+void AIStrategicObjectManager::create(std::string name, Vec2 topLeft, Vec2 centre, float height,
+                                      float radius, const std::string& category)
+{
+    if (m_strategicAreas.find(name) != m_strategicAreas.end())
+    {
+        m_activeArea = m_strategicAreas.end();
+        return;
+    }
+
+    AIStrategicArea* const area = checkPointer(new AIStrategicArea(name, topLeft, centre, height, radius));
+    if (!area)
+    {
+        m_activeArea = m_strategicAreas.end();
+        return;
+    }
+
+    if (getNumberOfCategories() <= 0)
+        area->m_category = 0;
+    else
+        area->m_category = getCategoryFromName(category);
+
+    AIStrategicObjectManager::getInstance()->addStrategicObject(area);
+
+    m_strategicAreas[name] = area;
+    m_areaNames[area] = name;
+    m_activeArea = m_strategicAreas.find(name);
+}
+
+// One way only: the other area just learns it is near the active one. Areas of different layers
+// are refused.
+bool AIStrategicObjectManager::addNeighbour(std::string name)
+{
+    std::map<std::string, AIStrategicArea*>::iterator other = m_strategicAreas.find(name);
+    if (other == m_strategicAreas.end())
+        return false;
+    AIStrategicArea* const active = m_activeArea->second;
+    if (active->m_layer != other->second->m_layer)
+        return false;
+    active->addNeighbour(other->second);
+    other->second->addNeighbouringObject(active);
+    return true;
+}
+
+int AIStrategicObjectManager::addObjectTypeFlag(int flag)
+{
+    if (m_activeArea == m_strategicAreas.end() || flag == 27)
+        return -1;
+    m_activeArea->second->addObjectTypeFlag(flag);
+    return 0;   // [CHOSEN, not recovered] no caller reads it
+}
+
+bool AIStrategicObjectManager::setOrderPosition(std::string map, const Vec3& position)
+{
+    if (m_activeArea == m_strategicAreas.end() || !IAIPathfinding::instance)
+        return false;
+    const int id = IAIPathfinding::instance->getMapIdFromName(map);
+    if (id == -1)
+        return false;
+    return m_activeArea->second->setOrderPos(id, position);
+}
+
+// A waypoint of the route between two different areas, on the named map.
+void AIStrategicObjectManager::addWayPoint(const Vec3& position, const std::string& mapName,
+                                           const std::string& firstName,
+                                           const std::string& secondName)
+{
+    std::map<std::string, AIStrategicArea*>::iterator first = m_strategicAreas.find(firstName);
+    if (first == m_strategicAreas.end())
+    {
+        Debug(DebugTypeError, "AI/AIDLL/AI/AIStrategicEntity/AIStrategicObjectManager.cpp", 1144, "")
+            << firstName << " is not the name of a valid strategic area.";
+        return;
+    }
+    std::map<std::string, AIStrategicArea*>::iterator second = m_strategicAreas.find(secondName);
+    if (second == m_strategicAreas.end())
+    {
+        Debug(DebugTypeError, "AI/AIDLL/AI/AIStrategicEntity/AIStrategicObjectManager.cpp", 1151, "")
+            << secondName << " is not the name of a valid strategic area.";
+        return;
+    }
+
+    AIStrategicArea* low = second->second;
+    AIStrategicArea* high = first->second;
+    if (high->m_index < low->m_index)
+    {
+        AIStrategicArea* const swapped = low;
+        low = high;
+        high = swapped;
+    }
+    if (low == high)
+    {
+        Debug(DebugTypeError, "AI/AIDLL/AI/AIStrategicEntity/AIStrategicObjectManager.cpp", 1171, "")
+            << "Must have two different strategic areas when adding waypoints.";
+        return;
+    }
+
+    const std::pair<int, int> key(low->m_index, high->m_index);
+    std::map<std::pair<int, int>, WPContainer>::iterator entry =
+        m_wayPoints.insert(std::make_pair(key, WPContainer())).first;
+    const int map = IAIPathfinding::instance->getMapIdFromName(mapName);
+    entry->second.getWayPoints(map).push_back(new SAWayPoint(position, map));
+}
+
 // Console bindings for strategic-area configuration.
-// [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 
 namespace {
 
@@ -638,12 +743,86 @@ void consoleAiStrategicAreaCreateFromControlPoint(const std::string& name,
         name, controlPointId, radius, std::string());   // [CHOSEN] empty category - see above
 }
 
+void consoleAiStrategicAreaCreate(const std::string& name, const Vec2& topLeft, const Vec2& centre,
+                                  float height, float radius)
+{
+    AIStrategicObjectManager::getInstance()->create(name, topLeft, centre, height, radius, std::string());
+}
+
+void consoleAiStrategicAreaSetActive(const std::string& name)
+{
+    AIStrategicObjectManager::getInstance()->setActive(name);
+}
+
+void consoleAiStrategicAreaAddNeighbour(const std::string& name)
+{
+    AIStrategicObjectManager::getInstance()->addNeighbour(name);
+}
+
+void consoleAiStrategicAreaAddObjectTypeFlag(AIStrategicObject::StrategicObjectType flag)
+{
+    AIStrategicObjectManager::getInstance()->addObjectTypeFlag(flag);
+}
+
+void consoleAiStrategicAreaSetOrderPosition(const std::string& map, const Vec3& position)
+{
+    AIStrategicObjectManager::getInstance()->setOrderPosition(map, position);
+}
+
+void consoleAiStrategicAreaAddWayPoint(const Vec3& position, const std::string& map,
+                                       const std::string& first, const std::string& second)
+{
+    AIStrategicObjectManager::getInstance()->addWayPoint(position, map, first, second);
+}
+
+void consoleAiStrategicAreaSetSide(int side)
+{
+    AIStrategicObjectManager::getInstance()->getActiveArea()->setSide(side);
+}
+
+void consoleAiStrategicAreaSetLayer(int layer)
+{
+    AIStrategicObjectManager::getInstance()->getActiveArea()->m_layer = layer;
+}
+
+void consoleAiStrategicAreaSetVehicleSearchRadius(float radius)
+{
+    AIStrategicObjectManager::getInstance()->getActiveArea()->m_vehicleSearchRadius = radius;
+}
+
+bool hasActiveStrategicArea()
+{
+    return AIStrategicObjectManager::getInstance() != 0
+        && AIStrategicObjectManager::getInstance()->getActiveArea() != 0;
+}
+
 } // anonymous namespace
 
 BF2_CONSOLE_OBJECT("aiStrategicArea", 2, 0)
 BF2_CONSOLE_METHOD_3(createFromControlPoint, consoleAiStrategicAreaCreateFromControlPoint,
                      AIStrategicObjectManager::getInstance() != 0,
                      std::string, unsigned int, float, kAiStrategicAreaConsoleTag)
+BF2_CONSOLE_METHOD_5(create, consoleAiStrategicAreaCreate, AIStrategicObjectManager::getInstance() != 0,
+                     std::string, Vec2, Vec2, float, float, kAiStrategicAreaConsoleTag)
+BF2_CONSOLE_METHOD_1(setActive, consoleAiStrategicAreaSetActive, std::string, kAiStrategicAreaConsoleTag)
+BF2_CONSOLE_METHOD_1_ACTIVE(addNeighbour, consoleAiStrategicAreaAddNeighbour, hasActiveStrategicArea(),
+                            std::string, kAiStrategicAreaConsoleTag)
+BF2_CONSOLE_METHOD_1_ACTIVE(addObjectTypeFlag, consoleAiStrategicAreaAddObjectTypeFlag,
+                            hasActiveStrategicArea(), AIStrategicObject::StrategicObjectType,
+                            kAiStrategicAreaConsoleTag)
+BF2_CONSOLE_METHOD_2_ACTIVE(setOrderPosition, consoleAiStrategicAreaSetOrderPosition,
+                            hasActiveStrategicArea(), std::string, Vec3, kAiStrategicAreaConsoleTag)
+BF2_CONSOLE_METHOD_4(addWayPoint, consoleAiStrategicAreaAddWayPoint,
+                     AIStrategicObjectManager::getInstance() != 0,
+                     Vec3, std::string, std::string, std::string, kAiStrategicAreaConsoleTag)
+BF2_CONSOLE_METHOD_1_ACTIVE(setSide, consoleAiStrategicAreaSetSide, hasActiveStrategicArea(), int,
+                            kAiStrategicAreaConsoleTag)
+BF2_CONSOLE_PROPERTY_FN(layer, int, hasActiveStrategicArea(),
+                        AIStrategicObjectManager::getInstance()->getActiveArea()->m_layer,
+                        consoleAiStrategicAreaSetLayer, kAiStrategicAreaConsoleTag)
+BF2_CONSOLE_PROPERTY_FN(vehicleSearchRadius, float, hasActiveStrategicArea(),
+                        AIStrategicObjectManager::getInstance()->getActiveArea()->m_vehicleSearchRadius,
+                        consoleAiStrategicAreaSetVehicleSearchRadius, kAiStrategicAreaConsoleTag)
 
 // Handed to the console registry by AIModule::init, beside the `ai` and `aiSettings` lists.
 ConsoleObjectList& aiStrategicAreaConsoleObjects()

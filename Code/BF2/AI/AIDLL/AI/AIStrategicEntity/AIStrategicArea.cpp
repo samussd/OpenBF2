@@ -2,6 +2,8 @@
 
 #include "AIStrategicArea.h"
 
+#include <algorithm>
+
 #include <cmath>                                          // the two centre-to-corner distances
 
 #include "../AIUtils/checkPointer.h"
@@ -52,7 +54,7 @@ AIStrategicArea::AIStrategicArea(const std::string& name, unsigned int controlPo
 {
     // The tail. Everything above this point lands before the three list members are constructed, so
     // it cannot be body code; everything here lands after them, so it cannot be an initialiser.
-    m_i400 = -1;
+    m_layer = -1;
     m_b404 = true;
     m_statusChanged = false;
     m_i416 = 0;
@@ -60,6 +62,32 @@ AIStrategicArea::AIStrategicArea(const std::string& name, unsigned int controlPo
     m_i424 = 0;
     m_fromControlPoint      = true;    // the phase selector - see the header
     m_orderPosesInitialised = false;
+}
+
+AIStrategicArea::AIStrategicArea(const std::string& name, const Vec2& topLeft, const Vec2& centre,
+                                 float height, float radius)
+    : AIStrategicObject(radius, height)
+    , m_list268()
+    , m_centre(topLeft)
+    , m_mapData(checkPointer(new MapData[IAIPathfinding::instance->getNumberOfMaps()]))
+    , m_neighbours()
+    , m_neighbouringObjects()
+    , m_name(name)
+    , m_objectTypeFlags(0)
+    , m_controlPointId(static_cast<unsigned int>(-1))
+    , m_landingZones()
+    , m_landingZoneUsers(0)
+    , m_b358(false)
+{
+    m_layer = -1;
+    m_b404 = true;
+    m_statusChanged = false;
+    m_i416 = 0;
+    m_i420 = 0;
+    m_i424 = 0;
+    m_fromControlPoint      = false;
+    m_orderPosesInitialised = false;
+    internalConstructorCall(topLeft, centre);
 }
 
 // Eleven hundred bytes: the per-map array, four lists, the name, and whatever the twenty-eight
@@ -82,6 +110,46 @@ int AIStrategicArea::getType() const
 int AIStrategicArea::getObjectTypeFlags() const
 {
     return m_objectTypeFlags;
+}
+
+void AIStrategicArea::addNeighbour(AIStrategicObject* neighbour)
+{
+    if (std::find(m_neighbours.begin(), m_neighbours.end(), neighbour) == m_neighbours.end())
+        m_neighbours.push_back(neighbour);
+}
+
+void AIStrategicArea::addNeighbouringObject(AIStrategicObject* object)
+{
+    if (std::find(m_neighbouringObjects.begin(), m_neighbouringObjects.end(), object)
+        == m_neighbouringObjects.end())
+        m_neighbouringObjects.push_back(object);
+}
+
+void AIStrategicArea::addObjectTypeFlag(int flag)
+{
+    m_objectTypeFlags |= 1 << (flag & 31);
+}
+
+bool AIStrategicArea::setOrderPos(int map, const Vec3& position)
+{
+    MapData& data = m_mapData[map];
+    if (!m_orderPosesInitialised)
+    {
+        data.m_offset = position;
+        return true;
+    }
+
+    Vec3 origin = {};
+    vec2ToVec3XZ(m_position[0], origin);
+    origin.y = m_f148;
+    unsigned int polygon;
+    unsigned int island;
+    IAIPathfinding::instance->getPolygon(data.m_offset, map, polygon, island, 1);
+    data.m_offset.x = position.x - origin.x;
+    data.m_offset.y = position.y - origin.y;
+    data.m_offset.z = position.z - origin.z;
+    data.m_island = island;
+    return true;
 }
 
 // 0x34f180 (Ghidra).
@@ -268,7 +336,7 @@ void AIStrategicArea::internalConstructorCall(const Vec2& topLeft, const Vec2& c
     m_f408 = 1.0f;
     m_f412 = 1.0f;
 
-    m_f396 = m_size[1] + m_size[1];
+    m_vehicleSearchRadius = m_size[1] + m_size[1];
 }
 
 // Raises the stored area height to the terrain height when the terrain is higher.

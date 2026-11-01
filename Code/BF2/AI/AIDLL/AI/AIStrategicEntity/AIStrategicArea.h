@@ -47,6 +47,9 @@ public:
     struct AreaRecord { int m_words[6]; };
 
     AIStrategicArea(const std::string& name, unsigned int controlPointId, float radius);
+    // An area with no control point: its box, height and radius are known at once.
+    AIStrategicArea(const std::string& name, const Vec2& topLeft, const Vec2& centre, float height,
+                    float radius);
 
     // [INFERRED] Initializes area state. Manager-created areas call this during initAreas;
     // control-point areas defer it until postLoadInit.
@@ -56,6 +59,12 @@ public:
     void internalConstructorCall(const Vec2& topLeft, const Vec2& centre);
     void postLoadInit();
     void initOrderPoses();
+    // Only the first of these can name a neighbour.
+    void addNeighbour(AIStrategicObject* neighbour);
+    void addNeighbouringObject(AIStrategicObject* object);
+    void addObjectTypeFlag(int flag);
+    // Absolute until initOrderPoses, then a delta from the area's position.
+    bool setOrderPos(int map, const Vec3& position);
 
     // Writes the control-point position and radius; returns false for an unassigned id.
     bool getControlPointPosAndRadius(Vec3& position, float& radius);
@@ -188,8 +197,8 @@ public:
     /* +384 */ std::list<AreaDistanceInfo> m_distances[2];
     /* +392 */ std::list<AreaRecord> m_list392;    // node
     // Stored doubled extent, initialized to twice m_size[1].
-    /* +396 */ float m_f396;                       // = 2 * m_size[1] [UNRESOLVED] meaning
-    /* +400 */ int m_i400;                         // 1 [UNRESOLVED]
+    /* +396 */ float m_vehicleSearchRadius;        // = 2 * m_size[1] [UNRESOLVED] meaning
+    /* +400 */ int m_layer;                        // only areas of one layer are neighbours
     /* +404 */ bool m_b404;                        // true
     /* +405 */ bool m_statusChanged;               // false; update stores its changed output here
     // Additional state initialized by internalConstructorCall.

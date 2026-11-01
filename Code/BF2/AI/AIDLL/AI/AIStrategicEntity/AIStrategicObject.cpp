@@ -86,6 +86,29 @@ int AIStrategicObject::getNumberOfAssignedUnits(int side) const
     return static_cast<int>(m_set68[side - 1].size());
 }
 
+void AIStrategicObject::setSide(int side)
+{
+    if (side == 1)
+    {
+        m_status[0] = StatusMap::Owned;
+        m_status[1] = StatusMap::Hostile;
+        m_status[2] = StatusMap::Owned;
+        m_status[3] = StatusMap::Hostile;
+    }
+    else if (side == 2)
+    {
+        m_status[0] = StatusMap::Hostile;
+        m_status[1] = StatusMap::Owned;
+        m_status[2] = StatusMap::Hostile;
+        m_status[3] = StatusMap::Owned;
+    }
+    else
+    {
+        m_status[2] = StatusMap::Neutral;
+        m_status[3] = StatusMap::Neutral;
+    }
+}
+
 void AIStrategicObject::resetStatus()
 {
     m_status[0] = m_status[2];
