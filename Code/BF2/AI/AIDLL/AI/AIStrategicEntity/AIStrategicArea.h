@@ -44,7 +44,8 @@ public:
 
     // [UNRESOLVED] List payloads whose original element types have not been identified.
     struct AreaWord   { int m_word; };
-    struct AreaRecord { int m_words[6]; };
+    // A flanking route: the positions to pass through on the way in.
+    struct FlankRoute { Vec3 m_first; Vec3 m_second; };
 
     AIStrategicArea(const std::string& name, unsigned int controlPointId, float radius);
     // An area with no control point: its box, height and radius are known at once.
@@ -65,6 +66,8 @@ public:
     void addObjectTypeFlag(int flag);
     // Absolute until initOrderPoses, then a delta from the area's position.
     bool setOrderPos(int map, const Vec3& position);
+    // The route that starts closest to the position; false when the area has none.
+    bool getClosestFlankingPositions(const Vec3& position, Vec3& first, Vec3& second) const;
 
     // Writes the control-point position and radius; returns false for an unassigned id.
     bool getControlPointPosAndRadius(Vec3& position, float& radius);
@@ -195,7 +198,7 @@ public:
     /* +376 */ std::map<AIStrategicObject*, float>* m_groupDistances[2];
     // Per-side distance records, indexed by side - 1 like m_distancesDirty.
     /* +384 */ std::list<AreaDistanceInfo> m_distances[2];
-    /* +392 */ std::list<AreaRecord> m_list392;    // node
+    /* +392 */ std::list<FlankRoute> m_flankRoutes;    // node
     // Stored doubled extent, initialized to twice m_size[1].
     /* +396 */ float m_vehicleSearchRadius;        // = 2 * m_size[1] [UNRESOLVED] meaning
     /* +400 */ int m_layer;                        // only areas of one layer are neighbours

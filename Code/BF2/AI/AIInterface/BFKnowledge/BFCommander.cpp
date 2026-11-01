@@ -10,6 +10,10 @@
 
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../../Core/ClassManager.h"
+#include "../../../Game/GameLogic/SquadManager/SquadOrder.h"
+#include "../../../Game/Objects/IObject.h"
+#include "../../../IO/Network/INetworkable.h"
+#include "IAIObject.h"
 #include "../SingletonServer.h"   // BFSingletonServer::updateStaticMethods
 #include "../../../Core/EventManager.h"                       // fireArtillery's request event
 #include "../../../Game/GameEvents/ArtilleryEvent.h"
@@ -24,6 +28,25 @@ extern ClassManager* classManager;
 extern IBase* squadManager;
 
 namespace ai {
+
+namespace {
+
+// The target travels by network id. Attack orders are type 5, move 4 and defend 6.
+SquadOrder makeOrder(const Vec3& position, IAIObject* target, int type)
+{
+    SquadOrder order = {};
+    order.orderId = type;
+    order.points[0] = position;
+    if (target)
+    {
+        io::INetworkable* const networkable = target->getObject()->getNetworkable();
+        if (networkable)
+            order.targetNetId = networkable->m_networkableId;
+    }
+    return order;
+}
+
+} // anonymous namespace
 
 // First wins in, exact match out.
 IBFCommander::IBFCommander()
@@ -66,17 +89,23 @@ int BFCommander::retireAsCommander(IAIPlayer* player)
 
 int BFCommander::giveAttackOrder(const Vec3& position, int a, int b, IAIObject* target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::giveAttackOrder");
+    SquadOrder order = makeOrder(position, target, 5);
+    static_cast<ISquadManager*>(squadManager)->issueCommanderOrder(b, a, order, false);
+    return 0;   // [CHOSEN, not recovered] no caller reads it
 }
 
 int BFCommander::giveMoveOrder(const Vec3& position, int a, int b, IAIObject* target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::giveMoveOrder");
+    SquadOrder order = makeOrder(position, target, 4);
+    static_cast<ISquadManager*>(squadManager)->issueCommanderOrder(b, a, order, false);
+    return 0;   // [CHOSEN, not recovered] no caller reads it
 }
 
 int BFCommander::giveDefendOrder(const Vec3& position, int a, int b, IAIObject* target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::giveDefendOrder");
+    SquadOrder order = makeOrder(position, target, 6);
+    static_cast<ISquadManager*>(squadManager)->issueCommanderOrder(b, a, order, false);
+    return 0;   // [CHOSEN, not recovered] no caller reads it
 }
 
 void BFCommander::sendAttackMessage(int a, int b)

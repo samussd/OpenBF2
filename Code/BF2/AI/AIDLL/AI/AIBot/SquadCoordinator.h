@@ -52,7 +52,8 @@ public:
     void updateNeedOrdersMessage(double time);
     void updateIncomingMessages();
     bool isSquadTakingFlag();                    // complete
-    void updateSquadManeuver();                  // selected maneuver seams
+    void updateSquadManeuver();                  // alternate fire is still a seam
+    void squadManeuverStaticFlank();
     int chooseSquadManeuver();                   // integer payload, enum spelling unresolved
     void updateSquadPaths();                     // complete invalidation loop
     int getSide();

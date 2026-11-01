@@ -125,6 +125,29 @@ void AIStrategicArea::addNeighbouringObject(AIStrategicObject* object)
         m_neighbouringObjects.push_back(object);
 }
 
+bool AIStrategicArea::getClosestFlankingPositions(const Vec3& position, Vec3& first,
+                                                  Vec3& second) const
+{
+    bool found = false;
+    float best = 3.402823466e+38F;
+    for (std::list<FlankRoute>::const_iterator it = m_flankRoutes.begin(); it != m_flankRoutes.end();
+         ++it)
+    {
+        const float dx = it->m_first.x - position.x;
+        const float dy = it->m_first.y - position.y;
+        const float dz = it->m_first.z - position.z;
+        const float distanceSq = dx * dx + dy * dy + dz * dz;
+        if (distanceSq < best)
+        {
+            first = it->m_first;
+            second = it->m_second;
+            best = distanceSq;
+            found = true;
+        }
+    }
+    return found;
+}
+
 void AIStrategicArea::addObjectTypeFlag(int flag)
 {
     m_objectTypeFlags |= 1 << (flag & 31);
@@ -757,9 +780,9 @@ float AIStrategicArea::calculateAttackCost(int side)
                               (1.5 - 0.5 * m_needCurveInput[side - 1]) * strength);
 }
 
-bool AIStrategicArea::isNeighbour(AIStrategicObject*) const
+bool AIStrategicArea::isNeighbour(AIStrategicObject* object) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::isNeighbour");
+    return std::find(m_neighbours.begin(), m_neighbours.end(), object) != m_neighbours.end();
 }
 
 // Native vector scan, captured end, no null/side guards; first matching status wins.
@@ -774,9 +797,10 @@ bool AIStrategicArea::hasNeighbourWithStatus(StatusMap::Status status, int side)
     return false;
 }
 
-bool AIStrategicArea::isNeighbouringObject(AIStrategicObject*) const
+bool AIStrategicArea::isNeighbouringObject(AIStrategicObject* object) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::isNeighbouringObject");
+    return std::find(m_neighbouringObjects.begin(), m_neighbouringObjects.end(), object)
+        != m_neighbouringObjects.end();
 }
 
 // Applies the same scan to the second neighbor vector.
@@ -801,9 +825,17 @@ int AIStrategicArea::getTacticalStatus(int) const
     BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::getTacticalStatus");
 }
 
+// Whether its control point can change hands now; areas without one never can.
 bool AIStrategicArea::isAreaTakeable()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::isAreaTakeable");
+    if (m_controlPointId == static_cast<unsigned int>(-1))
+        return false;
+    Vec3 position = {};
+    float radius;
+    bool active;
+    static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)
+        ->getControlPointInfo(m_controlPointId, position, radius, active);
+    return active;
 }
 
 // 0x34a380 (Ghidra).

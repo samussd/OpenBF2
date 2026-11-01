@@ -68,6 +68,7 @@ public:
 
     void update(double time);                 // complete scheduler
     bool shouldSquadMoveOut();               // returns m_b36
+    bool hasSquadMembers() const { return m_slots[0]->m_occupied; }
     void updateFormation();                  // leader/anchor reassignment
     // Clears m_b36 while a late human member gets a wait of 10 to 20 seconds; bots are not waited for.
     void updateWaitForSquadMembers(double time);

@@ -585,7 +585,12 @@ void SquadManager::issueCommanderOrder(int teamId, int squadId, SquadOrder& orde
         if (!player)
             continue;
 
-        // [UNRESOLVED] ecai 8 notification behind ds:0x8AC37F8 / PE dword_8B25B0.
+        if (ai::g_aiInstance && ai::aiInstance()->isBotsGame())
+        {
+            int aiPayload[2] = { *it, order.orderId };
+            eventManager->postEvent(ECAI, 8, aiPayload, 0.0f);
+        }
+
         if (player->getId() == 255)
         {
             eventManager->postEvent(ECHud, 26, &squadId, 0.0f);

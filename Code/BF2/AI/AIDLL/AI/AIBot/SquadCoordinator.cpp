@@ -492,8 +492,34 @@ void SquadCoordinator::updateSquadManeuver()
         // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
         BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::updateSquadManeuver (squadManeuverAlternateFire)");
     case 2:
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-        BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::updateSquadManeuver (squadManeuverStaticFlank)");
+        squadManeuverStaticFlank();
+        break;
+    }
+}
+
+// The squad may fire. Once per mission, 65% of the time, the leader takes the area's nearest
+// flanking route, if the area has one its vehicle can use.
+void SquadCoordinator::squadManeuverStaticFlank()
+{
+    for (unsigned int index = 0; index < m_squadMembers.size(); ++index)
+    {
+        SquadMember* const member = m_squadMembers[index];
+        if (member->isBot())
+            member->getBot()->setAllowFire(true);
+    }
+
+    if (m_b157 || m_i120 != 2 || !m_formation->hasSquadMembers() || !m_strategicAreaAssignment)
+        return;
+    m_b157 = true;
+    if (!(AIRandom::m_instance->nextFloat() < 0.65f))
+        return;
+
+    SquadMember* const leader = m_squadMembers[m_formation->getSquadMemberIndexAtSlot(0)];
+    if (m_strategicAreaAssignment->getClosestFlankingPositions(m_v108, m_positions[0], m_positions[1])
+        && isValidPosition(leader, m_positions[0]) && isValidPosition(leader, m_positions[1]))
+    {
+        m_b156 = true;
+        leader->setHavePath(false);
     }
 }
 
