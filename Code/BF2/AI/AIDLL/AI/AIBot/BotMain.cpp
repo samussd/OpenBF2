@@ -2254,7 +2254,8 @@ bool BotMain::getIsGoingForFlag() const
 // +0x280
 bool BotMain::botInPoseTransition() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::botInPoseTransition");
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    return now - m_poseChangeTime < 0.8;
 }
 
 // +0x284

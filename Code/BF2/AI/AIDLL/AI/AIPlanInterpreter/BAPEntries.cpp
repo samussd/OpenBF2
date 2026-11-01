@@ -11,13 +11,20 @@
 #include "../AIBotActionPlan/BAPALook.h"
 #include "../AIBotActionPlan/BAPAResetControls.h"
 #include "../AIBotActionPlan/BAPASoldierPose.h"
+#include "../AIBotActionPlan/BAPATrigger.h"
 #include "../AIBotActionPlan/BAPInfoWrapper.h"
 #include "../AIBotActionPlan/BAPCondition.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIArmament.h"
 #include "../AIKnowledge/IPIControlInfo.h"
 #include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/IPIUnit.h"
+#include "../AIKnowledge/WeaponInfo.h"
+#include "../AIKnowledge/WeaponInfoManager.h"
+#include "../Main/AISettingsInterfaces.h"
 #include "../Main/CommonSingletonServer.h"
+#include "../Main/IBotManager.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../AIInterface/BFKnowledge/BFGameEffector.h"
 #include "../../../AIInterface/BFKnowledge/BFObjectEnvironment.h"
@@ -719,9 +726,152 @@ int EntryTrigger::getTargetId()
     return 11;
 }
 
-bool EntryTrigger::execute(BotScript *, Bot *, bool&, bool&)
+// Before a shot: settles the pose the weapon wants and how well the bot aims with it.
+static void prepareFiring(Bot* bot, Information* equipment, IPIArmament* armament, WeaponInfo* weapon,
+                          bool moving)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryTrigger::execute");
+    const bool soldier = (equipment->getObjectTypeFlags() & 0x200000u) != 0;
+    if (!moving && weapon->getWeaponType() != 4)
+    {
+        int pose = 1;
+        if (soldier)
+        {
+            pose = weapon->getFiringPose();
+            if (armament->getActiveWeapon() == 0
+                || (bot->getFiringTarget() != 0xFFFFFFFFu && weapon->getWeaponType() == 3))
+            {
+                Vec2 own = {};
+                Vec2 other = {};
+                vec3ToVec2XZ(equipment->getPosition(), own);
+                Information* const target = informationManager->getInformation(bot->getFiringTarget());
+                if (target)
+                {
+                    vec3ToVec2XZ(target->getPosition(), other);
+                    const float dx = other.x - own.x;
+                    const float dy = other.y - own.y;
+                    if (dy * dy + dx * dx < 1.0f && target->getSoldierPose() == 3)
+                        pose = 2;
+                }
+            }
+        }
+        const int current = equipment->getSoldierPose();
+        if (current != 4 && current != pose)
+            bot->requestSoldierPose(pose, false);
+    }
+
+    Information* const target = informationManager->getInformation(bot->getFiringTarget());
+    const float botSkill = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getBotSkill();
+    const bool human = target && target->getAIObject()
+        && !IBotManager::instance->getBot(target->getAIObject())
+        && target->getUnit() && target->getUnit()->isOccupied();
+
+    float skill = 1.0f;
+    if (!weapon->getIsThrown())
+    {
+        if (weapon->getExplosionRadius() == 0.0f)
+            skill = human ? botSkill : 1.0f - (1.0f - botSkill) * 0.5f;
+        else
+            skill = 1.0f - (1.0f - botSkill) * (soldier ? 0.4f : 0.8f);
+    }
+    if (weapon->getWeaponGuidanceType() != 0)
+        skill = 1.0f;
+
+    float scale = 1.0f;
+    const unsigned int flags = equipment->getObjectTypeFlags();
+    if ((flags & 0x10u) == 0)
+    {
+        if (!target)
+            return;
+        if ((target->getObjectTypeFlags() & 0x10u) != 0 && !equipment->isPrimary()
+            && (flags & 0x80u) == 0)
+            scale = 3.0f;
+    }
+    weapon->setBotSkill(skill, bot->getFiringTargetTime(), scale);
+}
+
+// Presses or lets go of the action's input. A zoom waits until the bot stops, a weapon change
+// ends as soon as the weapon is in hand, and firing first settles pose and aim.
+bool EntryTrigger::execute(BotScript* script, Bot* bot, bool& ok, bool& done)
+{
+    BAPATrigger* const action = static_cast<BAPATrigger*>(script);
+    const io::PlayerInputMap key = action->m_input;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* const armament = equipment->getArmament();
+    WeaponInfo* weapon = 0;
+    if (armament && armament->getActiveWeapon() != -1)
+        weapon = WeaponInfoManager::m_instance->getInformation(armament->getWeapon(armament->getActiveWeapon()));
+
+    io::PlayerInput* const input = static_cast<BotMain*>(bot)->getPlayerInput();
+    const bool moving = input->getInput(static_cast<io::PlayerInputMap>(3)) != 0.0f
+                     || input->getInput(io::PIYaw) != 0.0f
+                     || input->getInput(io::PISprint) != 0.0f;
+    const bool firing = key == io::PIFire || static_cast<int>(key) == 0x1F;
+    const bool allowed = !(firing && static_cast<BotMain*>(bot)->botInPoseTransition());
+
+    if (weapon)
+    {
+        if (static_cast<unsigned int>(key) - 14u < 8u)
+        {
+            if (weapon->getWeaponActivate() == static_cast<int>(key))
+            {
+                ok = true;
+                done = true;
+                return true;
+            }
+            if (action->m_bool20)
+            {
+                ok = true;
+                done = false;
+                return true;
+            }
+        }
+        else if (weapon->getWeaponZoom() == static_cast<int>(key))
+        {
+            if (moving)
+                return true;
+        }
+        else if (firing)
+        {
+            prepareFiring(bot, equipment, armament, weapon, moving);
+        }
+    }
+
+    if (static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime() < action->m_startTime)
+        return true;
+
+    if (action->m_breakCondition && action->m_breakCondition->evaluate(bot))
+    {
+        if (input->getInput(key) != 0.0f)
+            input->setInput(key, 0.0f);
+        action->m_bool20 = false;
+        ok = true;
+        done = true;
+        return true;
+    }
+
+    if (action->m_bool20 && action->m_bool2C)
+    {
+        input->setInput(key, 0.0f);
+        action->m_bool20 = false;
+        ok = true;
+        done = true;
+        return true;
+    }
+
+    if (allowed && action->m_runCondition->evaluate(bot))
+    {
+        input->setInput(key, 1.0f);
+        action->m_bool20 = true;
+        ok = true;
+        done = !action->m_bool2C;
+        return true;
+    }
+
+    input->setInput(key, 0.0f);
+    action->m_bool20 = false;
+    ok = true;
+    done = false;
+    return true;
 }
 
 
