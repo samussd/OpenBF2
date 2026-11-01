@@ -803,6 +803,10 @@ bool BotMain::planExecution(const double&)
 // evaluations, which BotManager::actionDecisionMaking banks in BotInfo +32 (see BotMain.h).
 int BotMain::decisionMaking(const double& slice)
 {
+    // [TEMP] [RETIRE-WHEN: aidll-02-skeleton] Only MoveTo (1) and Idle (2) have plans so far, the
+    // ids of AIBehaviours.ai. Any other behaviour keeps an urgency of zero until its plan exists.
+    struct Gate { static bool hasPlan(unsigned short id) { return id == 1 || id == 2; } };
+
     std::list<int> evaluated;
     int count = 0;
     if (m_deactivated)
@@ -902,7 +906,7 @@ int BotMain::decisionMaking(const double& slice)
             if (!m_planInvalid && previousBehaviour != -1)
                 urgency = urgency * (m_memory->modifyBehaviourUrgency(m_behaviours[id], timer->getGameTime())
                                      * m_behaviours[previousBehaviour]->getWeights()[id]);
-            if (urgency > 0.0f)
+            if (urgency > 0.0f && Gate::hasPlan(id))
             {
                 ++count;
                 m_behaviours[id]->calculateUrgency(this, true, urgency);
@@ -937,7 +941,7 @@ int BotMain::decisionMaking(const double& slice)
                               * m_behaviours[previousBehaviour]->getWeights()[id];
                 else
                     urgency = m_behaviourUrgencies[id];
-                if (urgency > 0.0f)
+                if (urgency > 0.0f && Gate::hasPlan(id))
                     m_behaviours[id]->calculateUrgency(this, false, urgency);
                 ++it;
             }
