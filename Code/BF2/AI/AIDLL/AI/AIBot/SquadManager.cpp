@@ -714,6 +714,43 @@ void SquadManager::playerRemovedFromSquad(int playerId, int squadId, int side)
     coordinator->updateSquadLeader();
 }
 
+void SquadManager::removeSquadMember(int playerId, int side)
+{
+    std::vector<SquadCoordinator*>& squads = m_coordinators[side - 1];
+    for (unsigned int i = 0; i < squads.size(); ++i)
+    {
+        int index;
+        SquadMember* const member = squads[i]->getSquadMember(playerId, index);
+        if (member)
+        {
+            squads[i]->removeSquadMember(index);
+            static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+                ->exitSquad(squads[i]->getSquadId() + 1, member->getPlayer());
+            squads[i]->updateSquadLeader();
+            return;
+        }
+    }
+}
+
+void SquadManager::destroySquadMember(int playerId, int side)
+{
+    std::vector<SquadCoordinator*>& squads = m_coordinators[side - 1];
+    for (unsigned int i = 0; i < squads.size(); ++i)
+    {
+        int index;
+        SquadMember* const member = squads[i]->getSquadMember(playerId, index);
+        if (member)
+        {
+            IAIPlayer* const player = member->getPlayer();
+            squads[i]->destroySquadMember(index);
+            static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+                ->exitSquad(squads[i]->getSquadId() + 1, player);
+            squads[i]->updateSquadLeader();
+            return;
+        }
+    }
+}
+
 // 0x1c0d40 (Ghidra).
 Vec3 SquadManager::getArtilleryTargetPos(int side) const
 {

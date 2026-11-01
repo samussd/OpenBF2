@@ -203,8 +203,9 @@ public:
     bool addUnspawnedBot(int playerId, int side, float* personality);
     // Returns whether the player's bot was reactivated on the requested side.
     bool reactivateBot(int playerId, int side, const std::string& name);
-    void deactivateBot(int id);
-    void deactivateBotFromPlayerId(int playerId);                   // indexes m_botByPlayerId
+    // Both answer the bot's id, or -1. The side's dead bots go first, then any of the side.
+    int deactivateBot(int side);
+    int deactivateBotFromPlayerId(int playerId);                    // indexes m_botByPlayerId
 
 private:
 // Three priority queues hold pending bot work. Native container sizes depend on the compiler ABI.

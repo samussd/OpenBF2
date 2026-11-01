@@ -73,6 +73,8 @@ def parse_args():
     parser.add_argument('--interval', type=float, default=5.0, help='seconds between player samples')
     parser.add_argument('--port', type=int, default=16600, help='game port; 16567 is refused')
     parser.add_argument('--record', action='store_true', help='let the server record a demo (sv.autoRecord)')
+    parser.add_argument('--time-limit', type=int, default=0,
+                        help='round time limit in seconds; default: longer than the run')
     parser.add_argument('--bots-alone', action='store_true',
                         help='rebuilt server only: let bots spawn with no human (BF2_AI_SPAWN_ALONE)')
     parser.add_argument('--no-redirect', action='store_true',
@@ -99,7 +101,7 @@ def install(game, args, out):
     files = {
         admin / (PRIVATE + '.py'): probe_source(out, args.interval),
         settings_dir / (PRIVATE + '_settings.con'): SETTINGS.format(
-            port=args.port, query_port=args.port + 13350, time_limit=args.seconds + 60,
+            port=args.port, query_port=args.port + 13350, time_limit=args.time_limit or args.seconds + 60,
             record=1 if args.record else 0, private=PRIVATE, bots=args.bots,
             difficulty=args.difficulty),
         settings_dir / (PRIVATE + '_maplist.con'): 'mapList.append %s %s %d\n' % (args.map, args.mode, args.size),

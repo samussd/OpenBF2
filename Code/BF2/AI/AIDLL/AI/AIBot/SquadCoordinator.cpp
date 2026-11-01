@@ -850,6 +850,23 @@ void SquadCoordinator::removeSquadMember(int index)
     m_formation->reassignSlots();
 }
 
+void SquadCoordinator::destroySquadMember(int index)
+{
+    SquadMember* const member = m_squadMembers[index];
+    removeSquadMemberFire(member);
+    member->removeRequest();
+    if (m_formation->isInFormation(member->getMemberIndex()))
+        m_formation->leaveFormation(member->getMemberIndex());
+    m_squadMembers.erase(m_squadMembers.begin() + index);
+    if (member->isBot())
+        member->getBot()->setSquadMember(0);
+    delete member;
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+        m_squadMembers[i]->setMemberIndex(static_cast<int>(i));
+    updateSquadLeader();
+    m_formation->reassignSlots();
+}
+
 // Matches by player id, first match only; an unknown member is ignored.
 void SquadCoordinator::removeSquadMember(SquadMember* member)
 {

@@ -200,9 +200,9 @@ void AIMain::popPlayer()
     BF2_AI_FRONTIER("dice::hfe::ai::AIMain::popPlayer");
 }
 
-void AIMain::registerFreeBot(Bot* /*bot*/)
+void AIMain::registerFreeBot(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::registerFreeBot");
+    m_pendingBots.push_back(bot);
 }
 
 // Activates the bot associated with a player ID.
@@ -252,14 +252,34 @@ bool AIMain::addUnspawnedBot(int playerId, int side, float* personality)
     return true;
 }
 
-void AIMain::deactivateBot(int& /*a*/, int /*b*/)
+// Takes one bot of the side out of play, preferably a dead one; playerId comes back as its player
+// or -1.
+void AIMain::deactivateBot(int& playerId, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::deactivateBot(int&, int)");
+    SquadManager::m_instance->removeSquadMember(playerId, side);
+    const int id = m_botManager->deactivateBot(side);
+    if (id == -1)
+    {
+        playerId = -1;
+        return;
+    }
+    Bot* const bot = m_botManager->getBotFromId(id);
+    if (m_sai[side])
+        m_sai[side]->removeBot(bot);
+    playerId = bot->getPlayerId();
 }
 
-void AIMain::deactivateBot(int /*a*/)
+void AIMain::deactivateBot(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::deactivateBot(int)");
+    IAIPlayer* const player =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(playerId);
+    SquadManager::m_instance->destroySquadMember(playerId, player->getSide());
+    const int id = m_botManager->deactivateBotFromPlayerId(playerId);
+    if (id == -1)
+        return;
+    Bot* const bot = m_botManager->getBotFromId(id);
+    if (m_sai[bot->getSide()])
+        m_sai[bot->getSide()]->removeBot(bot);
 }
 
 // Updates population counts when a player is created.
@@ -339,9 +359,19 @@ void AIMain::newPlayerCreated(bool isAI)
     }
 }
 
-void AIMain::reactivateBot(int /*a*/)
+// A human left: forget it, and fill the place if bots count against the human limit.
+void AIMain::reactivateBot(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::reactivateBot");
+    IAIPlayer* const player =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(playerId);
+    if (!player)
+        return;
+    --m_humanCount;
+    SquadManager::m_instance->destroySquadMember(playerId, player->getSide());
+    const IAISettings* const settings = static_cast<const IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    const IAIGame* const game = static_cast<const IAIGame*>(CommonSingletonServer::m_iaiGame);
+    if (settings->getmaxBotsIncludeHumans() && m_botCount + m_humanCount < game->getMaxNumberOfPlayers())
+        spawnBots();
 }
 
 void AIMain::switchSides(int /*a*/)

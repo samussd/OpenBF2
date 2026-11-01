@@ -76,6 +76,7 @@ public:
     // caller keeps ownership of the removed member. Remaining members are renumbered.
     void removeSquadMember(int index);
     void removeSquadMember(SquadMember* member);
+    void destroySquadMember(int index);          // and the member record with it
     void removeSquadMemberFire(SquadMember* member);  // deletes the member's shot records
     void updateSquadLeader();
     void unAssignSquad();                       // PE inlined at

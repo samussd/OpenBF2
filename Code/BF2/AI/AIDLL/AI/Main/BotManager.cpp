@@ -1087,6 +1087,57 @@ void BotManager::setBotIsRevived(int playerId, IAIObject*)
     }
 }
 
+int BotManager::deactivateBot(int side)
+{
+    unsigned int index = 0;
+    bool found = false;
+    for (unsigned int i = 0; i < m_botInfos.size() && !found; ++i)
+    {
+        Bot* const bot = m_botInfos[i]->m_bot;
+        if (bot && bot->getSide() == side && bot->isDead())
+        {
+            index = i;
+            found = true;
+        }
+    }
+    for (unsigned int i = 0; i < m_botInfos.size() && !found; ++i)
+    {
+        Bot* const bot = m_botInfos[i]->m_bot;
+        if (bot && bot->getSide() == side)
+        {
+            index = i;
+            found = true;
+        }
+    }
+
+    Bot* const bot = m_botInfos[index]->m_bot;
+    static_cast<IAISettingsModifier*>(CommonSingletonServer::m_iaiSettingsModifier)
+        ->setBotNameUnused(bot->getPlayer()->getName());
+    m_deactivatedBots.push_back(index);
+    m_botByPlayerId[bot->getPlayerId()] = -1;
+    bot->getPlayer()->setPlayer(static_cast<world::IPlayer*>(0));
+    bot->setAsDeactivated(true);
+    return static_cast<int>(index);
+}
+
+// A living bot stays, though its name is already free again.
+int BotManager::deactivateBotFromPlayerId(int playerId)
+{
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot)
+        return -1;
+    static_cast<IAISettingsModifier*>(CommonSingletonServer::m_iaiSettingsModifier)
+        ->setBotNameUnused(bot->getPlayer()->getName());
+    const unsigned int id = bot->getBotId();
+    if (!bot->isDead())
+        return -1;
+    m_deactivatedBots.push_back(id);
+    bot->setAsDeactivated(true);
+    bot->getPlayer()->setPlayer(static_cast<world::IPlayer*>(0));
+    m_botByPlayerId[playerId] = -1;
+    return static_cast<int>(id);
+}
+
 void BotManager::setBotReceivedRadioMessage(const AIRadioMessageSettings&, int, int)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotReceivedRadioMessage");

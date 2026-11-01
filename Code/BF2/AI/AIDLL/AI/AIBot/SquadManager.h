@@ -36,6 +36,10 @@ public:
     // each image discard the result; neither body materializes one independently of its last
     // updateSquadLeader call. void is the recovered no-result contract, not decompiler EAX.
     void addSquadMember(int playerId, int side);
+    // Both take the player out of its squad on the engine's side too; the second one deletes
+    // the member record.
+    void removeSquadMember(int playerId, int side);
+    void destroySquadMember(int playerId, int side);
 
     // Engine notifications use one-based side and squad ids. These bodies materialize no
     // result; the engine/courier callers discard it on both ports.

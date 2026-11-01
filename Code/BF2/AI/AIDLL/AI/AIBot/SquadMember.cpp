@@ -238,6 +238,11 @@ bool SquadMember::isSameRequest(unsigned int handle, int action)
     return handle == m_request->m_handle && action == m_request->m_action;
 }
 
+void SquadMember::removeRequest()
+{
+    delete m_request;
+}
+
 void SquadMember::clearRequestAction()
 {
     m_request->m_action = 0;

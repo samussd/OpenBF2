@@ -39,6 +39,7 @@ public:
     void setIsIdle(bool idle);               // an idle plan holds the member idle
     bool getIsIdle();
     void clearRequestAction();               // no action, no handle
+    void removeRequest();                    // frees the record; the pointer stays
     void setIsSquadLeader(bool leader);
     bool isSquadLeader();
     bool isMoving();                         // returns m_moved

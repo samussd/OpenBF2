@@ -4,6 +4,7 @@
 // [CHOSEN, not recovered] Temporary implementation boundaries remain.
 // [RETIRE-WHEN: aidll-01-adapters] Complete and validate the remaining AIPlayerFactory operations.
 
+#include <algorithm>
 #include "AIPlayerFactory.h"
 
 #include "AIFrontier.h"
@@ -109,7 +110,17 @@ IAIPlayer* AIPlayerFactory::create(world::IPlayer* player)
 
 void AIPlayerFactory::destroy(IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerFactory::destroy");
+    if (player->getPlayer())
+    {
+        m_players[player->getId()] = 0;
+    }
+    else
+    {
+        std::vector<IAIPlayer*>::iterator it = std::find(m_players.begin(), m_players.end(), player);
+        if (it != m_players.end())
+            *it = 0;
+    }
+    delete player;
 }
 
 int AIPlayerFactory::getPlayerIdFromName(const std::string& name)
@@ -131,12 +142,12 @@ IAIPlayer* AIPlayerFactory::getPlayerFromId(int id)
 
 void AIPlayerFactory::setIdToPlayerMapping(IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerFactory::setIdToPlayerMapping");
+    m_players[player->getId()] = player;
 }
 
 void AIPlayerFactory::removeIdToPlayerMapping(IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerFactory::removeIdToPlayerMapping");
+    m_players[player->getId()] = 0;
 }
 
 // - a bare member load, so it hands back the vector itself.
