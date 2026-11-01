@@ -252,11 +252,8 @@ void BotMain::uninitAllBehaviours()
 {
     for (int i = 0; i < mu8NBehaviours; ++i)
     {
-        if (m_behaviours[i])
-        {
-            // Retail here is `m_behaviours[i]->something->uninit(this)` - see the block above.
-            BF2_AI_FRONTIER("dice::hfe::ai::BotMain::uninitAllBehaviours (a behaviour is present)");
-        }
+        if (m_behaviours[i] && m_behaviours[i]->getGenerator())
+            m_behaviours[i]->getGenerator()->unInit(this);
     }
 }
 
@@ -267,15 +264,11 @@ void BotMain::reset()
     m_double172 = 0.0;
 
     if (m_player)
-    {
-        // Retail calls IAIPlayer byte-slot +8 with no arguments. See the block above.
-        BF2_AI_FRONTIER("dice::hfe::ai::BotMain::reset (IAIPlayer slot +8)");
-    }
+        m_player->reset();
 
     if (m_activePlan)
     {
-        // Retail destroys the plan through byte-slot +8. See the block above.
-        BF2_AI_FRONTIER("dice::hfe::ai::BotMain::reset (active plan present)");
+        delete m_activePlan;
         m_activePlan = 0;
         m_planInvalid = true;
         m_sensingAgent->setOverride(false);
