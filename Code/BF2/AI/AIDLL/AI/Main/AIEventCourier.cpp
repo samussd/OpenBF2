@@ -184,9 +184,10 @@ int AIEventCourier::event_mineRemoved(unsigned int mineId)
     return 0;
 }
 
-int AIEventCourier::event_enemySpotted(IAIObject *, unsigned char)
+int AIEventCourier::event_enemySpotted(IAIObject* object, unsigned char side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_enemySpotted");
+    CommunicationHub::m_instance->enemySpottedByHuman(object, side);
+    return 0;   // [CHOSEN, not recovered] the caller discards it
 }
 
 int AIEventCourier::event_isRepaired(int playerId)
