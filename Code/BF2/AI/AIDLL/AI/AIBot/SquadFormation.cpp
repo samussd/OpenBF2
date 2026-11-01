@@ -8,17 +8,30 @@
 
 #include "SquadCoordinator.h"
 #include "SquadMember.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIMobile.h"
 #include "../Main/AIDllFrontier.h"
+#include "../Main/AIRandom.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"   // IAIPlayer::getCurrentVehicle
 #include "../../../AIInterface/BFKnowledge/BFGame.h"     // IAIGame::getMaxNumberOfSquadMembers
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 
 namespace dice {
 namespace hfe {
 namespace ai {
 
 namespace {
+
+float squaredDistance(const Vec3& a, const Vec3& b)
+{
+    const float dx = a.x - b.x;
+    const float dy = a.y - b.y;
+    const float dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+}
 
 // attested type name: `std::list<dice::hfe::ai::(anonymous namespace)::SquadMemberDistanceObj>`
 // is instantiated from this translation unit (the anonymous namespace carries its path). Eight
@@ -245,21 +258,38 @@ void SquadFormation::selectFormation()
     m_formation = FormationLine;
 }
 
-// Updates the formation direction from its anchor member. An empty anchor returns immediately.
-// [FRONTIER] The occupied-anchor path requires the remaining information queries.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding SquadFormation operation.
+// Points the formation along its anchor member's motion. An empty anchor or one that is almost
+// still leaves the direction as it is.
 void SquadFormation::updateFormationForwardVector()
 {
-    Vec3 speed = {};
     Slot* const anchor = m_slots[0];
     if (!anchor->m_occupied)
         return;
 
     IAIPlayer* const player = m_coordinator->getSquadMember(anchor->m_memberIndex)->getPlayer();
     IAIObject* const vehicle = player->getCurrentVehicle();
-    (void)speed;
-    (void)vehicle;
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::updateFormationForwardVector (IAIObject information query)");
+    Information* const information =
+        informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    const Vec3 speed = information->getMobile()->getSpeed();
+    if (speed.x * speed.x + speed.y * speed.y + speed.z * speed.z <= 0.25f)
+        return;
+
+    m_f48 = speed.x;
+    m_f52 = speed.z;
+    const float lengthSq = m_f48 * m_f48 + m_f52 * m_f52;
+    if (std::fabs(lengthSq - 1.0f) < 1.1920929e-07f)
+        return;
+    if (std::fabs(lengthSq) < 1.4210855e-14f)
+    {
+        m_f48 = 0.0f;
+        m_f52 = 0.0f;
+    }
+    else
+    {
+        const float scale = 1.0f / std::sqrt(lengthSq);
+        m_f52 *= scale;
+        m_f48 *= scale;
+    }
 }
 
 // Adds a trail position when the anchor moves more than six metres from the last position.
@@ -478,18 +508,42 @@ void SquadFormation::updateWaitForSquadMembers(double time)
     m_b36 = true;
     Vec3 memberPosition = {};
     Vec3 squadPosition = {};
-    (void)memberPosition;
-    (void)squadPosition;
-    (void)time;
     for (unsigned int index = 1; index < m_maxSquadMembers; ++index)
     {
         Slot* const slot = m_slots[index];
-        if (slot->m_occupied)
+        if (!slot->m_occupied)
+            continue;
+
+        SquadMember* const member = m_coordinator->getSquadMember(slot->m_memberIndex);
+        bool late = !(m_b84 && slot->m_memberIndex == m_coordinator->getSquadLeaderIndex())
+                 && !member->isBot();
+        if (late)
         {
-            // The real member lookup begins an occupied-slot timing policy with
-            // platform-specific time/RNG precision; no deadline or wait is invented.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::updateWaitForSquadMembers (occupied slot timing)");
+            const float arrival = member->getEstimatedArrival();
+            const bool positioned = member->getPosition(memberPosition);
+            m_coordinator->getSquadPosition(squadPosition);
+            late = positioned && arrival < 1500.0f && arrival > 150.0f
+                && squaredDistance(memberPosition, m_coordinator->getSquadGotoPos())
+                       > squaredDistance(squadPosition, m_coordinator->getSquadGotoPos());
+        }
+        if (!late)
+        {
+            slot->m_b24 = false;
+            slot->m_i28 = 0.0f;
+        }
+        else if (slot->m_b24)
+        {
+            if (static_cast<float>(time) > slot->m_i28)
+                slot->m_b24 = false;
+            else
+                m_b36 = false;
+        }
+        else if (slot->m_i28 < 0.01f)
+        {
+            m_b36 = false;
+            slot->m_b24 = true;
+            slot->m_i28 = AIRandom::m_instance->nextFloat() * 10.0f + 10.0f
+                        + static_cast<float>(time);
         }
     }
 }
@@ -719,19 +773,34 @@ void SquadFormation::updateClosestSlots()
     }
 }
 
-// The slot/member read precedes
-// the first getSlotWorldPos call; no argument or null guard is added.
+// The occupied slot, past the anchor, whose member stands nearest this slot's world position;
+// -1 when there is none. No argument or null guard is added.
 int SquadFormation::getClosestSlotIndex(int slotIndex)
 {
     int best = -1;
     float minimum = 3.402823466e+38F;
     Vec3 target = {};
     Vec3 position = {};
-    const int memberIndex = m_slots[slotIndex]->m_memberIndex;
-    (void)best; (void)minimum; (void)target; (void)position; (void)memberIndex;
-    // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-    // The bool getSlotWorldPos(int,Vec3&) movement/position chain remains unwritten.
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::getClosestSlotIndex (getSlotWorldPos)");
+    if (!getSlotWorldPos(m_slots[slotIndex]->m_memberIndex, target))
+        return best;
+
+    for (unsigned int index = 1; index < m_maxSquadMembers; ++index)
+    {
+        Slot* const slot = m_slots[index];
+        if (slot->m_occupied
+            && m_coordinator->getSquadMember(slot->m_memberIndex)->getPosition(position)
+            && nearerFormationMember(position, target, minimum))
+            best = static_cast<int>(index);
+    }
+    return best;
+}
+
+// The coordinator goes first; the slots were each allocated by the constructor.
+SquadFormation::~SquadFormation()
+{
+    m_coordinator = 0;
+    for (unsigned int i = 0; i < m_maxSquadMembers; ++i)
+        delete m_slots[i];
 }
 
 // Keep the real allocation and captured pointers;
@@ -875,15 +944,11 @@ void SquadFormation::updateMovementFlag(bool force)
 }
 
 // Preserve both guards.
-// The positioned-squad arm calls getSlotWorldPos(getSquadMemberIndexAtSlot(0), m_v72).
-// Its navigation/position dependencies are not recovered here.
-// [FRONTIER, narrow] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// Keeps slot zero's world position current while the squad has one.
 void SquadFormation::updateSlotZeroPos()
 {
     if (m_slots[0]->m_occupied && m_coordinator->squadHasPosition())
-    {
-        BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::updateSlotZeroPos (getSlotWorldPos)");
-    }
+        getSlotWorldPos(getSquadMemberIndexAtSlot(0), m_v72);
 }
 
 // Only the target-valid flags and slot indices are
@@ -901,7 +966,6 @@ void SquadFormation::resetTrailingPositions()
 }
 
 // Sets the formation speed from the slowest occupied slot, adjusted for crowding.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding SquadFormation operation.
 void SquadFormation::updateFormationMaxSpeed()
 {
     int occupied = 0;
@@ -915,8 +979,13 @@ void SquadFormation::updateFormationMaxSpeed()
         if (slot->m_occupied)
         {
             ++occupied;
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::updateFormationMaxSpeed"
-                            " - the per-member IPIMobile::getMaxSpeed lookup");
+            IAIObject* const vehicle =
+                m_coordinator->getSquadMember(slot->m_memberIndex)->getPlayer()->getCurrentVehicle();
+            Information* const information =
+                informationManager->getInformation(vehicle->getInformation(m_side + 1));
+            const float speed = information->getMobile()->getMaxSpeed();
+            if (speed < m_formationMaxSpeed)
+                m_formationMaxSpeed = speed;
         }
     }
 
@@ -975,14 +1044,13 @@ void SquadFormation::setFormation()
     }
 }
 
-// Places slot zero at the origin and alternates subsequent formation slots on either side.
-// [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
-void SquadFormation::setLineFormation()
+// Places slot zero at the origin and alternates the rest on either side of their reference
+// slots, spread by both vehicles' radii. rightZ and leftZ scale the direction's z on each side.
+void SquadFormation::layOutSlots(float rightZ, float leftZ)
 {
-    const float spacing = 1.0f;
-
     bool  positiveSide  = true;
-    float offset        = 0.0f;
+    float offsetX       = 0.0f;
+    float offsetZ       = 0.0f;
     int   referenceSlot = 0;
 
     for (unsigned int i = 0; i < m_maxSquadMembers; ++i)
@@ -991,46 +1059,55 @@ void SquadFormation::setLineFormation()
 
         if (i)
         {
+            slot->m_referenceSlot = referenceSlot;
             if (positiveSide)
             {
-                offset = spacing * m_direction.x;
-                slot->m_referenceSlot = referenceSlot;
+                offsetX = m_direction.x;
+                offsetZ = rightZ * m_direction.z;
                 positiveSide = false;
-
                 if (i >= 3)
                     ++referenceSlot;
             }
             else
             {
-                offset = -spacing * m_direction.x;
-                slot->m_referenceSlot = referenceSlot++;
+                offsetX = -m_direction.x;
+                offsetZ = leftZ * m_direction.z;
                 positiveSide = true;
+                ++referenceSlot;
             }
         }
 
-        slot->m_offset.x = offset;
+        slot->m_offset.x = offsetX;
         slot->m_offset.y = 0.0f;
-        slot->m_offset.z = 0.0f;
+        slot->m_offset.z = offsetZ;
 
         if (slot->m_occupied)
         {
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::setLineFormation"
-                            " - the occupied-slot vehicle-radius spread");
+            const float own =
+                3.0f * m_coordinator->getSquadMember(slot->m_memberIndex)->getVehicleRadius();
+            Slot* const reference = m_slots[slot->m_referenceSlot];
+            const float spread = own
+                + 3.0f * m_coordinator->getSquadMember(reference->m_memberIndex)->getVehicleRadius();
+            slot->m_offset.x = spread * slot->m_offset.x + reference->m_offset.x;
+            slot->m_offset.y = spread * slot->m_offset.y + reference->m_offset.y;
+            slot->m_offset.z = spread * slot->m_offset.z + reference->m_offset.z;
         }
     }
 }
 
-// [FRONTIER] Wedge and echelon layouts selected by changeFormation remain unimplemented.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace the stops when their layout behavior is recovered.
+void SquadFormation::setLineFormation()
+{
+    layOutSlots(0.0f, 0.0f);
+}
+
 void SquadFormation::setWedgeFormation()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::setWedgeFormation");
+    layOutSlots(1.0f, 1.0f);
 }
 
 void SquadFormation::setEchelonFormation()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::setEchelonFormation");
+    layOutSlots(-1.0f, 1.0f);
 }
 
 // 0x1bb640 (Ghidra).

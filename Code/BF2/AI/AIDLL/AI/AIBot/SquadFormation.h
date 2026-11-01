@@ -64,12 +64,14 @@ public:
     };
 
     explicit SquadFormation(SquadCoordinator* coordinator);
+    ~SquadFormation();
 
     void update(double time);                 // complete scheduler
     bool shouldSquadMoveOut();               // returns m_b36
     void updateFormation();                  // leader/anchor reassignment
-    void updateWaitForSquadMembers(double time); // occupied timing seam
-    void updateFormationForwardVector();     // occupied owner-query seam
+    // Clears m_b36 while a late human member gets a wait of 10 to 20 seconds; bots are not waited for.
+    void updateWaitForSquadMembers(double time);
+    void updateFormationForwardVector();
     void updateTrailingPositions();          // complete
     void updateTrailingSlots();              // complete
     void selectFormation();                  // / PE inlined at
@@ -85,8 +87,9 @@ public:
     void updateFormationMaxSpeed();
     void setFormation();
     void setLineFormation();
-    void setWedgeFormation();                // [FRONTIER]
-    void setEchelonFormation();              // [FRONTIER]
+    void setWedgeFormation();
+    void setEchelonFormation();
+    void layOutSlots(float rightZ, float leftZ);   // the three setters' shared loop
 
     void joinFormation(int memberIndex);
     bool isInFormation(int memberIndex);      // ignores occupied flag
@@ -94,7 +97,7 @@ public:
     void resetSlot(int slotIndex);            // inlined
     void reassignSlots();                     // refills the slots after a member leaves
     void updateClosestSlots();
-    int getClosestSlotIndex(int slotIndex);    // world-position seam
+    int getClosestSlotIndex(int slotIndex);
     void swapSlots(int first, int second);    // three payload fields only
     void updateMovementFlag(bool force);
     void updateSlotZeroPos();                 // inlined
@@ -111,9 +114,7 @@ public:
     /*  +44 */ int m_side;                            // = the coordinator's side
     // ELF +0x30 / PE +0x34 is one `Vec2` - the formation's XZ forward vector, born (0, 1). The
     // Vec2 type is attested by the forward-vector update passing this address to
-    // `vec3ToVec2XZ(const Vec3&, Vec2&)`; getSlotWorldPos is the only other reader. The split
-    // below predates that evidence and stays until the occupied projection lands, so that the
-    // retyping and its first writer arrive together.
+    // `vec3ToVec2XZ(const Vec3&, Vec2&)`; getSlotWorldPos is the only other reader.
     /*  +48 */ float m_f48;                           // = 0 Vec2 x (0.0f bits)
     /*  +52 */ float m_f52;                           // = 1.0f Vec2 y
     /*  +56 */ bool m_b56;                            // = false; hasFormationMoved returns it

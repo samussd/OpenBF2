@@ -372,7 +372,6 @@ void SquadCoordinator::updateRepairRequest(double time)
 }
 
 // Requests orders for an idle bot squad leader after twenty seconds without orders.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding SquadCoordinator operation.
 void SquadCoordinator::updateNeedOrdersMessage(double time)
 {
     if (IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander() && !isSquadTakingFlag())
@@ -398,9 +397,9 @@ void SquadCoordinator::updateNeedOrdersMessage(double time)
                         return;
                     static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
                         ->requestNewCommanderOrder(m_squadIndex + 1, leader->getPlayer());
-                    CommunicationAgent* const radio = leader->getBot()->getCommunicationAgent();
-                    (void)radio;
-                    BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::updateNeedOrdersMessage (CommunicationAgent::enqueueRadioMessage)");
+                    leader->getBot()->getCommunicationAgent()->enqueueRadioMessage(
+                        static_cast<AIRadioMessageType>(14), static_cast<AIRadioChannelType>(4),
+                        3, 1.0f, 0);
                 }
             }
         }
@@ -409,7 +408,6 @@ void SquadCoordinator::updateNeedOrdersMessage(double time)
 }
 
 // Routes a human leader's call to one bot when the formation has left the leader.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding SquadCoordinator operation.
 void SquadCoordinator::updateIncomingMessages()
 {
     SquadMember* const leader = getSquadLeader();
@@ -441,7 +439,9 @@ void SquadCoordinator::updateIncomingMessages()
         return;
 
     m_formation->joinSquadLeader();
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::updateIncomingMessages (CommunicationAgent::enqueueRadioMessage)");
+    radio->enqueueRadioMessage(static_cast<AIRadioMessageType>(6),
+                               static_cast<AIRadioChannelType>(3), 3, 2.0f, 0);
+    updateSquadPaths();
 }
 
 // Returns whether a living, standing squad member is inside the assigned control point
@@ -536,12 +536,25 @@ int SquadCoordinator::chooseSquadManeuver()
     if (m_i120 != 2)
         return 0;
 
-    Vec3 target = m_v28;
-    (void)target;
-    // The remaining terrain-altitude/distance/assignment policy is evidenced but
-    // not implemented here. Preserve its entry before any height call or flag store.
-    // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::chooseSquadManeuver (terrain altitude and flank policy)");
+    // Flank a commander's target from between 50 and about 173 metres, while the area is hostile.
+    const float x = m_v28.x;
+    const float z = m_v28.z;
+    const float dy = static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain)
+                         ->getTerrainAltitude(x, z) - m_v108.y;
+    const float dx = x - m_v108.x;
+    const float dz = z - m_v108.z;
+    const float distanceSq = dx * dx + dy * dy + dz * dz;
+    if (distanceSq < 30000.0f && distanceSq > 2500.0f && m_b56 && m_strategicAreaAssignment
+        && m_strategicAreaAssignment->getStatus(m_side + 1) == 1)
+    {
+        if (m_i148 != 2)
+        {
+            m_b156 = false;
+            m_b157 = false;
+        }
+        return 2;
+    }
+    return 0;
 }
 
 // [INFERRED] void return, as above.
@@ -608,15 +621,11 @@ int SquadCoordinator::getStrategicStrength(StrategicStrengthType type)
         if (!vehicle)
             continue;
 
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-        // Both ports next call vehicle's unknown slot (ELF +0xB8 / PE +0xB4), passing
-        // m_side + 1, then resolve its unsigned handle and sum unit strategic strengths[type].
-        // ELF captures informationManager before that call; PE captures it afterwards for a
-        // nonzero low handle word. Stop before the untyped call; do not invent an owner ABI.
-        BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::getStrategicStrength (IAIObject information query)");
+        Information* const information =
+            informationManager->getInformation(vehicle->getInformation(m_side + 1));
+        if (information && information->getUnit())
+            total += information->getUnit()->getStrategicStrengths()[type];
     }
-    // The shipped empty/filtered paths reach this rounding tail with the unchanged zero sum.
-    // Every possible contributor above still stops before its unrecovered object query.
     return static_cast<int>(total + 0.5f);
 }
 

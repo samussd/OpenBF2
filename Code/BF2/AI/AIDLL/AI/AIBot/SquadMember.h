@@ -44,6 +44,7 @@ public:
     bool isMoving();                         // returns m_moved
     bool isAtFormationSlot();                // returns m_flag30
     float getMaxSpeed() const { return m_maxSpeed; }
+    float getEstimatedArrival() const { return m_estimatedArrival; }
     bool isAvoidingArtillery();              // returns m_flag4B
     void setHavePath(bool havePath);
     void update(double time);                // bounded dependent calls

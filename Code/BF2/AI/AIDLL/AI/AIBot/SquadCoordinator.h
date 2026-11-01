@@ -49,8 +49,8 @@ public:
     void updateSquadPosition();                  // complete
     void updateShotsFired();                     // complete
     void updateRepairRequest(double time);       // PE inlined at ; complete
-    void updateNeedOrdersMessage(double time);   // radio-enqueue seam
-    void updateIncomingMessages();               // radio-enqueue seam
+    void updateNeedOrdersMessage(double time);
+    void updateIncomingMessages();
     bool isSquadTakingFlag();                    // complete
     void updateSquadManeuver();                  // selected maneuver seams
     int chooseSquadManeuver();                   // integer payload, enum spelling unresolved
@@ -61,9 +61,10 @@ public:
     // Whether the squad has no mission, and whether it was requested to the area.
     bool isSquadAvailable();
     bool isSquadRequestedToArea(int areaIndex);
-    int getStrategicStrength(StrategicStrengthType type); // nonnull vehicle seam
+    int getStrategicStrength(StrategicStrengthType type);
     void getSquadPosition(Vec3& position);       // inferred void
     SquadMember* getSquadLeader();
+    int getSquadLeaderIndex() const { return m_i96; }
     int getNumberOfSquadMembers();
     int getSquadId();
     bool squadHasPosition();
