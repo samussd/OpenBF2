@@ -119,6 +119,9 @@ public:
     // position its centre. The Vec3 form drops y.
     bool isInside(const Vec2& point) const;
     bool isInside(const Vec3& point) const;
+    // The way to this area from an object for the side; false when none is stored.
+    bool getRouteList(int side, AIStrategicObject* from, std::list<AIStrategicObject*>& route) const;
+    void orderNormalBot(int side, std::list<AIStrategicObject*>& route, int botId, ISAI* sai);    // [FRONTIER]
     // 0x3496e0 (Ghidra): the side-one position.
     const Vec2& getCenterPosition() const { return m_position[0]; }
 

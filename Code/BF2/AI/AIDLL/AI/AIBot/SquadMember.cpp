@@ -4,10 +4,29 @@
 #include "SquadMember.h"
 
 #include "../Main/AIDllFrontier.h"
+#include "../Main/AIMain.h"
+#include "../Main/AIRandom.h"
+#include "../Main/CommonSingletonServer.h"
 #include "../Main/IBotManager.h"
 #include "BotMain.h"
+#include "CommunicationAgent.h"
 #include "SquadCoordinator.h"
 #include "SquadFormation.h"
+#include "SquadManager.h"
+#include "WPAltitudeMoveTo.h"
+#include "WPMoveTo.h"
+#include "../AIKnowledge/IPIArmament.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../AIKnowledge/WeaponInfo.h"
+#include "../AIKnowledge/WeaponInfoManager.h"
+#include "../AIStrategic/SAI.h"
+#include "../AIStrategicEntity/AIStrategicObjectManager.h"
+#include "../AIUtils/checkPointer.h"
+#include "../../../AIInterface/BFKnowledge/BFSquad.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/BFTerrain.h"
+#include "../../../../IO/Input/PlayerInput.h"
 #include "../AIStrategicEntity/AIStrategicArea.h"   // isCloseToNonOwnedTarget: area status
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
@@ -261,12 +280,16 @@ void SquadMember::update(double time)
         }
         else if (m_bot && getPosition(position))
         {
-            WaypointList* const waypoints = m_bot->getWaypoints();
-            (void)waypoints;
-            // ELF +0x08 / PE +0x04 takes this position and the freshly read Bot.
-            // Its complete owner interface is not known. The time store is later.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::update (WaypointList position query)");
+            if (m_bot->getWaypoints()->getUrgency(position, m_bot) < 0.5f)
+                setHavePath(false);
+            else if (!m_moved)
+            {
+                const float x = m_vector60.x - position.x;
+                const float y = m_vector60.y - position.y;
+                const float z = m_vector60.z - position.z;
+                if (16.0f < x * x + y * y + z * z)
+                    setHavePath(false);
+            }
         }
         m_time24 = time;
     }
@@ -276,12 +299,13 @@ void SquadMember::update(double time)
         Vec3 position = {};
         if (getPosition(position))
         {
-            if (isMobile())
+            double since = 0.0;
+            int bySide = 0;
+            if (isMobile()
+                && SquadManager::m_instance->isInArtilleryDangerZone(position, m_side + 1, since, bySide))
             {
-                // The bool danger query and subsequent avoidArtillery body remain
-                // unrecovered, not replaced by a fabricated no-danger decision.
-                // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-                BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::update (SquadManager::isInArtilleryDangerZone)");
+                if (avoidArtillery(position, since, bySide))
+                    return;
             }
             else
             {
@@ -305,10 +329,7 @@ void SquadMember::update(double time)
         if (information && (information->getObjectTypeFlags() & 0x200000u) &&
             information->hasArmament())
         {
-            // The next call is the armament's selected-index query, ELF +0x14
-            // PE +0x10. Keep the full missing owner/WeaponInfo chain explicit.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::update (IPIArmament selected weapon)");
+            switchToThirdWeapon(information);
         }
     }
 
@@ -323,10 +344,11 @@ void SquadMember::update(double time)
         }
         if (member)
         {
-            // The selected member goes to acceptMission before the engine's
-            // accept/decline courier. Neither response is fabricated here.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::update (SquadCoordinator::acceptMission)");
+            IBFSquad* const adapter = static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad);
+            if (m_squad->acceptMission(member))
+                adapter->acceptSquadOrder(m_squadIndex + 1, m_player);
+            else
+                adapter->declineSquadOrder(m_squadIndex + 1, m_player);
         }
     }
 
@@ -385,27 +407,37 @@ bool SquadMember::isAvoidingArtillery()
     return m_flag4B;
 }
 
-// These are the complete refusal paths before vehicle information.
-// The remaining body queries the vehicle at ELF +0xB8 / PE +0xB4 with m_side+1, checks its
-// information/type/physical records, then compares the squad destination distance if assigned.
-// IAIObject is still forward-only, so its slot signature must be recovered before crossing here.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// 0x1c5380 (Ghidra). A living soldier, unless its squad's mission is to an area and it has come
+// within the formation distance of the place there.
 bool SquadMember::isAllowedInFormation()
 {
-    if (!m_player->getIsAlive())
+    if (!m_player->getIsAlive() || m_player->isManDown())
         return false;
-    if (m_player->isManDown())
+    IAIObject* const vehicle = m_player->getCurrentVehicle();
+    if (!vehicle)
         return false;
-    if (!m_player->getCurrentVehicle())
+    Information* const information = informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    if (!information || !information->getUnit() || (information->getObjectTypeFlags() & 0x200000) == 0
+        || !information->getMobile())
         return false;
-
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::isAllowedInFormation (IAIObject information handle)");
+    Vec3 goal = m_squad->getSquadGotoPos();
+    Vec3 position = {};
+    if (m_squad->getMissionStatus() == 2 && m_squad->isSquadAssignedToAnyArea())
+    {
+        m_squad->getValidSaPos(this, goal);
+        if (getPosition(position))
+        {
+            const float x = goal.x - position.x;
+            const float y = goal.y - position.y;
+            const float z = goal.z - position.z;
+            if (z * z + x * x + y * y < m_formationDistanceSq)
+                return false;
+        }
+    }
+    return true;
 }
 
-// The getter occurs before either flag is cleared. A null current
-// vehicle leaves the prior position untouched. The nonnull arm needs the same unknown IAIObject
-// slot, Information::getPrimaryObject(side+1), and the primary object's position/physics record.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// 0x1c1a70 (Ghidra). No null guard on the vehicle's record, as shipped. Moved: over 10 cm.
 void SquadMember::updateMemberPos()
 {
     IAIObject* const vehicle = m_player->getCurrentVehicle();
@@ -413,63 +445,390 @@ void SquadMember::updateMemberPos()
     m_moved = false;
     if (!vehicle)
         return;
-
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::updateMemberPos (IAIObject information handle)");
+    Information* const record = informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    Information* const primary = informationManager->getInformation(record->getPrimaryObject(m_side + 1));
+    if (!primary || !primary->getUnit())
+        return;
+    const Vec3 last = m_position;
+    m_position = primary->getPosition();
+    m_positionValid = true;
+    const float x = last.x - m_position.x;
+    const float y = last.y - m_position.y;
+    const float z = last.z - m_position.z;
+    if (0.01f < z * z + x * x + y * y)
+        m_moved = true;
 }
 
-// Retain
-// the vehicle before testing the freshly read player's alive/man-down state.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// 0x1c5560 (Ghidra).
 bool SquadMember::isMobile()
 {
     IAIObject* const vehicle = m_player->getCurrentVehicle();
-    if (!vehicle)
+    if (!vehicle || !m_player->getIsAlive() || m_player->isManDown())
         return false;
-    if (!m_player->getIsAlive())
-        return false;
-    if (m_player->isManDown())
-        return false;
-
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::isMobile (IAIObject information handle)");
+    Information* const information = informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    return information && information->getUnit() && information->getMobile();
 }
 
-// Position validity is deliberately ignored before the formation-world-position query.
-// [INFERRED] void return: callers discard it and exits materialize no common value.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// 0x1c3ac0 (Ghidra). Takes the speed and arrival estimate from the slot. No null guards on the
+// vehicle, as shipped. The member in slot 0 leads to the goal; the others go to their slots when
+// idle or told to look for a new path.
 void SquadMember::moveWithFormation()
 {
     SquadFormation* const formation = m_squad->getSquadFormation();
     Vec3 position = {};
     getPosition(position);
-    Vec3 slotPosition = {};
-    (void)formation; (void)slotPosition;
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::moveWithFormation (SquadFormation::getSlotWorldPos)");
-}
-
-// The no-bot and dead-player returns are shipped. The alive branch ignores position
-// validity, copies the goal and queries the fresh player; no null vehicle guard follows.
-// [INFERRED] void return, as above.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-void SquadMember::moveWithoutFormation()
-{
+    Vec3 slot = {};
+    if (!formation->getSlotWorldPos(m_memberIndex, slot))
+        return;
+    float x = slot.x - position.x;
+    float y = slot.y - position.y;
+    float z = slot.z - position.z;
+    const float distanceSqr = y * y + x * x + z * z;
+    Information* const equipment =
+        informationManager->getInformation(m_player->getCurrentVehicle()->getInformation(m_side + 1));
+    const float speed = equipment->getMobile()->getMaxSpeed();
+    m_maxSpeed = speed;
+    m_estimatedArrival = distanceSqr / speed;
     if (!m_bot)
         return;
-    if (!m_player->getIsAlive())
-        return;
+    if (distanceSqr <= 10.0f)
+    {
+        if (!m_flag30)
+            m_havePath = false;
+        m_flag30 = true;
+    }
+    else
+        m_flag30 = false;
+    if (formation->getSquadMemberIndexAtSlot(0) == m_memberIndex)
+    {
+        if (m_squad->getMissionStatus() == 2 && formation->shouldSquadMoveOut())
+        {
+            m_maxSpeed = formation->getFormationMaxSpeed();
+            Vec3 goal = m_squad->getSquadGotoPos();
+            if (m_squad->isSquadAssignedToAnyArea())
+                m_squad->getValidSaPos(this, goal);
+            if (m_havePath)
+                return;
+            x = goal.x - position.x;
+            y = goal.y - position.y;
+            z = goal.z - position.z;
+            if (z * z + x * x + y * y <= 8.0f)
+                return;
+        }
+        else
+        {
+            if (m_havePath || !IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+                return;
+        }
+        moveToGoalPos(equipment);
+    }
+    else if (m_isIdle || m_flag4A)
+    {
+        m_flag4A = false;
+        moveToSlotPos(slot, equipment);
+    }
+}
 
+// 0x1c3e20 (Ghidra). No null guards on the vehicle, as shipped.
+void SquadMember::moveWithoutFormation()
+{
+    if (!m_bot || !m_player->getIsAlive())
+        return;
     Vec3 position = {};
     getPosition(position);
     const Vec3 goal = m_squad->getSquadGotoPos();
-    IAIObject* const vehicle = m_player->getCurrentVehicle();
-    (void)goal; (void)vehicle;
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::moveWithoutFormation (IAIObject information handle)");
+    Information* const equipment =
+        informationManager->getInformation(m_player->getCurrentVehicle()->getInformation(m_side + 1));
+    if (equipment->getMobile())
+        m_maxSpeed = equipment->getMobile()->getMaxSpeed();
+    const float x = goal.x - position.x;
+    const float y = goal.y - position.y;
+    const float z = goal.z - position.z;
+    if (m_havePath)
+        return;
+    if (!(m_squad->getMissionStatus() == 2 && 8.0f < z * z + x * x + y * y)
+        && !IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+        return;
+    moveToGoalPos(equipment);
 }
 
-// [FRONTIER] Returns the member's vehicle radius once the information query chain is implemented.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding SquadMember operation.
+namespace {
+
+// A route of one point on the ground, as every squad move starts.
+WPMoveTo* newMove(const Vec3& point)
+{
+    std::list<std::pair<Vec3, int> > points;
+    points.push_back(std::make_pair(point, -1));
+    return checkPointer(new WPMoveTo(0.0f, 60.0f, 2, points));
+}
+
+// A flying vehicle's route: 70 m over the ground at a 30 m radius, a helicopter (flag 0x20) 20 m at 5 m.
+WPAltitudeMoveTo* newFlight(const Vec3& point, float ground, Information* equipment)
+{
+    const bool helicopter = (equipment->getObjectTypeFlags() & 0x20) != 0;
+    const float radius = helicopter ? 5.0f : 30.0f;
+    const float height = helicopter ? 20.0f : 70.0f;
+    std::list<Vec3> points;
+    Vec3 high = point;
+    high.y = ground + height;
+    points.push_back(high);
+    return checkPointer(new WPAltitudeMoveTo(radius, radius, height, 2, points));
+}
+
+// A bot's answer to its human leader, once per goal.
+void answerLeader(SquadCoordinator* squad, SquadMember* member, int message)
+{
+    if (!squad->getRogerThatPositionMessage() || !member->isBot())
+        return;
+    member->getBot()->getCommunicationAgent()->enqueueRadioMessage(
+        static_cast<AIRadioMessageType>(message), static_cast<AIRadioChannelType>(3), 3, 2.0f, 0);
+    squad->setRogerThatPositionMessage(false);
+}
+
+} // namespace
+
+// 0x1c3ff0 (Ghidra). As shipped, a flight takes the ground height at the slot's x and y.
+void SquadMember::moveToSlotPos(const Vec3& slot, Information* equipment)
+{
+    m_havePath = true;
+    m_vector60 = slot;
+    if ((equipment->getObjectTypeFlags() & 0x10) == 0)
+    {
+        m_bot->setWaypoints(newMove(slot));
+        return;
+    }
+    const IAITerrain* const terrain = static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+    m_bot->setWaypoints(newFlight(slot, terrain->getTerrainAltitude(slot.x, slot.y), equipment));
+}
+
+// 0x1c4240 (Ghidra). On a mission, the route to the goal: a ground unit whose squad left its human
+// leader goes to that leader's goal when it is valid and not inside the assigned area, or else to
+// the squad's goal, the order position of the area when the squad has one. There a route of
+// strategic objects is used when one is stored.
+void SquadMember::moveToGoalPos(Information* equipment)
+{
+    if (!equipment->getMobile() || m_squad->getMissionStatus() != 2)
+        return;
+    AIStrategicArea* const assigned = m_squad->getSquadStrategicAreaAssignment();
+    const bool flying = (equipment->getObjectTypeFlags() & 0x10) != 0;
+    if (!flying && m_squad->getSquadFormation()->shouldLeaveSquadLeader() && !m_squad->isSquadCloseToNonOwnedTarget())
+    {
+        Vec3 goal = m_squad->getSquadLeaderGotoPos();
+        bool tryGoal = true;
+        if (assigned)
+        {
+            if (assigned->isInside(goal))
+                tryGoal = false;
+            else
+            {
+                AIStrategicArea* const closest = static_cast<AIStrategicArea*>(
+                    AIStrategicObjectManager::getInstance()->getClosestObject(goal, m_side + 1));
+                if (closest && closest->isInside(goal))
+                    m_squad->getValidSaPos(this, closest, goal);
+            }
+        }
+        if (tryGoal)
+        {
+            if (m_squad->isValidPosition(this, goal))
+            {
+                m_havePath = true;
+                m_bot->setWaypoints(newMove(goal));
+                m_vector60 = goal;
+                answerLeader(m_squad, this, 6);
+                return;
+            }
+            answerLeader(m_squad, this, 7);
+        }
+    }
+    Vec3 goal = m_squad->getSquadGotoPos();
+    if (m_squad->isSquadAssignedToAnyArea())
+        m_squad->getValidSaPos(this, goal);
+    if (flying)
+    {
+        const IAITerrain* const terrain = static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+        m_bot->setWaypoints(newFlight(goal, terrain->getTerrainAltitude(goal.x, goal.z), equipment));
+        m_vector60 = goal;
+        answerLeader(m_squad, this, 6);
+        return;
+    }
+    if (!m_squad->isValidPosition(this, goal))
+    {
+        answerLeader(m_squad, this, 7);
+        return;
+    }
+    m_havePath = true;
+    if (m_squad->isSquadAssignedToAnyArea())
+    {
+        std::list<AIStrategicObject*> route;
+        const int botId = m_bot->getBotId();
+        ISAI* const sai = IAIMain::m_instance->getSAI(m_side + 1);
+        AIStrategicObject* const from =
+            AIStrategicObjectManager::getInstance()->getStrategicObject(sai->getBotCurrentPos(botId));
+        if (assigned->getRouteList(m_side + 1, from, route))
+        {
+            if (route.size() > 1)
+            {
+                Vec3 position = {};
+                getPosition(position);
+                const float dx = goal.x - position.x;
+                const float dz = goal.z - position.z;
+                const Vec2& first = route.front()->getPosition(m_side + 1);
+                const float fx = goal.x - first.x;
+                const float fz = goal.z - first.y;
+                if (dx * dx + dz * dz < fz * fz + fx * fx)
+                    route.pop_front();
+            }
+            goal.y = assigned->m_f148;
+            m_vector60 = goal;
+            assigned->orderNormalBot(m_side + 1, route, botId, sai);
+            answerLeader(m_squad, this, 6);
+            return;
+        }
+    }
+    WPMoveTo* const move = newMove(goal);
+    if (isSameWaypointList(m_bot->getWaypoints(), move))
+    {
+        delete move;
+        return;
+    }
+    m_bot->setWaypoints(move);
+    m_vector60 = goal;
+    if (!m_squad->isSquadAssignedToAnyArea())
+        answerLeader(m_squad, this, 6);
+}
+
+// 0x1c5120 (Ghidra).
+bool SquadMember::isSameWaypointList(WaypointList* current, WaypointList* other)
+{
+    if (current->m_int0C != 0)
+        return false;
+    std::list<Vec3> a;
+    std::list<Vec3> b;
+    static_cast<WPMoveTo*>(current)->getCoords(a);
+    static_cast<WPMoveTo*>(other)->getCoords(b);
+    if (a.empty() || b.empty())
+        return false;
+    std::list<Vec3>::const_iterator p = a.begin();
+    std::list<Vec3>::const_iterator q = b.begin();
+    for (; p != a.end() && q != b.end(); ++p, ++q)
+    {
+        const float x = q->x - p->x;
+        const float y = q->y - p->y;
+        const float z = q->z - p->z;
+        if (100.0f < z * z + x * x + y * y)
+            return false;
+    }
+    return p == a.end() && q == b.end();
+}
+
+// 0x1c2840 (Ghidra). Away from where the shells fall to 5 m past the safe distance, turning the
+// direction out by a growing random angle each side for five tries; then the last place the side
+// fled to. Already fleeing: true.
+bool SquadMember::avoidArtillery(const Vec3& position, double, int bySide)
+{
+    if (m_flag4B)
+        return true;
+    SquadManager* const manager = SquadManager::m_instance;
+    const Vec3 target = manager->getArtilleryTargetPos(bySide);
+    Vec3 away;
+    away.x = position.x - target.x;
+    away.y = position.y - target.y;
+    away.z = position.z - target.z;
+    const float reach = manager->getArtillerySafeDistance() + 5.0f;
+    const float length2 = away.z * away.z + away.x * away.x + away.y * away.y;
+    if (!(std::fabs(length2 - 1.0f) < 1.1920929e-07f))
+    {
+        if (1.1920929e-07f <= std::fabs(length2))
+        {
+            const float inverse = 1.0f / std::sqrt(length2);
+            away.x = away.x * inverse;
+            away.y = away.y * inverse;
+            away.z = inverse * away.z;
+        }
+        else
+        {
+            away.x = 0.0f;
+            away.y = 0.0f;
+            away.z = 0.0f;
+        }
+    }
+    Vec3 direction = away;
+    Vec3 flee = {};
+    float angle = 0.0f;
+    bool found = false;
+    for (int i = 0; i < 5 && !found; ++i)
+    {
+        flee.x = reach * direction.x + target.x;
+        flee.y = reach * direction.y + target.y;
+        flee.z = reach * direction.z + target.z;
+        if (m_squad->isValidPosition(this, flee))
+        {
+            found = true;
+            break;
+        }
+        const float step = AIRandom::m_instance->nextFloat() * 0.2f + 0.6f;
+        if (angle <= 0.0f)
+            angle = step + angle + angle + angle;
+        else
+            angle = (angle - (angle + angle)) - step;
+        rotateXZ(away, direction, angle);
+    }
+    if (!found && !manager->haveValidArtilleryFleePos(this, flee))
+        return false;
+    m_havePath = true;
+    m_flag4B = true;
+    m_bot->setWaypoints(newMove(flee));
+    if (found)
+        manager->setValidArtilleryFleePos(this, flee);
+    return true;
+}
+
+// 0x1c1ed0 (Ghidra), the update's weapon block. A soldier not firing presses its third weapon's
+// key, unless a kit 5 member holds a weapon of type 1 with health to spare or a kit 3 member with
+// type 2 in hand is short of ammunition. No null guard on the physical, as shipped.
+void SquadMember::switchToThirdWeapon(Information* equipment)
+{
+    IPIArmament* const armament = equipment->getArmament();
+    if (!armament || armament->getActiveWeapon() == -1)
+        return;
+    WeaponInfo* const active =
+        WeaponInfoManager::m_instance->getInformation(armament->getWeapon(armament->getActiveWeapon()));
+    if (!active)
+        return;
+    IPIPhysical* const physical = equipment->getPhysical();
+    bool stay = false;
+    if (m_player->getSpawnKit() != 5 || active->getWeaponType() != 1 || 0.95f < physical->getHealth())
+    {
+        if (m_player->getSpawnKit() == 3 && active->getWeaponType() == 2)
+        {
+            const std::vector<unsigned int> weapons = armament->getWeapons();
+            float left = 1.0f;
+            for (unsigned int i = 0; i < weapons.size(); ++i)
+            {
+                WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+                if (weapon && weapon->getWeaponType() != 1 && weapon->getWeaponType() != 2 && weapon->getAmmo() != -1
+                    && weapon->getMaxAmmo() != 0)
+                    left = (static_cast<float>(weapon->getCurrentAmmo()) / static_cast<float>(weapon->getMaxAmmo())) * left;
+            }
+            stay = left <= 0.9f;
+        }
+        if (!stay && active->getWeaponType() != 1 && active->getWeaponType() != 2 && m_bot->isFiring())
+            stay = true;
+    }
+    else
+        stay = true;
+    WeaponInfo* const third = WeaponInfoManager::m_instance->getInformation(armament->getWeapon(2));
+    if (third && !stay && active != third)
+        static_cast<BotMain*>(m_bot)->getPlayerInput()->setInput(
+            static_cast<io::PlayerInputMap>(third->getWeaponActivate()), 1.0f);
+}
+
+// 0x1c3a10 (Ghidra). No null guards, as shipped.
 float SquadMember::getVehicleRadius()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::getVehicleRadius");
+    Information* const information =
+        informationManager->getInformation(m_player->getCurrentVehicle()->getInformation(m_side + 1));
+    return information->getPhysical()->getRadius();
 }
 
 } // namespace ai

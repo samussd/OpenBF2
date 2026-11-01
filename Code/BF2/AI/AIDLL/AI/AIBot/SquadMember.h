@@ -13,7 +13,9 @@ namespace ai {
 
 class IAIPlayer;
 class Bot;
+class Information;
 class SquadCoordinator;
+class WaypointList;
 
 class SquadMember
 {
@@ -47,15 +49,24 @@ public:
     void update(double time);                // bounded dependent calls
     void updateFormationStatus();
     bool getPosition(Vec3& position);         // copies even if invalid
-    bool isAllowedInFormation();             // nonnull vehicle [FRONTIER]
-    void updateMemberPos();                  // nonnull vehicle [FRONTIER]
-    bool isMobile();                         // owner query [FRONTIER]
+    bool isAllowedInFormation();
+    void updateMemberPos();
+    bool isMobile();
     // On a mission to its assigned area, which the side does not own, and within the formation
     // distance of the squad's goal. The (float, float) overload is not called by this path.
     bool isCloseToNonOwnedTarget() const;
-    void moveWithFormation();                // world-position [FRONTIER]
-    void moveWithoutFormation();             // alive owner query [FRONTIER]
-    float getVehicleRadius();                // [FRONTIER]
+    void moveWithFormation();
+    void moveWithoutFormation();
+    float getVehicleRadius();
+    int getSide() const { return m_side + 1; }     // one-based, unlike m_side
+    // Gives the bot a route to the formation slot or to the squad's goal.
+    void moveToSlotPos(const Vec3& slot, Information* equipment);
+    void moveToGoalPos(Information* equipment);
+    // The bot's route is a move to the same points, within 10 m each.
+    bool isSameWaypointList(WaypointList* current, WaypointList* other);
+    // Sends the bot out of a danger zone; false when there is nowhere to go.
+    bool avoidArtillery(const Vec3& position, double since, int bySide);
+    void switchToThirdWeapon(Information* equipment);
 
     // [INFERRED] carrier name. The two fields are attested by setCurrentRequestAction
     // its first parameter is the RequestAction enum, its second unsigned int.

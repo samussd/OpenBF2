@@ -2,6 +2,10 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining SquadCoordinator operations.
 
 #include "SquadCoordinator.h"
+#include "../AIStrategicEntity/AIStrategicObjectManager.h"
+#include "../Main/AIRandom.h"
+#include "../Main/AISettingsInterfaces.h"
+#include "../../../AIInterface/BFKnowledge/BFTerrain.h"
 
 #include "SquadFormation.h"
 #include "SquadMember.h"
@@ -1131,6 +1135,264 @@ bool SquadCoordinator::isSquadCloseToNonOwnedTarget()
 void SquadCoordinator::resetNeedOrderMessageTimer(double now)
 {
     m_needOrderMessageTimer = now;
+}
+
+const Vec3& SquadCoordinator::getSquadLeaderGotoPos()
+{
+    return m_v200;
+}
+
+bool SquadCoordinator::getRogerThatPositionMessage()
+{
+    return m_b220;
+}
+
+void SquadCoordinator::setRogerThatPositionMessage(bool answer)
+{
+    m_b220 = answer;
+}
+
+// 0x1b4dc0 (Ghidra). No vehicle counts as water; no null guards on its record, as shipped.
+bool SquadCoordinator::isPosOnWater(SquadMember* member, const Vec3& position)
+{
+    IAIObject* const vehicle = member->getPlayer()->getCurrentVehicle();
+    if (!vehicle)
+        return true;
+    Information* const information = informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    const int type = information->getUnit()->getEquipmentType();
+    const int map = information->getMobile()->getVehicleNumber();
+    unsigned char material = 0;
+    IAIPathfinding::instance->getMaterial(position, map, type, material);
+    return material == 4;
+}
+
+// 0x1b6b20 (Ghidra).
+bool SquadCoordinator::getSquadMissionTargetPos(Vec3& position)
+{
+    if (m_i44 != 0)
+        return false;
+    position = m_v28;
+    return true;
+}
+
+// 0x1b79c0 (Ghidra).
+bool SquadCoordinator::getRandomValidPosition(SquadMember* member, Vec3& position, float radius)
+{
+    if (isValidPosition(member, position))
+        return true;
+    const IAITerrain* const terrain = static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+    for (int i = 0; i < 8; ++i)
+    {
+        Vec3 point;
+        float draw = AIRandom::m_instance->nextFloat();
+        point.x = (draw + draw) * radius + (position.x - radius);
+        draw = AIRandom::m_instance->nextFloat();
+        point.z = (draw + draw) * radius + (position.z - radius);
+        point.y = terrain->getTerrainAltitude(point.x, point.z);
+        if (isValidPosition(member, point))
+        {
+            position = point;
+            return true;
+        }
+    }
+    return false;
+}
+
+// 0x1b7bc0 (Ghidra).
+bool SquadCoordinator::getValidSaPos(SquadMember* member, Vec3& position)
+{
+    AIStrategicObject* const closest = AIStrategicObjectManager::getInstance()->getClosestObject(m_v28, m_side + 1);
+    if (!member || !closest)
+        return false;
+    IAIObject* const vehicle = member->getPlayer()->getCurrentVehicle();
+    if (!vehicle)
+        return false;
+    Information* const information = informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    if (!information || !information->getUnit() || !information->getMobile())
+        return false;
+    position = closest->getOrderPos(information->getMobile()->getVehicleNumber(), m_side + 1);
+    return true;
+}
+
+// 0x1b7d30 (Ghidra).
+bool SquadCoordinator::getValidSaPos(SquadMember* member, AIStrategicArea* area, Vec3& position)
+{
+    if (!member || !area)
+        return false;
+    IAIObject* const vehicle = member->getPlayer()->getCurrentVehicle();
+    if (!vehicle)
+        return false;
+    Information* const information = informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    if (!information || !information->getUnit() || !information->getMobile())
+        return false;
+    position = area->getOrderPos(information->getMobile()->getVehicleNumber(), m_side + 1);
+    return true;
+}
+
+// 0x1b69c0 (Ghidra).
+bool SquadCoordinator::isSameMission(int type, const Vec3& position, int target)
+{
+    return m_i40 == type && m_i44 == target && std::fabs(m_v28.x - position.x) <= 1.1920929e-07f
+        && std::fabs(m_v28.y - position.y) <= 1.1920929e-07f && std::fabs(m_v28.z - position.z) <= 1.1920929e-07f;
+}
+
+// 0x1b6f30 (Ghidra). A bot leader's own order goes nowhere. Near a target the side does not own, or
+// with a request pending, an AI commander's order is dropped. The request stands for 10 s.
+void SquadCoordinator::requestMission(int type, const Vec3& position, int target, bool fromCommander)
+{
+    SquadMember* const leader = getSquadLeader();
+    if (!fromCommander)
+    {
+        if (m_squadMembers.empty())
+            return;
+        const bool same = std::fabs(position.x - m_v200.x) <= 1.1920929e-07f
+            && std::fabs(position.y - m_v200.y) <= 1.1920929e-07f
+            && std::fabs(position.z - m_v200.z) <= 1.1920929e-07f;
+        if (!same && !leader->isBot())
+        {
+            m_b220 = true;
+            m_v200 = position;
+            updateSquadPaths();
+            m_formation->leaveSquadLeader();
+        }
+        return;
+    }
+    if (((!IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander() && isSquadCloseToNonOwnedTarget())
+         || m_i120 != 0)
+        && !IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+        return;
+    m_i120 = 1;
+    m_d132 = 10.0f + static_cast<float>(m_d124);
+    m_v64 = position;
+    m_i76 = type;
+    m_requestedArea = 0;
+    m_i80 = target;
+    m_b92 = fromCommander;
+}
+
+// 0x1b7160 (Ghidra). Takes the requested mission to the strategic object closest to its position
+// when the position is inside it or within the ignore distance past its size and the side holds it,
+// otherwise to a valid point near the position. The leader says so on the radio, or a commander
+// message goes out for a human one, and every member looks for a new path.
+bool SquadCoordinator::acceptMission(SquadMember* member)
+{
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    bool accepted = false;
+    m_strategicAreaAssignment = 0;
+    AIStrategicArea* const closest =
+        static_cast<AIStrategicArea*>(AIStrategicObjectManager::getInstance()->getClosestObject(m_v64, m_side + 1));
+    if (!IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander() && closest && m_i76 == 0
+        && closest->getStatus(m_side + 1) == 0)
+    {
+        unAssignSquad();
+        return false;
+    }
+    if (!IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander() && m_i40 == m_i76
+        && m_strategicAreaAssignment == closest)
+        return true;
+    if (closest)
+    {
+        const Vec2& flat = closest->getPosition(m_side + 1);
+        Vec3 at;
+        at.x = flat.x;
+        at.z = flat.y;
+        at.y = static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain)->getTerrainAltitude(at.x, at.z);
+        const float ignore = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getIgnoreCommanderDistance();
+        const float size = closest->m_size[m_side];
+        bool take = true;
+        if (!closest->isInside(m_v64))
+        {
+            const float x = m_v64.x - at.x;
+            const float y = m_v64.y - at.y;
+            const float z = m_v64.z - at.z;
+            if (ignore + size <= std::sqrt(x * x + y * y + z * z) || closest->getStatus(m_side + 1) == 0)
+                take = false;
+        }
+        if (take)
+        {
+            m_v64 = at;
+            m_v28 = at;
+            m_i120 = 2;
+            m_i40 = m_i76;
+            m_strategicAreaAssignment = closest;
+            m_i44 = m_i80;
+            m_d48 = now;
+            m_b56 = m_b92;
+            accepted = true;
+        }
+    }
+    IBFSquad* const adapter = static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad);
+    if (!m_strategicAreaAssignment)
+    {
+        Vec3 point = m_v64;
+        if (getRandomValidPosition(member, point, 30.0f))
+        {
+            m_v64 = point;
+            m_i120 = 2;
+            m_v28 = point;
+            m_i40 = m_i76;
+            m_i44 = m_i80;
+            m_b56 = m_b92;
+            m_d48 = now;
+            accepted = true;
+        }
+        else if (member->isBot())
+        {
+            member->getBot()->getCommunicationAgent()->enqueueRadioMessage(
+                static_cast<AIRadioMessageType>(7), static_cast<AIRadioChannelType>(4), 3, 2.0f, 0);
+            if (member->isSquadLeader())
+            {
+                if (m_i76 == 0)
+                    adapter->declineCommanderAttackOrder(m_squadIndex + 1, member->getPlayer());
+                else if (m_i76 == 1)
+                    adapter->declineCommanderDefendOrder(m_squadIndex + 1, member->getPlayer());
+                else if (m_i76 == 2)
+                    adapter->declineCommanderMoveOrder(m_squadIndex + 1, member->getPlayer());
+            }
+            unAssignSquad();
+            updateSquadPaths();
+        }
+    }
+    if (!accepted)
+        return false;
+    SquadMember* const leader = getSquadLeader();
+    if (!leader->isBot())
+    {
+        if (!IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander() && (m_i40 == 0 || m_i40 == 1))
+            SquadManager::m_instance->enqueueCommanderMessage(m_side, m_squadIndex, m_i40 == 0 ? 0 : 1, 3.0f);
+    }
+    else
+    {
+        CommunicationAgent* const agent = leader->getBot()->getCommunicationAgent();
+        if (IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+            agent->enqueueRadioMessage(static_cast<AIRadioMessageType>(6), static_cast<AIRadioChannelType>(4), 3,
+                                       2.5f, 0);
+        int message = -1;
+        if (m_i40 == 0)
+        {
+            adapter->issueSquadAttackOrder(m_v28, m_squadIndex + 1, m_side + 1, 0);
+            adapter->acceptCommanderAttackOrder(m_squadIndex + 1, member->getPlayer());
+            message = 0x10;
+        }
+        else if (m_i40 == 1)
+        {
+            adapter->issueSquadDefendOrder(m_v28, m_squadIndex + 1, m_side + 1, 0);
+            adapter->acceptCommanderDefendOrder(m_squadIndex + 1, member->getPlayer());
+            message = 0xF;
+        }
+        else if (m_i40 == 2)
+        {
+            adapter->issueSquadMoveOrder(m_v28, m_squadIndex + 1, m_side + 1, 0);
+            adapter->acceptCommanderMoveOrder(m_squadIndex + 1, member->getPlayer());
+            message = 0x11;
+        }
+        if (message != -1)
+            agent->enqueueRadioMessage(static_cast<AIRadioMessageType>(message), static_cast<AIRadioChannelType>(3), 3,
+                                       2.0f, 0);
+    }
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+        m_squadMembers[i]->setHavePath(false);
+    return true;
 }
 
 } // namespace ai

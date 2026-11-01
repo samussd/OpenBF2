@@ -99,6 +99,20 @@ public:
     bool isSquadAssignedToAnyArea();
     bool squadHasMission();                      // the maneuver state is 2
     bool isSquadCloseToNonOwnedTarget();         // any member, while the area is not neutral
+    const Vec3& getSquadLeaderGotoPos();         // a human leader's own goal
+    bool getRogerThatPositionMessage();
+    void setRogerThatPositionMessage(bool answer);
+    bool isPosOnWater(SquadMember* member, const Vec3& position);
+    bool getSquadMissionTargetPos(Vec3& position);       // false when the mission has a target object
+    // The position, or one of eight tries within the radius; false when none is valid.
+    bool getRandomValidPosition(SquadMember* member, Vec3& position, float radius);
+    // The order position of the closest object to the goal, or of an area, for the member's vehicle.
+    bool getValidSaPos(SquadMember* member, Vec3& position);
+    bool getValidSaPos(SquadMember* member, AIStrategicArea* area, Vec3& position);
+    bool isSameMission(int type, const Vec3& position, int target);
+    // A commander's order waits for acceptMission; a squad leader's only moves the leader's goal.
+    void requestMission(int type, const Vec3& position, int target, bool fromCommander);
+    bool acceptMission(SquadMember* member);
     AIStrategicArea* getSquadStrategicAreaAssignment(); // borrowed
     void resetNeedOrderMessageTimer(double now);
 
@@ -113,12 +127,15 @@ public:
     /*  +40 */ int m_i40;                      // = 4 [UNRESOLVED]
     /*  +44 */ int m_i44;                      // = 0 [UNRESOLVED]
     /*  +48 */ double m_d48;                   // = -20.0 a "never happened" sentinel, not a time
-    /*  +56 */ char m_gap56[4];                // never written by the constructor
+    /*  +56 */ bool m_b56;                     // acceptMission: the request's m_b92
+    /*  +57 */ char m_gap57[3];                // never written by the constructor
     /*  +60 */ AIStrategicArea* m_requestedArea;   // = 0 [INFERRED] name
     /*  +64 */ Vec3 m_v64;                     // zeroed [UNRESOLVED]
     /*  +76 */ int m_i76;                      // = 4 [UNRESOLVED] - the twin of m_i40
     /*  +80 */ int m_i80;                      // = 0 [UNRESOLVED]
-    /*  +84 */ char m_gap84[12];               // never written by the constructor
+    /*  +84 */ char m_gap84[8];                // never written by the constructor
+    /*  +92 */ bool m_b92;                     // requestMission: from a commander
+    /*  +93 */ char m_gap93[3];                // never written by the constructor
     /*  +96 */ int m_i96;                      // leader member index, initially -1
     /* +100 */ SquadFormation* m_formation;    // new SquadFormation(this)
     /* +104 */ std::list<int> m_list104;       // header only; 4-byte element [UNRESOLVED]
@@ -140,7 +157,7 @@ public:
     /* +196 */ bool m_b196;                    // = false; haveConfirmedRepairRequest
     /* +200 */ Vec3 m_v200;                    // zeroed twice, like m_v108
     /* +212 */ double m_needOrderMessageTimer; // = IBFTimer::getGameTime at construction
-    /* +220 */ bool m_b220;                    // = false [UNRESOLVED]
+    /* +220 */ bool m_b220;                    // = false; a human leader's goal awaits a radio answer
 };
 
 } // namespace ai

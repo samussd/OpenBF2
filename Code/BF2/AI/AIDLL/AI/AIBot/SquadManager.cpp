@@ -714,6 +714,84 @@ void SquadManager::playerRemovedFromSquad(int playerId, int squadId, int side)
     coordinator->updateSquadLeader();
 }
 
+// 0x1c0d40 (Ghidra).
+Vec3 SquadManager::getArtilleryTargetPos(int side) const
+{
+    const SideBlock* const blocks[2] = { &m_sideBlock0, &m_sideBlock1 };
+    return blocks[side - 1]->m_artilleryPosition;
+}
+
+// 0x1c0d80 (Ghidra). No soldier: the second place.
+bool SquadManager::haveValidArtilleryFleePos(SquadMember* member, Vec3& position)
+{
+    SideBlock* const blocks[2] = { &m_sideBlock0, &m_sideBlock1 };
+    const int side = member->getSide();
+    SideBlock& block = *blocks[side - 1];
+    IAIObject* const vehicle = member->getPlayer()->getCurrentVehicle();
+    if (!vehicle)
+        return false;
+    Information* const information = informationManager->getInformation(vehicle->getInformation(side));
+    if (!information || !information->getUnit())
+        return false;
+    if ((information->getObjectTypeFlags() & 0x200000) == 0)
+    {
+        if (!block.m_validFlee1)
+            return false;
+        position = block.m_fleePos1;
+    }
+    else
+    {
+        if (!block.m_validFlee0)
+            return false;
+        position = block.m_fleePos0;
+    }
+    return true;
+}
+
+// 0x1c0ec0 (Ghidra).
+void SquadManager::setValidArtilleryFleePos(SquadMember* member, const Vec3& position)
+{
+    SideBlock* const blocks[2] = { &m_sideBlock0, &m_sideBlock1 };
+    const int side = member->getSide();
+    SideBlock& block = *blocks[side - 1];
+    IAIObject* const vehicle = member->getPlayer()->getCurrentVehicle();
+    if (!vehicle)
+        return;
+    Information* const information = informationManager->getInformation(vehicle->getInformation(side));
+    if (!information || !information->getUnit())
+        return;
+    if ((information->getObjectTypeFlags() & 0x200000) == 0)
+    {
+        block.m_validFlee1 = true;
+        block.m_fleePos1 = position;
+    }
+    else
+    {
+        block.m_validFlee0 = true;
+        block.m_fleePos0 = position;
+    }
+}
+
+// 0x1bf720 (Ghidra).
+SquadCoordinator* SquadManager::getSquadFromId(int squadId, int side)
+{
+    return m_coordinators[side - 1][squadId - 1];
+}
+
+// 0x1be970 (Ghidra).
+void SquadManager::enqueueCommanderMessage(int side, int squad, int type, double delay)
+{
+    for (std::list<CommanderMessage*>::iterator it = m_commanderMessages.begin(); it != m_commanderMessages.end(); ++it)
+        if ((*it)->m_sideIndex == side && (*it)->m_squadIndex == squad)
+            return;
+    CommanderMessage* const message = new CommanderMessage();
+    message->m_type = static_cast<CommanderMessageType>(type);
+    message->m_squadIndex = squad;
+    message->m_sideIndex = side;
+    message->m_dueTime = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime() + delay;
+    m_commanderMessages.push_back(message);
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

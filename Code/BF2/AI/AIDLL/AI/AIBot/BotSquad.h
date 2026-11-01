@@ -52,6 +52,7 @@ public:
     void issueSquadDefendOrder(const Vec3& position, Information* info);
 
     // taking orders. `recieve`, not `receive`.
+    void recieveSquadOrder(OrderType type);
     void recieveAttackSquadOrder();
     void recieveDefendSquadOrder();
     void recieveMoveSquadOrder();

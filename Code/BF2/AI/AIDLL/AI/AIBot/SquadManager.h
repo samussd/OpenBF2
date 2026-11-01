@@ -44,6 +44,7 @@ public:
     void playerRemovedFromSquad(int playerId, int squadId, int side);
     SquadMember* getSquadMember(int playerId, int side);
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
+    SquadCoordinator* getSquadFromId(int squadId, int side);      // one-based, unchecked
     // The same for the player occupying the unit behind an information handle, if any.
     SquadMember* getSquadMember(unsigned int handle, int side);
     SquadCoordinator* getSquadFromPlayer(unsigned int handle, int side);
@@ -65,6 +66,11 @@ public:
 
     // Artillery. Sides are one-based and unchecked.
     float getArtillerySafeDistance();
+    // Where the side's artillery falls.
+    Vec3 getArtilleryTargetPos(int side) const;
+    // The last place a member's side fled to from it, one for soldiers and one for vehicles.
+    bool haveValidArtilleryFleePos(SquadMember* member, Vec3& position);
+    void setValidArtilleryFleePos(SquadMember* member, const Vec3& position);
     bool friendliesCloseTo(Vec3 position, float distance, int side);
     // Whether a human player is on the side.
     bool haveHumanPlayerOnOwnSide(int side);
@@ -80,6 +86,8 @@ public:
 
     // Clears messages and position records by erasing each container node individually.
     void clearCommanderMessages();
+    // Queues a message for the delay from now, unless the squad of the side already has one.
+    void enqueueCommanderMessage(int side, int squad, int type, double delay);
     void clearPlayerValidPositions();
 
     static SquadManager* m_instance;

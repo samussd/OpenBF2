@@ -2,6 +2,8 @@
 
 #include "SquadFormation.h"
 
+#include <cmath>
+
 #include <list>
 
 #include "SquadCoordinator.h"
@@ -757,7 +759,7 @@ SquadFormation::SquadFormation(SquadCoordinator* coordinator)
     : m_slots()
     , m_coordinator(coordinator)
     , m_formation(0)
-    , m_i48(0)
+    , m_f48(0.0f)
     , m_f52(0.0f)
     , m_i88(0)
     , m_d92(0.0)
@@ -799,7 +801,7 @@ SquadFormation::SquadFormation(SquadCoordinator* coordinator)
     setFormation();
 
     m_b36 = false;
-    m_i48 = 0;
+    m_f48 = 0;
     m_f52 = 1.0f;
     m_v60.x = 0.0f;
     m_v60.y = 0.0f;
@@ -1029,6 +1031,110 @@ void SquadFormation::setWedgeFormation()
 void SquadFormation::setEchelonFormation()
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::setEchelonFormation");
+}
+
+// 0x1bb640 (Ghidra).
+void SquadFormation::leaveSquadLeader()
+{
+    m_b85 = false;
+    m_b84 = true;
+    updateMovementFlag(true);
+}
+
+// 0x1bc550 (Ghidra). A squad at the origin has no position yet: the leader's. Slot 0 takes its spot
+// as it is; another that falls off the mesh or in water takes a trailing place, and without one the
+// mission's target or the first slot's member. The offset turns with the forward vector.
+bool SquadFormation::getSlotWorldPos(int memberIndex, Vec3& position)
+{
+    Vec3 anchor;
+    anchor.x = 0.0f;
+    anchor.y = 0.0f;
+    anchor.z = 0.0f;
+    m_coordinator->getSquadPosition(anchor);
+    if (anchor.x * anchor.x + anchor.y * anchor.y + anchor.z * anchor.z < 0.001f)
+        return m_coordinator->getSquadLeader()->getPosition(position);
+    float x = m_f48;
+    float y = m_f52;
+    for (unsigned int i = 0; i < m_maxSquadMembers; ++i)
+    {
+        Slot* const slot = m_slots[i];
+        if (slot->m_memberIndex != memberIndex)
+            continue;
+        const Vec3 offset = slot->m_offset;
+        const float length2 = x * x + y * y;
+        if (!(std::fabs(length2 - 1.0f) < 1.1920929e-07f))
+        {
+            if (1.4210855e-14f <= std::fabs(length2))
+            {
+                const float inverse = 1.0f / std::sqrt(length2);
+                x = x * inverse;
+                y = inverse * y;
+            }
+            else
+            {
+                x = 0.0f;
+                y = 0.0f;
+            }
+        }
+        float cosine = y;
+        if (cosine < -1.0f)
+            cosine = -1.0f;
+        else if (1.0f < cosine)
+            cosine = 1.0f;
+        float angle = std::acos(cosine);
+        if (0.0f < x)
+            angle = -angle;
+        const float sine = std::sin(angle);
+        position.x = anchor.x + (offset.x * y - offset.z * sine);
+        position.y = offset.y + anchor.y;
+        position.z = anchor.z + offset.x * sine + offset.z * y;
+        if (i == 0)
+            return true;
+        SquadMember* const member = m_coordinator->getSquadMember(slot->m_memberIndex);
+        if (m_coordinator->isValidPosition(member, position) && !m_coordinator->isPosOnWater(member, position))
+        {
+            slot->m_i20 = -1;
+            return true;
+        }
+        int trail = slot->m_i20;
+        if (trail == -1)
+        {
+            trail = getFirstFreeTrailingSlot(member);
+            if (trail == -1)
+            {
+                if (m_coordinator->squadHasMission())
+                    return m_coordinator->getSquadMissionTargetPos(position);
+                SquadMember* const first = m_coordinator->getSquadMember(getSquadMemberIndexAtSlot(0));
+                return first && first->getPosition(position);
+            }
+            slot->m_i20 = trail;
+        }
+        position = m_slotTargets[trail].second;
+        return true;
+    }
+    return true;
+}
+
+// 0x1bca30 (Ghidra). As shipped, the position is tested first.
+int SquadFormation::getFirstFreeTrailingSlot(SquadMember* member)
+{
+    for (unsigned int i = 0; i < m_maxSquadMembers; ++i)
+    {
+        const bool assigned = isTrailPosAssigned(static_cast<int>(i));
+        const bool valid = m_coordinator->isValidPosition(member, m_slotTargets[i].second);
+        if (m_slotTargets[i].first && !assigned && valid)
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
+// 0x1bcb70 (Ghidra).
+bool SquadFormation::isTrailPosAssigned(int index)
+{
+    for (unsigned int i = 0; i < m_maxSquadMembers; ++i)
+        if (m_slots[i]->m_i20 == index)
+            return true;
+    return false;
 }
 
 } // namespace ai

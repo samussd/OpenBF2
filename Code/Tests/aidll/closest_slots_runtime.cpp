@@ -39,7 +39,7 @@ namespace dice { namespace hfe { namespace ai {
 // [CHOSEN, not recovered] Native lifetime only. Actual constructor is not under test.
 SquadFormation::SquadFormation(SquadCoordinator* coordinator)
     : m_coordinator(coordinator), m_formation(0), m_direction{}, m_maxSquadMembers(0),
-      m_b36(false), m_formationMaxSpeed(0), m_side(0), m_i48(0), m_f52(0), m_b56(false),
+      m_b36(false), m_formationMaxSpeed(0), m_side(0), m_f48(0), m_f52(0), m_b56(false),
       m_v60{}, m_v72{}, m_b84(false), m_b85(false), m_i88(0), m_d92(0),
       m_trailingPosition{}
 {}

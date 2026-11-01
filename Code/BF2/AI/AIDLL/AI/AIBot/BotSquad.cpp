@@ -3,6 +3,8 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining BotSquad operations.
 
 #include "BotSquad.h"
+#include "SquadCoordinator.h"
+#include "SquadManager.h"
 #include "BotMain.h"
 
 #include "../Main/AIDllFrontier.h"
@@ -99,34 +101,48 @@ void BotSquad::issueSquadDefendOrder(const Vec3&, Information*)
     BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::issueSquadDefendOrder");
 }
 
+// 0x1b1540 (Ghidra). The three orders differ in their type.
+void BotSquad::recieveSquadOrder(OrderType type)
+{
+    Vec3 position;
+    position.x = 0.0f;
+    position.y = 0.0f;
+    position.z = 0.0f;
+    static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)->getSquadOrder(m_bot->getSide(), m_squadId, position, 0);
+    m_order = type;
+    SquadCoordinator* const squad = SquadManager::m_instance->getSquadFromId(m_squadId, m_bot->getSide());
+    if (!squad->isSameMission(m_order, position, 0))
+        squad->requestMission(m_order, position, 0, false);
+}
+
 void BotSquad::recieveAttackSquadOrder()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::recieveAttackSquadOrder");
+    recieveSquadOrder(OrderAttack);
 }
 
 void BotSquad::recieveDefendSquadOrder()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::recieveDefendSquadOrder");
+    recieveSquadOrder(OrderDefend);
 }
 
 void BotSquad::recieveMoveSquadOrder()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::recieveMoveSquadOrder");
+    recieveSquadOrder(OrderMove);
 }
 
+// Empty, as shipped.
 void BotSquad::recieveAttackCommanderOrder()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::recieveAttackCommanderOrder");
 }
 
+// Empty, as shipped.
 void BotSquad::recieveDefendCommanderOrder()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::recieveDefendCommanderOrder");
 }
 
+// Empty, as shipped.
 void BotSquad::recieveMoveCommanderOrder()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::recieveMoveCommanderOrder");
 }
 
 void BotSquad::acceptSquadOrder()

@@ -15,6 +15,7 @@ namespace hfe {
 namespace ai {
 
 class SquadCoordinator;
+class SquadMember;
 
 class SquadFormation
 {
@@ -74,6 +75,11 @@ public:
     void selectFormation();                  // / PE inlined at
     int getSquadMemberIndexAtSlot(int slotIndex); // no occupied test
     bool shouldLeaveSquadLeader();           // returns m_b84
+    void leaveSquadLeader();
+    // Where a member's slot is in the world, or a trailing place when that spot will not do.
+    bool getSlotWorldPos(int memberIndex, Vec3& position);
+    int getFirstFreeTrailingSlot(SquadMember* member);       // -1: none
+    bool isTrailPosAssigned(int index);
     void joinSquadLeader();                  // (inlines the movement update)
     float getFormationMaxSpeed();
     void updateFormationMaxSpeed();
@@ -108,7 +114,7 @@ public:
     // `vec3ToVec2XZ(const Vec3&, Vec2&)`; getSlotWorldPos is the only other reader. The split
     // below predates that evidence and stays until the occupied projection lands, so that the
     // retyping and its first writer arrive together.
-    /*  +48 */ int m_i48;                             // = 0 Vec2 x (0.0f bits)
+    /*  +48 */ float m_f48;                           // = 0 Vec2 x (0.0f bits)
     /*  +52 */ float m_f52;                           // = 1.0f Vec2 y
     /*  +56 */ bool m_b56;                            // = false; hasFormationMoved returns it
     /*  +60 */ Vec3 m_v60;                            // zeroed; anchor position at the last movement stamp

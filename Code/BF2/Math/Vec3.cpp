@@ -200,6 +200,16 @@ float getSignedDiffAngleToDir(const Vec2& from, const Vec2& to)
     return (angle < 0.0f ? -1.0f : 0.0f) * 3.1415927f - angle;
 }
 
+// libaidll 0x37c1e0 (Ghidra).
+void rotateXZ(const Vec3& in, Vec3& out, float angle)
+{
+    out.y = 0.0f;
+    const float c = std::cos(angle);
+    const float n = std::sin(angle);
+    out.x = in.x * c - in.z * n;
+    out.z = c * in.z + n * in.x;
+}
+
 // libaidll 0x37c2e0 (Ghidra), bf2 0x083fb520.
 bool lineIntersect(const Vec2& a, const Vec2& b, const Vec2& c, const Vec2& d, float& t, float& u)
 {

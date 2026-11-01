@@ -66,7 +66,7 @@ IBFTimer::IBFTimer(){} IBFTimer::~IBFTimer(){}
 IAIPlayer::~IAIPlayer(){}
 SquadFormation::SquadFormation(SquadCoordinator* c)
  :m_coordinator(c),m_formation(3),m_maxSquadMembers(6),m_b36(false),m_formationMaxSpeed(17),
-  m_side(0),m_i48(77),m_f52(2),m_b56(true),m_b84(false),m_b85(false),m_i88(88),m_d92(30)
+  m_side(0),m_f48(77),m_f52(2),m_b56(true),m_b84(false),m_b85(false),m_i88(88),m_d92(30)
 {m_direction={1,2,3};m_v60={4,5,6};m_v72={7,8,9};m_trailingPosition={10,11,12};}
 SquadCoordinator::SquadCoordinator(int side,int index)
  :m_squadIndex(index),m_side(side),m_formation(nullptr),m_i96(4)
@@ -257,7 +257,7 @@ int main(int argc,char** argv)
   f.update(originalTime);
   require(f.m_b36&&f.m_formationMaxSpeed==5&&f.m_b56,"actual unoccupied prefix");
   require(clockCalls==0&&vehicleCalls==0,"no timer or owner query on an unoccupied tick");
-  require(f.m_i48==77&&f.m_f52==2,"forward vector untouched");require(equal(f.m_direction,{1,2,3}),"no re-lay");
+  require(f.m_f48==77&&f.m_f52==2,"forward vector untouched");require(equal(f.m_direction,{1,2,3}),"no re-lay");
   s.verify();
  }else if(mode.rfind("cycle_",0)==0){
   s.snapshot();
@@ -286,11 +286,11 @@ int main(int argc,char** argv)
   if(mode=="forward_unoccupied"){
    s.members[0].m_player=&player;f.updateFormationForwardVector();
    require(vehicleCalls==0&&calls.empty(),"empty anchor returns before any member or owner call");
-   require(f.m_i48==77&&f.m_f52==2,"forward vector untouched");
+   require(f.m_f48==77&&f.m_f52==2,"forward vector untouched");
   }else{
    s.slots[0].m_occupied=true;s.slots[0].m_memberIndex=2;s.members[2].m_player=&player;
    abortCheck=[&]{require(vehicleCalls==1&&vehiclePlayer==&player,"anchor member's player gives its current vehicle once");
-    require(f.m_i48==77&&f.m_f52==2,"no forward write before the owner query");};
+    require(f.m_f48==77&&f.m_f52==2,"no forward write before the owner query");};
    f.updateFormationForwardVector();unexpected("occupied forward vector should stop");
   }
  }else if(mode.rfind("trail_",0)==0){

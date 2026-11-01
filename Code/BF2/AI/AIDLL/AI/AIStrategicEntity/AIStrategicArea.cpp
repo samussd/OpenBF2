@@ -1004,6 +1004,23 @@ float AIStrategicArea::gravity(float distance, int side)
     return static_cast<float>(m_size[side] / (wideDistance * wideDistance));
 }
 
+// 0x34a2f0 (Ghidra).
+bool AIStrategicArea::getRouteList(int side, AIStrategicObject* from, std::list<AIStrategicObject*>& route) const
+{
+    const std::map<AIStrategicObject*, std::list<AIStrategicObject*> >& routes = *m_routes[side - 1];
+    const std::map<AIStrategicObject*, std::list<AIStrategicObject*> >::const_iterator it = routes.find(from);
+    if (it == routes.end())
+        return false;
+    route = it->second;
+    return true;
+}
+
+// [FRONTIER] 0x34c940 (Ghidra), 9.8 KB: the bot's waypoints along a route of strategic objects.
+void AIStrategicArea::orderNormalBot(int, std::list<AIStrategicObject*>&, int, ISAI*)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::orderNormalBot");
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice
